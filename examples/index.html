@@ -20,7 +20,10 @@
       .view-as select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(0,0,0,.15); background: transparent; color: inherit; }
       body.dark .view-as select { border-color: rgba(255,255,255,.2); }
       .view-as option { color: #0b0b0b; }
-      .dax-console { position: fixed; right: 16px; top: 56px; bottom: 16px; width: min(560px, calc(100vw - 32px)); z-index: 2000; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #fcfcfb; color: #0b0b0b; border: 1px solid rgba(0,0,0,.12); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.25); }
+      .dax-console[hidden] { display: none; }
+      body.console-open #app { margin-right: min(576px, 100vw); }
+      .dax-result td.num { text-align: right; }
+      .dax-console { position: fixed; right: 8px; top: 48px; bottom: 8px; width: min(560px, calc(100vw - 16px)); z-index: 2000; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #fcfcfb; color: #0b0b0b; border: 1px solid rgba(0,0,0,.12); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.25); }
       body.dark .dax-console { background: #1a1a19; color: #f0efec; border-color: rgba(255,255,255,.12); }
       .dax-console header { display: flex; gap: 10px; align-items: baseline; }
       .dax-console header span { font-size: 11px; opacity: .6; margin-right: auto; }

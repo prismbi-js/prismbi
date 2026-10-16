@@ -489,7 +489,7 @@ export class DataModel {
   }
 
   /** Evaluate a DAX table expression (like a DAX query's EVALUATE). */
-  evaluateTable(expression: string, filters: (FilterSpec | Filter)[] = []): { columns: string[]; rows: CellValue[][] } {
+  evaluateTable(expression: string, filters: (FilterSpec | Filter)[] = []): { columns: string[]; rows: CellValue[][]; formats: (string | undefined)[] } {
     return this.evaluator.evalTableToRows(parseDax(expression), { filters: this.toContext(filters) });
   }
 

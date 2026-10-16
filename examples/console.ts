@@ -25,9 +25,18 @@ export function mountDaxConsole(model: DataModel, button: HTMLButtonElement): vo
   const sig = panel.querySelector<HTMLSpanElement>('.dax-sig')!;
   const result = panel.querySelector<HTMLDivElement>('.dax-result')!;
   let items: DaxCompletion[] = [];
+  const setOpen = (open: boolean) => {
+    panel.hidden = !open;
+    document.body.classList.toggle('console-open', open);
+    button.setAttribute('aria-pressed', String(open));
+    if (open) {
+      ta.focus();
+      refresh();
+    }
+  };
   let active = 0;
 
-  const fmt = (v: unknown) => (v === null ? '(Blank)' : formatValue(v as never, typeof v === 'number' && !Number.isInteger(v) ? '#,0.####' : undefined));
+  const fmt = (v: unknown, format?: string) => (v === null ? '(Blank)' : formatValue(v as never, format ?? (typeof v === 'number' && !Number.isInteger(v) ? '#,0.####' : undefined)));
   const escape = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
 
   const refresh = () => {
@@ -61,16 +70,16 @@ export function mountDaxConsole(model: DataModel, button: HTMLButtonElement): vo
     hide();
     const text = ta.value;
     try {
-      let t: { columns: string[]; rows: unknown[][] };
+      let t: { columns: string[]; rows: unknown[][]; formats?: (string | undefined)[] };
       try {
         t = model.evaluateTable(text);
       } catch (tableErr) {
         if (!/table expression was expected/i.test((tableErr as Error).message)) throw tableErr;
-        t = { columns: ['Value'], rows: [[model.evaluate(text)]] };
+        t = { columns: ['Value'], rows: [[model.evaluate(text)]], formats: [/^\s*\[([^\]]+)\]\s*$/.test(text) && model.hasMeasure(text.trim().slice(1, -1)) ? model.measure(text.trim().slice(1, -1)).format : undefined] };
       }
       result.innerHTML = `<p>${t.rows.length} row(s)</p><table><thead><tr>${t.columns.map((c) => `<th>${escape(c)}</th>`).join('')}</tr></thead><tbody>${t.rows
         .slice(0, 200)
-        .map((r) => `<tr>${r.map((v) => `<td>${escape(fmt(v))}</td>`).join('')}</tr>`)
+        .map((r) => `<tr>${r.map((v, i) => `<td class="${typeof v === 'number' ? 'num' : ''}">${escape(fmt(v, t.formats?.[i]))}</td>`).join('')}</tr>`)
         .join('')}</tbody></table>`;
     } catch (e) {
       result.innerHTML = `<p class="error">${escape((e as Error).message)}</p>`;
@@ -110,12 +119,7 @@ export function mountDaxConsole(model: DataModel, button: HTMLButtonElement): vo
     ta.value = ls.format(ta.value);
     refresh();
   });
-  panel.querySelector('[data-close]')!.addEventListener('click', () => (panel.hidden = true));
-  button.addEventListener('click', () => {
-    panel.hidden = !panel.hidden;
-    if (!panel.hidden) {
-      ta.focus();
-      refresh();
-    }
-  });
+  panel.querySelector('[data-close]')!.addEventListener('click', () => setOpen(false));
+  panel.addEventListener('keydown', (e) => e.key === 'Escape' && list.hidden && setOpen(false));
+  button.addEventListener('click', () => setOpen(panel.hidden));
 }

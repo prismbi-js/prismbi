@@ -28,6 +28,8 @@ export interface TuplesTable {
   tuples: CellValue[][];
   /** Time-intelligence results clear every other filter on this (date) table when used in CALCULATE. */
   clearTable?: string;
+  /** Display format per column (computed columns that are plain measure references). */
+  formats?: (string | undefined)[];
 }
 
 export type TableValue = RowsTable | TuplesTable;
@@ -1057,11 +1059,17 @@ export class Evaluator {
   }
 
   /** Materialise a table expression into named columns + rows (DAX query EVALUATE). */
-  evalTableToRows(expr: Expr, ctx: EvalContext): { columns: string[]; rows: CellValue[][] } {
+  evalTableToRows(expr: Expr, ctx: EvalContext): { columns: string[]; rows: CellValue[][]; formats: (string | undefined)[] } {
     const t = this.toTuples(this.evalTable(expr, ctx));
     const names = t.columns.map((c) => c.column);
     const columns = t.columns.map((c, i) => (names.indexOf(c.column) !== i || names.lastIndexOf(c.column) !== i ? (c.table ? `${c.table}[${c.column}]` : c.column) : c.column));
-    return { columns, rows: t.tuples.map((tu) => [...tu]) };
+    const formats = t.columns.map((c, i) => t.formats?.[i] ?? (c.table && this.model.hasTable(c.table) && this.model.table(c.table).hasColumn(c.column) ? this.model.table(c.table).column(c.column).format : undefined));
+    return { columns, rows: t.tuples.map((tu) => [...tu]), formats };
+  }
+
+  /** Format of a computed column: the measure's format when the expression is a plain measure reference. */
+  private formatOf(e: Expr): string | undefined {
+    return e.type === 'bracket' && this.model.hasMeasure(e.name) ? this.model.measure(e.name).format : undefined;
   }
 
   /** Split trailing "Name", expr pairs. */
@@ -1136,7 +1144,7 @@ export class Evaluator {
           const f = overrideFilters(baseFilters, groupCols.map((c, k) => compileFilter({ target: c, op: 'eq', value: tu[k] })));
           return [...tu, ...ext.map((x) => this.evalScalar(x.expr, { filters: f, vars: ctx.vars, selectedMeasure: ctx.selectedMeasure }))];
         });
-        return { kind: 'tuples', columns: [...groupCols, ...ext.map((x) => ({ table: '', column: x.name }))], tuples };
+        return { kind: 'tuples', columns: [...groupCols, ...ext.map((x) => ({ table: '', column: x.name }))], tuples, formats: [...groupCols.map(() => undefined), ...ext.map((x) => this.formatOf(x.expr))] };
       }
       case 'SUMMARIZECOLUMNS': {
         let i = 0;
@@ -1154,7 +1162,7 @@ export class Evaluator {
           if (ext.length && vals.every((v) => v === null)) continue;
           tuples.push([...keys, ...vals]);
         }
-        return { kind: 'tuples', columns: [...groupCols, ...ext.map((x) => ({ table: '', column: x.name }))], tuples };
+        return { kind: 'tuples', columns: [...groupCols, ...ext.map((x) => ({ table: '', column: x.name }))], tuples, formats: [...groupCols.map(() => undefined), ...ext.map((x) => this.formatOf(x.expr))] };
       }
       case 'ADDCOLUMNS':
       case 'SELECTCOLUMNS': {
@@ -1167,7 +1175,8 @@ export class Evaluator {
           return name === 'ADDCOLUMNS' ? [...asTuples.tuples[r], ...vals] : vals;
         });
         const extCols = ext.map((x) => ({ table: '', column: x.name }));
-        return { kind: 'tuples', columns: name === 'ADDCOLUMNS' ? [...asTuples.columns, ...extCols] : extCols, tuples };
+        const extFormats = ext.map((x) => this.formatOf(x.expr));
+        return { kind: 'tuples', columns: name === 'ADDCOLUMNS' ? [...asTuples.columns, ...extCols] : extCols, tuples, formats: name === 'ADDCOLUMNS' ? [...asTuples.columns.map(() => undefined), ...extFormats] : extFormats };
       }
       case 'CROSSJOIN': {
         let acc: TuplesTable = { kind: 'tuples', columns: [], tuples: [[]] };
@@ -1208,7 +1217,7 @@ export class Evaluator {
       }
       case 'ROW': {
         const ext = this.namedPairs(args, 0, name);
-        return { kind: 'tuples', columns: ext.map((x) => ({ table: '', column: x.name })), tuples: [ext.map((x) => this.evalScalar(x.expr, ctx))] };
+        return { kind: 'tuples', columns: ext.map((x) => ({ table: '', column: x.name })), tuples: [ext.map((x) => this.evalScalar(x.expr, ctx))], formats: ext.map((x) => this.formatOf(x.expr)) };
       }
       case 'DATATABLE': {
         const data = args[args.length - 1];

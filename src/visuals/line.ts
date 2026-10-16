@@ -93,17 +93,19 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       lo = Math.min(lo, sum);
     } else
       for (const se of all) {
-        const v = se.values[ci];
-        if (v === null) continue;
-        lo = Math.min(lo, v);
-        hi = Math.max(hi, v);
+        // highlighted portions must fit the axis too (they are usually smaller than the totals)
+        for (const v of [se.values[ci], se.highlights?.[ci] ?? null]) {
+          if (v === null) continue;
+          lo = Math.min(lo, v);
+          hi = Math.max(hi, v);
+        }
       }
   });
   const includeZero = kind !== 'line' || va.min === 0;
   if (!includeZero) {
     lo = Infinity;
     hi = -Infinity;
-    for (const se of all) for (const v of se.values) if (v !== null) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
+    for (const se of all) for (const v of [...se.values, ...(se.highlights ?? [])]) if (v !== null) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
   }
   const valueField = all[0]?.field;
   const endLabels = f.lines.endLabels && lineSeries.length <= 4 && kind !== 'combo';
@@ -232,8 +234,11 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     if (showMarkers)
       pts.forEach((p, i) => {
         if (!p) return;
-        const op = markOpacity(ctx, mergeIdentity(categories[i].identity, se.identity));
+        const op = se.highlights && !stacked ? 0.3 : markOpacity(ctx, mergeIdentity(categories[i].identity, se.identity));
         marks.append(s('circle', { cx: p[0], cy: p[1], r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2, opacity: op, 'pointer-events': 'none' }));
+        // the highlighted value gets the solid marker, like the solid highlight line
+        const hv = se.highlights && !stacked ? se.highlights[i] : null;
+        if (hv !== null && hv !== undefined) marks.append(s('circle', { cx: p[0], cy: scale(hv), r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2, class: 'pbi-marker-highlight', 'pointer-events': 'none' }));
       });
     if (stacked) se.values.forEach((v, i) => (base[i] += v ?? 0));
   });

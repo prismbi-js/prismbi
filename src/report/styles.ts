@@ -27,6 +27,7 @@ export const CSS = /* css */ `
 .pbi-report{--pbi-gap:12px;position:relative;display:flex;flex-direction:column;height:100%;min-height:0;background:var(--pbi-bg);color:var(--pbi-fg);font:var(--pbi-font-size)/1.4 var(--pbi-font);color-scheme:light;-webkit-font-smoothing:antialiased;box-sizing:border-box}
 .pbi-report[data-mode=dark]{color-scheme:dark}
 .pbi-report *,.pbi-report *::before,.pbi-report *::after{box-sizing:border-box}
+.pbi-report [hidden],.pbi-report[hidden],.pbi-tooltip[hidden],.pbi-menu[hidden]{display:none!important}
 .pbi-report button{font:inherit;color:inherit}
 .pbi-report :focus-visible{outline:2px solid var(--pbi-accent);outline-offset:1px}
 .pbi-toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--pbi-border);background:var(--pbi-surface);flex-wrap:wrap}
@@ -52,7 +53,8 @@ export const CSS = /* css */ `
 .pbi-icon[aria-pressed=true]{color:var(--pbi-accent)}
 .pbi-vbody{position:relative;flex:1;min-height:0;min-width:0}
 .pbi-vbody>*{position:absolute;inset:0}
-.pbi-visual.is-focus{position:absolute;inset:var(--pbi-gap);z-index:50;grid-area:auto}
+.pbi-visual.is-focus{position:absolute;inset:var(--pbi-gap);z-index:50;grid-area:auto;box-shadow:0 12px 40px rgb(0 0 0/.25)}
+.pbi-page-scroll.is-focusing{overflow:hidden}
 .pbi-focus-back{position:absolute;top:8px;left:8px;z-index:51}
 .pbi-chart{display:flex;width:100%;height:100%;gap:6px}
 .pbi-chart-legend-top{flex-direction:column}.pbi-chart-legend-bottom{flex-direction:column}

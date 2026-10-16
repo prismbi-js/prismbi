@@ -169,6 +169,7 @@ export class Report implements ReportRuntime {
   private paneOpen: boolean;
   private chrome: Required<ReportChrome>;
   private unsubModel: () => void;
+  private offResize: () => void = () => {};
   private onEvent?: ReportOptions['onEvent'];
   private destroyed = false;
 
@@ -205,6 +206,9 @@ export class Report implements ReportRuntime {
         else this.clearSelection();
       }
     });
+    const onResize = () => this._focused && this.layoutFocus();
+    window.addEventListener('resize', onResize);
+    this.offResize = () => window.removeEventListener('resize', onResize);
     this.unsubModel = this.model.onChange(() => {
       this._modelVersion++;
       this.domainCache.clear();
@@ -348,7 +352,28 @@ export class Report implements ReportRuntime {
     if (!host) return;
     this._focused = this._focused === visualId ? null : visualId;
     for (const hst of this.page.hosts.values()) hst.el.classList.toggle('is-focus', hst.id === this._focused);
+    this.layoutFocus();
     this.schedule(visualId);
+  }
+
+  /** Pin the focused visual to the visible page area (not the whole scrollable page). */
+  private layoutFocus(): void {
+    const focused = this._focused ? this.page.hosts.get(this._focused) : undefined;
+    this.pageScroll.classList.toggle('is-focusing', !!focused);
+    for (const hst of this.page.hosts.values()) {
+      if (hst === focused) continue;
+      for (const k of ['position', 'left', 'top', 'width', 'height']) hst.el.style.removeProperty(k);
+    }
+    if (!focused) return;
+    const r = this.pageScroll.getBoundingClientRect();
+    if (!r.width || !r.height) return; // not laid out (e.g. jsdom): CSS absolute fallback applies
+    const gap = this.page.def.layout?.gap ?? 12;
+    const st = focused.el.style;
+    st.position = 'fixed';
+    st.left = `${r.left + gap}px`;
+    st.top = `${r.top + gap}px`;
+    st.width = `${Math.max(0, r.width - gap * 2)}px`;
+    st.height = `${Math.max(0, r.height - gap * 2)}px`;
   }
 
   slicerTuples(visualId: string, columns: string[]): CellValue[][] {
@@ -612,7 +637,11 @@ export class Report implements ReportRuntime {
 
   private showPage(i: number, emit = true): void {
     if (this.page?.el) this.page.el.hidden = true;
-    this._focused = null;
+    if (this._focused) {
+      this._focused = null;
+      for (const hst of this.page.hosts.values()) hst.el.classList.remove('is-focus');
+      this.layoutFocus();
+    }
     this.active = null;
     this.current = i;
     const p = this.page;
@@ -933,6 +962,7 @@ export class Report implements ReportRuntime {
   destroy(): void {
     this.destroyed = true;
     this.unsubModel();
+    this.offResize();
     for (const p of this.pages) for (const host of p.hosts.values()) host.destroy();
     this.tooltip.destroy();
     this.ctxMenu.destroy();

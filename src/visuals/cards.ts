@@ -34,7 +34,8 @@ export const card = /* @__PURE__ */ defineVisual({
     const field = ctx.data.values[vi];
     const v = row?.values[vi] ?? null;
     const label = ctx.spec.title ?? field.name;
-    const fontSize = f.valueFontSize ?? Math.max(18, Math.min(ctx.theme.calloutFontSize, ctx.height * 0.42, ctx.width / Math.max(4, ctx.fmt(field, v, { displayUnits: 'auto' }).length * 0.62)));
+    const roomy = Math.min(120, Math.max(ctx.theme.calloutFontSize, ctx.height * 0.22));
+    const fontSize = f.valueFontSize ?? Math.max(18, Math.min(roomy, ctx.height * 0.42, ctx.width / Math.max(4, ctx.fmt(field, v, { displayUnits: 'auto' }).length * 0.62)));
     const value = h('div', { class: 'pbi-card-value', style: `font-size:${fontSize.toFixed(0)}px` }, ctx.fmt(field, v, { displayUnits: ctx.format.dataLabels.displayUnits, decimals: ctx.format.dataLabels.decimals, blank: '(Blank)' }));
     const labelEl = f.showLabel === false ? null : h('div', { class: 'pbi-card-label' }, label);
     const delta = di !== undefined ? deltaEl(ctx, row?.values[di] ?? null, ctx.data.values[di], f.deltaLabel ?? ctx.data.values[di].name, f.upIsGood ?? true) : null;
