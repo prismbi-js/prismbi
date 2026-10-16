@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrismBI Demo</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body { display: flex; flex-direction: column; font: 13px system-ui, sans-serif; background: #f9f9f7; }
+      body.dark { background: #0d0d0d; color: #f0efec; }
+      .demo-bar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid rgba(0,0,0,.08); flex-wrap: wrap; }
+      body.dark .demo-bar { border-color: rgba(255,255,255,.1); }
+      .demo-bar b { margin-right: auto; font-size: 13px; }
+      .demo-bar button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(0,0,0,.15); background: transparent; color: inherit; cursor: pointer; }
+      body.dark .demo-bar button { border-color: rgba(255,255,255,.2); }
+      #stats { font: 12px ui-monospace, Consolas, monospace; opacity: .7; }
+      #app { flex: 1; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="demo-bar">
+      <b>PrismBI · Vanilla TS demo</b>
+      <span id="stats"></span>
+      <button id="theme" type="button">Toggle dark</button>
+      <button id="bookmark" type="button">Save bookmark</button>
+      <button id="restore" type="button" disabled>Restore bookmark</button>
+      <button id="json" type="button">Log report JSON</button>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

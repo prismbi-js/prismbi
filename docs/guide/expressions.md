@@ -1,0 +1,97 @@
+# Expressions (DAX subset)
+
+PrismBI measures and calculated columns use a DAX-compatible syntax and semantics. If you know DAX, you already know this. This page lists what is supported today. The rest is scheduled in the [roadmap](../ROADMAP.md#phase-3-advanced-modeling-and-dax-coverage).
+
+## Syntax
+
+| Element | Example |
+|---|---|
+| Column | `Sales[Amount]`, `'Sales Data'[Net Amount]` |
+| Measure | `[Total Sales]` |
+| Table | `Sales`, `'Sales Data'` |
+| Numbers, text, booleans | `1.5`, `"text"` (`""` escapes a quote), `TRUE`, `FALSE` |
+| Arithmetic | `+ - * / ^`, unary `-` |
+| Text concatenation | `&` |
+| Comparison | `= == <> < > <= >=` (`==` is strict: BLANK ≠ 0) |
+| Logic | `&& \|\| NOT`, `IN { "a", "b" }` |
+| Variables | `VAR x = [Sales] VAR y = [Cost] RETURN x - y` |
+| Comments | `-- line`, `// line`, `/* block */` |
+
+## Semantics
+
+- **BLANK:** `BLANK() + 1 = 1`, `BLANK() * 5 = BLANK`, and `BLANK() = 0` and `BLANK() = ""` are TRUE. `DIVIDE` returns BLANK, or its third argument, when dividing by zero.
+- **Filter context:** aggregations see the rows visible under the current filters, which come from slicers, visual grouping, page and report filters, and `CALCULATE`.
+- **Row context:** iterators (`SUMX`, `FILTER`, …) and calculated columns evaluate per row. Inside them, `Table[Column]` reads the current row.
+- **Context transition:** a measure reference or `CALCULATE` inside a row context turns the current row into filters. For example, `MAXX(Products, [Total Sales])` gives the best-selling product's sales.
+- **CALCULATE filter arguments:**
+  - `Table[Col] = value` or any boolean expression over **one column** replaces the existing filters on that column.
+  - A table expression (`FILTER(...)`, `VALUES(...)`, `DATESYTD(...)`) filters by its rows or values.
+  - `ALL(Table)` / `REMOVEFILTERS(Table)` removes the filters on a table (and the tables it reaches). `ALL(Table[Col], …)` removes them for those columns only.
+  - `ALLEXCEPT(Table, Table[Col]…)` removes all except the listed columns.
+  - `ALLSELECTED(...)` removes only the filters introduced by the visual's own grouping, which gives "share of what's selected".
+  - `KEEPFILTERS(expr)` intersects with existing filters instead of replacing them.
+
+## Function reference
+
+### Aggregation
+`SUM` · `AVERAGE` · `MIN` · `MAX` (one column, or two scalars) · `MEDIAN` · `COUNT` · `COUNTA` · `COUNTBLANK` · `COUNTROWS` · `DISTINCTCOUNT` · `DISTINCTCOUNTNOBLANK` · `PRODUCT`
+
+### Iterators
+`SUMX` · `AVERAGEX` · `MINX` · `MAXX` · `MEDIANX` · `PRODUCTX` · `COUNTX` · `COUNTAX` · `CONCATENATEX(table, expr, [delimiter], [orderBy], [ASC|DESC])` · `RANKX(table, expr, [value], [ASC|DESC], [SKIP|DENSE])`
+
+### Filter and context
+`CALCULATE` · `CALCULATETABLE` · `FILTER` · `ALL` · `REMOVEFILTERS` · `ALLEXCEPT` · `ALLSELECTED` · `KEEPFILTERS` · `VALUES` · `DISTINCT` · `TOPN(n, table, orderBy, [ASC|DESC])` · `SELECTEDVALUE(col, [alternate])` · `HASONEVALUE` · `ISFILTERED` · `RELATED` · `RELATEDTABLE`
+
+### Time intelligence
+These need a date table related to your facts. See [data-model.md](data-model.md#date-tables).
+
+`TOTALYTD(expr, dates, [filter], [yearEnd "mm-dd"])` · `TOTALQTD` · `TOTALMTD` · `DATESYTD(dates, [yearEnd])` · `DATESQTD` · `DATESMTD` · `SAMEPERIODLASTYEAR` · `DATEADD(dates, n, DAY|MONTH|QUARTER|YEAR)` · `PARALLELPERIOD` · `PREVIOUSMONTH` · `PREVIOUSQUARTER` · `PREVIOUSYEAR` · `DATESBETWEEN(dates, start, end)` · `FIRSTDATE` · `LASTDATE`
+
+Used inside `CALCULATE`, these clear the other filters on the date table (Power BI "mark as date table" behaviour). So `CALCULATE([Sales], SAMEPERIODLASTYEAR(Date[Date]))` works inside a visual grouped by `Date[Year]`.
+
+### Logical
+`IF` · `IFERROR` · `SWITCH` (including `SWITCH(TRUE(), …)`) · `AND` · `OR` · `NOT` · `TRUE` · `FALSE` · `BLANK` · `ISBLANK` · `ISNUMBER` · `ISTEXT` · `ISEMPTY` · `COALESCE`
+
+### Math
+`DIVIDE` · `ABS` · `ROUND` · `ROUNDUP` · `ROUNDDOWN` · `TRUNC` · `INT` · `CEILING` · `FLOOR` · `SQRT` · `POWER` · `MOD` · `EXP` · `LN` · `LOG` · `LOG10` · `SIGN` · `PI`
+
+### Text
+`CONCATENATE` · `UPPER` · `LOWER` · `LEN` · `TRIM` · `LEFT` · `RIGHT` · `MID` · `SUBSTITUTE` · `REPT` · `SEARCH` · `FIND` · `CONTAINSSTRING` · `EXACT` · `VALUE` · `FORMAT(value, "format")`
+
+### Date and time
+`DATE` · `TODAY` · `NOW` · `YEAR` · `QUARTER` · `MONTH` · `DAY` · `HOUR` · `MINUTE` · `WEEKDAY(date, [1|2|3])` · `WEEKNUM` · `EOMONTH` · `EDATE` · `DATEDIFF(start, end, DAY|WEEK|MONTH|QUARTER|YEAR|HOUR|MINUTE|SECOND)` · date arithmetic (`date + 1` adds a day, `date - date` gives days)
+
+## Patterns
+
+```dax
+-- % of grand total
+DIVIDE([Total Sales], CALCULATE([Total Sales], ALL(Products)))
+
+-- % of what's selected (respects slicers, ignores the visual's own grouping)
+DIVIDE([Total Sales], CALCULATE([Total Sales], ALLSELECTED(Products)))
+
+-- Year over year
+VAR ly = CALCULATE([Total Sales], SAMEPERIODLASTYEAR(Date[Date]))
+RETURN IF(ISBLANK(ly), BLANK(), DIVIDE([Total Sales] - ly, ly))
+
+-- Running total within the year
+TOTALYTD([Total Sales], Date[Date])
+
+-- Rank of the current product
+RANKX(ALL(Products[Name]), [Total Sales])
+
+-- Sales of big orders only
+CALCULATE([Total Sales], Sales[Amount] >= 1000)
+
+-- Dynamic title text
+"Sales for " & SELECTEDVALUE(Region[Name], "all regions")
+```
+
+## Errors
+
+Errors carry readable messages, and a failing visual shows the message in place:
+
+- `DaxSyntaxError`: includes the position and a snippet, e.g. `Expected rparen at position 17: SUM(Sales[Amount]⟦⟧`
+- `A single value for column 'Sales'[Amount] cannot be determined…`: a bare column used outside row context
+- `Circular dependency detected: A → B → A`
+- `Function X is not supported (yet)`

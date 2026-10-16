@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PrismBI Developer Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: two-column "code → result" story; stacks to one column on narrow screens */
+:root {
+  --page: #f4f5f7; --panel: #ffffff; --ink: #14161a; --ink-2: #4b5160; --muted: #8a8f9c;
+  --line: #e3e5ea; --accent: #2a78d6; --code-bg: #12151c; --code-ink: #d7dce6;
+  --tok-key: #7fb4ff; --tok-str: #9ad7a8; --tok-fn: #f2c879; --tok-com: #6b7385; --tok-num: #f09a7a;
+  /* chart tokens (validated reference palette) */
+  --surface: #fcfcfb; --plane: #f9f9f7; --t1: #0b0b0b; --t2: #52514e; --t3: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --good: #006300; --bad: #d03b3b;
+  --display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0e1014; --panel: #161920; --ink: #eef0f4; --ink-2: #b4b9c6; --muted: #7d8391; --line: #262a33;
+  --accent: #3987e5; --code-bg: #0a0c10;
+  --surface: #1a1a19; --plane: #0d0d0d; --t1: #f0efec; --t2: #c3c2b7; --t3: #898781;
+  --grid: #2c2c2a; --axis: #383835; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --good: #0ca30c; --bad: #e66767;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --page: #0e1014; --panel: #161920; --ink: #eef0f4; --ink-2: #b4b9c6; --muted: #7d8391; --line: #262a33;
+  --accent: #3987e5; --code-bg: #0a0c10;
+  --surface: #1a1a19; --plane: #0d0d0d; --t1: #f0efec; --t2: #c3c2b7; --t3: #898781;
+  --grid: #2c2c2a; --axis: #383835; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --good: #0ca30c; --bad: #e66767;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--ui); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 40px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 4vw, 44px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 22px; font-weight: 700; }
+h3 { font-size: 15px; font-weight: 700; }
+p { margin: 0; color: var(--ink-2); max-width: 68ch; }
+.eyebrow { font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+header { display: grid; gap: 14px; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { font: 500 12px var(--mono); padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); background: var(--panel); }
+section { display: grid; gap: 18px; }
+.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); } }
+
+/* code panel */
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; overflow: hidden; min-width: 0; }
+.tabs { display: flex; gap: 2px; padding: 8px 8px 0; overflow-x: auto; border-bottom: 1px solid #ffffff14; }
+.tabs button { font: 500 12.5px var(--mono); color: #9aa3b5; background: none; border: 0; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: #fff; background: #ffffff12; }
+.tabs button:focus-visible { outline: 2px solid var(--accent); }
+pre { margin: 0; padding: 18px 20px; overflow-x: auto; font: 13px/1.65 var(--mono); }
+.k { color: var(--tok-key); } .s { color: var(--tok-str); } .f { color: var(--tok-fn); } .c { color: var(--tok-com); font-style: italic; } .n { color: var(--tok-num); }
+
+/* ---------- report canvas (what PrismBI renders) ---------- */
+.report { background: var(--plane); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-family: var(--ui); color: var(--t1); min-width: 0; }
+.report-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); flex-wrap: wrap; }
+.report-bar b { font-size: 14px; }
+.report-bar small { color: var(--t3); font-size: 12px; }
+.canvas { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; padding: 10px; }
+.vis { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; position: relative; }
+.vis-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.vis-h h4 { margin: 0; font: 600 12.5px var(--ui); color: var(--t1); }
+.vis-icons { display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.vis:hover .vis-icons, .vis:focus-within .vis-icons { opacity: 1; }
+.vis-icons span { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 4px; color: var(--t3); font-size: 12px; border: 1px solid var(--line); }
+.c12 { grid-column: span 12; } .c3 { grid-column: span 3; } .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c7 { grid-column: span 7; } .c8 { grid-column: span 8; }
+@media (max-width: 720px) { .c3 { grid-column: span 6; } .c4, .c5, .c7, .c8 { grid-column: span 12; } }
+
+.slicer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.slicer label { font-size: 12px; color: var(--t2); margin-right: 4px; }
+.tile { font: 500 12.5px var(--ui); padding: 5px 12px; border-radius: 6px; border: 1px solid var(--axis); background: transparent; color: var(--t1); cursor: pointer; }
+.tile[aria-pressed="true"] { background: var(--s1); border-color: var(--s1); color: #fff; }
+.tile:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+.clear { font-size: 12px; color: var(--s1); background: none; border: 0; cursor: pointer; padding: 4px; }
+
+.card .lbl { font-size: 12px; color: var(--t2); }
+.card .val { font: 600 26px var(--ui); letter-spacing: -0.01em; margin-top: 2px; }
+.card .delta { font-size: 12px; margin-top: 2px; color: var(--t2); }
+.card .delta b { font-weight: 600; }
+.up { color: var(--good); } .down { color: var(--bad); }
+
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: var(--ui); }
+.bar { cursor: pointer; transition: opacity .15s; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tbl th { text-align: left; font-weight: 600; color: var(--t2); padding: 6px 8px; border-bottom: 1px solid var(--axis); }
+.tbl td { padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+.tbl th.r, .tbl td.r { text-align: right; }
+.tbl tr.dim td { opacity: .35; }
+.tbl tfoot td { font-weight: 600; border-bottom: 0; border-top: 1px solid var(--axis); }
+.databar { position: relative; }
+.databar i { position: absolute; left: 0; top: 7px; bottom: 7px; background: var(--s1); opacity: .16; border-radius: 0 3px 3px 0; }
+.databar span { position: relative; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--t2); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--t1); border: 1px solid var(--line); box-shadow: 0 6px 20px #0000002a; border-radius: 6px; padding: 7px 10px; font: 12px/1.45 var(--ui); z-index: 20; }
+.tip b { font-weight: 600; }
+.pages { display: flex; gap: 2px; padding: 0 10px; border-top: 1px solid var(--line); background: var(--surface); overflow-x: auto; }
+.pages span { font-size: 12.5px; padding: 8px 14px; color: var(--t2); border-top: 2px solid transparent; white-space: nowrap; }
+.pages span.on { color: var(--t1); font-weight: 600; border-top-color: var(--s1); }
+.hint { font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; align-items: center; }
+.hint kbd { font: 600 11px var(--mono); padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); }
+
+/* architecture */
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 860px) { .flow { grid-template-columns: minmax(0, 1fr); } }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 6px; align-content: start; }
+.step code { font: 600 12px var(--mono); color: var(--accent); }
+.step p { font-size: 13px; }
+.phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.phase { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 6px; align-content: start; }
+.phase .tag { font: 600 11px var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.phase.now { border-color: var(--accent); }
+.phase.now .tag { color: var(--accent); }
+.phase ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Developer preview · v0.1</span>
+  <h1>PrismBI: Power BI-style reports from a few lines of TypeScript</h1>
+  <p>You load data, describe a model with DAX-like measures, and declare pages of visuals as JSON. PrismBI handles querying, cross-filtering, slicers, formatting and theming. It runs in any framework, with first-class React bindings.</p>
+  <div class="pill-row">
+    <span class="pill">npm i prismbi</span><span class="pill">TypeScript-first</span><span class="pill">0 runtime deps</span>
+    <span class="pill">SVG visuals</span><span class="pill">DAX-like engine</span><span class="pill">React · vanilla (Vue next)</span>
+  </div>
+</header>
+
+<section>
+  <div>
+    <span class="eyebrow">1 · What you write → what renders</span>
+    <h2>Four short files produce the report on the right</h2>
+  </div>
+  <div class="split">
+    <div class="code">
+      <div class="tabs" role="tablist" aria-label="Code samples">
+        <button role="tab" id="tab-model" aria-selected="true" data-pane="model">model.ts</button>
+        <button role="tab" id="tab-report" aria-selected="false" data-pane="report">report.ts</button>
+        <button role="tab" id="tab-react" aria-selected="false" data-pane="react">App.tsx</button>
+        <button role="tab" id="tab-events" aria-selected="false" data-pane="events">events.ts</button>
+      </div>
+<pre id="pane-model"><span class="k">import</span> { DataModel } <span class="k">from</span> <span class="s">'prismbi'</span>;
+
+<span class="k">export const</span> model = <span class="k">new</span> <span class="f">DataModel</span>()
+  .<span class="f">addTable</span>(<span class="s">'Sales'</span>, salesRows)      <span class="c">// any JSON array / CSV</span>
+  .<span class="f">addTable</span>(<span class="s">'Products'</span>, productRows)
+  .<span class="f">addTable</span>(<span class="s">'Region'</span>, regionRows)
+  .<span class="f">addDateTable</span>(<span class="s">'Date'</span>, <span class="s">'2024-01-01'</span>, <span class="s">'2025-12-31'</span>)
+
+  <span class="c">// star schema: filters flow from dimensions to facts</span>
+  .<span class="f">addRelationship</span>({ from: <span class="s">'Sales[ProductId]'</span>, to: <span class="s">'Products[Id]'</span> })
+  .<span class="f">addRelationship</span>({ from: <span class="s">'Sales[RegionId]'</span>,  to: <span class="s">'Region[Id]'</span> })
+  .<span class="f">addRelationship</span>({ from: <span class="s">'Sales[OrderDate]'</span>, to: <span class="s">'Date[Date]'</span> })
+
+  <span class="c">// calculated column (row context)</span>
+  .<span class="f">addCalculatedColumn</span>(<span class="s">'Sales'</span>, <span class="s">'Profit'</span>, <span class="s">'Sales[Amount] - Sales[Cost]'</span>)
+
+  <span class="c">// measures – real DAX semantics (filter context, CALCULATE, time intelligence)</span>
+  .<span class="f">addMeasure</span>(<span class="s">'Total Sales'</span>, <span class="s">'SUM(Sales[Amount])'</span>, { format: <span class="s">'$#,0'</span> })
+  .<span class="f">addMeasure</span>(<span class="s">'Margin %'</span>,    <span class="s">'DIVIDE(SUM(Sales[Profit]), [Total Sales])'</span>, { format: <span class="s">'0.0%'</span> })
+  .<span class="f">addMeasure</span>(<span class="s">'Sales LY'</span>,    <span class="s">'CALCULATE([Total Sales], SAMEPERIODLASTYEAR(Date[Date]))'</span>)
+  .<span class="f">addMeasure</span>(<span class="s">'YoY %'</span>,       <span class="s">'DIVIDE([Total Sales] - [Sales LY], [Sales LY])'</span>, { format: <span class="s">'0.0%'</span> })
+  .<span class="f">addMeasure</span>(<span class="s">'Share of All'</span>, <span class="s">'DIVIDE([Total Sales], CALCULATE([Total Sales], ALLSELECTED(Products)))'</span>);
+
+<span class="c">// ad-hoc evaluation, handy in tests and APIs</span>
+model.<span class="f">evaluate</span>(<span class="s">'[Total Sales]'</span>, [{ target: <span class="s">'Region[Name]'</span>, op: <span class="s">'eq'</span>, value: <span class="s">'West'</span> }]);</pre>
+<pre id="pane-report" hidden><span class="k">import</span> { Report } <span class="k">from</span> <span class="s">'prismbi'</span>;
+<span class="k">import</span> { model } <span class="k">from</span> <span class="s">'./model'</span>;
+
+<span class="k">const</span> report = <span class="k">new</span> <span class="f">Report</span>(document.<span class="f">getElementById</span>(<span class="s">'app'</span>)!, {
+  model,
+  theme: <span class="s">'light'</span>,                      <span class="c">// or 'dark', or a Power BI theme JSON</span>
+  pages: [{
+    name: <span class="s">'Overview'</span>,
+    layout: { columns: <span class="n">12</span>, rowHeight: <span class="n">44</span> },  <span class="c">// responsive grid</span>
+    visuals: [
+      { type: <span class="s">'slicer'</span>, layout: { x: <span class="n">0</span>, y: <span class="n">0</span>, w: <span class="n">12</span>, h: <span class="n">1</span> },
+        fields: { field: <span class="s">'Region[Name]'</span> }, format: { slicer: { style: <span class="s">'tiles'</span> } } },
+
+      { type: <span class="s">'card'</span>, layout: { x: <span class="n">0</span>, y: <span class="n">1</span>, w: <span class="n">3</span>, h: <span class="n">2</span> },
+        fields: { value: <span class="s">'Total Sales'</span>, delta: <span class="s">'YoY %'</span> } },
+      <span class="c">// ...three more cards</span>
+
+      { type: <span class="s">'clusteredColumn'</span>, layout: { x: <span class="n">0</span>, y: <span class="n">3</span>, w: <span class="n">5</span>, h: <span class="n">6</span> },
+        title: <span class="s">'Sales by category'</span>,
+        fields: { category: [<span class="s">'Products[Category]'</span>, <span class="s">'Products[Name]'</span>], values: <span class="s">'Total Sales'</span> },
+        format: { dataLabels: { show: <span class="k">true</span>, displayUnits: <span class="s">'auto'</span> } } },
+
+      { type: <span class="s">'line'</span>, layout: { x: <span class="n">5</span>, y: <span class="n">3</span>, w: <span class="n">7</span>, h: <span class="n">6</span> },
+        title: <span class="s">'Monthly sales'</span>,
+        fields: { category: <span class="s">'Date[MonthShort]'</span>, values: <span class="s">'Total Sales'</span> } },
+
+      { type: <span class="s">'donut'</span>, layout: { x: <span class="n">0</span>, y: <span class="n">9</span>, w: <span class="n">4</span>, h: <span class="n">6</span> },
+        fields: { legend: <span class="s">'Region[Name]'</span>, values: <span class="s">'Total Sales'</span> } },
+
+      { type: <span class="s">'table'</span>, layout: { x: <span class="n">4</span>, y: <span class="n">9</span>, w: <span class="n">8</span>, h: <span class="n">6</span> },
+        fields: { columns: [<span class="s">'Products[Category]'</span>, <span class="s">'Total Sales'</span>, <span class="s">'Profit'</span>, <span class="s">'Margin %'</span>] },
+        format: { table: { conditional: { <span class="s">'Total Sales'</span>: { dataBars: <span class="k">true</span> } } } } },
+    ],
+  }],
+});</pre>
+<pre id="pane-react" hidden><span class="k">import</span> { PrismReport, PrismVisual } <span class="k">from</span> <span class="s">'prismbi/react'</span>;
+<span class="k">import</span> { model } <span class="k">from</span> <span class="s">'./model'</span>;
+<span class="k">import</span> definition <span class="k">from</span> <span class="s">'./overview.report.json'</span>; <span class="c">// same JSON as report.ts</span>
+
+<span class="k">export function</span> <span class="f">App</span>() {
+  <span class="k">const</span> [theme, setTheme] = <span class="f">useState</span>&lt;<span class="s">'light'</span> | <span class="s">'dark'</span>&gt;(<span class="s">'light'</span>);
+
+  <span class="k">return</span> (
+    &lt;<span class="f">PrismReport</span>
+      model={model}
+      definition={definition}
+      theme={theme}
+      onSelectionChanged={(sel) =&gt; console.<span class="f">log</span>(sel.filters)}
+      onDataPointClick={(e) =&gt; <span class="f">navigate</span>(<span class="s">`/category/</span>${e.keys[<span class="n">0</span>]}<span class="s">`</span>)}
+      style={{ height: <span class="n">720</span> }}
+    /&gt;
+  );
+}
+
+<span class="c">// or drop a single visual anywhere in your own layout</span>
+&lt;<span class="f">PrismVisual</span> model={model} type=<span class="s">"line"</span>
+  fields={{ category: <span class="s">'Date[MonthShort]'</span>, values: <span class="s">'Total Sales'</span> }} /&gt;</pre>
+<pre id="pane-events" hidden><span class="c">// everything is observable and scriptable</span>
+report.<span class="f">on</span>(<span class="s">'selectionChanged'</span>, ({ visualId, filters }) =&gt; { <span class="c">/* ... */</span> });
+report.<span class="f">on</span>(<span class="s">'filtersChanged'</span>, ({ pageId, filters }) =&gt; <span class="f">saveToUrl</span>(filters));
+
+<span class="c">// drive it from your own UI</span>
+report.<span class="f">setPageFilters</span>(<span class="s">'overview'</span>, [
+  { target: <span class="s">'Date[Year]'</span>, op: <span class="s">'in'</span>, values: [<span class="n">2025</span>] },
+]);
+report.<span class="f">setTheme</span>(<span class="s">'dark'</span>);
+report.<span class="f">goToPage</span>(<span class="s">'details'</span>);
+
+<span class="c">// bookmarks capture page + slicers + selection</span>
+<span class="k">const</span> bm = report.<span class="f">captureBookmark</span>(<span class="s">'West only'</span>);
+report.<span class="f">applyBookmark</span>(bm);
+
+<span class="c">// persist & restore the whole report as JSON</span>
+<span class="k">const</span> json = report.<span class="f">toJSON</span>();
+
+<span class="c">// export what a visual shows</span>
+report.<span class="f">visual</span>(<span class="s">'sales-by-category'</span>).<span class="f">exportCsv</span>();
+
+<span class="c">// register your own visual type (Custom Visuals SDK)</span>
+<span class="f">registerVisual</span>({ type: <span class="s">'bullet'</span>, roles: [...], <span class="f">render</span>(ctx) { <span class="c">/* SVG */</span> } });</pre>
+    </div>
+
+    <div class="report" aria-label="Rendered report preview">
+      <div class="report-bar"><b>Adventure Sales · Overview</b><small>Rendered by PrismBI · sample data</small></div>
+      <div class="canvas">
+        <div class="vis c12 slicer" id="slicer"><label>Region</label></div>
+        <div class="vis c3 card" id="k1"></div>
+        <div class="vis c3 card" id="k2"></div>
+        <div class="vis c3 card" id="k3"></div>
+        <div class="vis c3 card" id="k4"></div>
+        <div class="vis c5"><div class="vis-h"><h4>Sales by category</h4><div class="vis-icons" aria-hidden="true"><span>⤢</span><span>⇩</span><span>⋯</span></div></div><svg id="bars" viewBox="0 0 360 220" role="img" aria-label="Sales by category column chart"></svg></div>
+        <div class="vis c7"><div class="vis-h"><h4 id="lineTitle">Monthly sales</h4><div class="vis-icons" aria-hidden="true"><span>⤢</span><span>⇩</span><span>⋯</span></div></div><svg id="line" viewBox="0 0 500 220" role="img" aria-label="Monthly sales line chart"></svg></div>
+        <div class="vis c4"><div class="vis-h"><h4>Sales by region</h4></div><svg id="donut" viewBox="0 0 240 170" role="img" aria-label="Sales by region donut chart"></svg><div class="legend" id="donutLegend"></div></div>
+        <div class="vis c8"><div class="vis-h"><h4>Category details</h4><div class="vis-icons" aria-hidden="true"><span>⤢</span><span>⇩</span><span>⋯</span></div></div><div style="overflow-x:auto"><table class="tbl" id="tbl"></table></div></div>
+      </div>
+      <div class="pages"><span class="on">Overview</span><span>Products</span><span>Regions</span><span>Details</span></div>
+    </div>
+  </div>
+  <div class="hint">Try it: click a <kbd>column</kbd> to cross-filter the other visuals, click a <kbd>region tile</kbd> to slice the whole page, and hover the line for a tooltip. This mock behaves the way the library will.</div>
+</section>
+
+<section>
+  <div><span class="eyebrow">2 · How it fits together</span><h2>Five layers, each usable on its own</h2></div>
+  <div class="flow">
+    <div class="step"><code>DataTable</code><h3>Data</h3><p>Columnar tables from JSON, CSV or column arrays. Types are inferred and hash indexes are built lazily.</p></div>
+    <div class="step"><code>DataModel</code><h3>Semantic model</h3><p>Relationships, measures, calculated columns, date tables, formats and a field list for building UIs.</p></div>
+    <div class="step"><code>Evaluator</code><h3>DAX-like engine</h3><p>Filter and row context, context transition, CALCULATE, iterators, ALLSELECTED, YTD and same period last year.</p></div>
+    <div class="step"><code>defineVisual</code><h3>Visuals</h3><p>SVG charts, cards, table, matrix and slicers, with data roles, format panes, tooltips and highlighting.</p></div>
+    <div class="step"><code>Report</code><h3>Report runtime</h3><p>Pages, grid layout, cross-filtering, bookmarks, themes, JSON save and load, events, plus React wrappers.</p></div>
+  </div>
+</section>
+
+<section>
+  <div><span class="eyebrow">3 · Delivery plan</span><h2>Built in phases, each one shippable</h2></div>
+  <div class="phases">
+    <div class="phase now"><span class="tag">Phase 1 · built</span><h3>Core engine + essential visuals</h3><ul><li>Model, relationships, DAX subset</li><li>Column, bar, line, area, pie and donut, scatter, card, table, matrix, slicer, gauge, treemap, funnel</li><li>Cross-filter, themes, report JSON, React</li></ul></div>
+    <div class="phase"><span class="tag">Phase 2</span><h3>Pro visuals + interactivity</h3><ul><li>Drill through, waterfall, ribbon, maps, small multiples</li><li>Filter pane, conditional formatting</li><li>Export to PNG and PDF, focus mode</li></ul></div>
+    <div class="phase"><span class="tag">Phase 3</span><h3>Advanced modeling</h3><ul><li>Bidirectional and many-to-many relationships, USERELATIONSHIP</li><li>SUMMARIZE, ADDCOLUMNS, calculation groups</li><li>Hierarchies, row-level security</li></ul></div>
+    <div class="phase"><span class="tag">Phase 4</span><h3>Authoring studio</h3><ul><li>Drag-and-drop editor with Fields, Visualizations and Format panes</li><li>Undo and redo, autosave</li></ul></div>
+    <div class="phase"><span class="tag">Phase 5</span><h3>Scale + connectors</h3><ul><li>Web Workers, Arrow, DuckDB-WASM</li><li>REST, SQL and streaming sources, scheduled refresh</li></ul></div>
+    <div class="phase"><span class="tag">Phase 6</span><h3>Beyond Power BI</h3><ul><li>Ask questions in plain language, AI insights</li><li>Real-time collaboration, embedding, plugins</li></ul></div>
+  </div>
+</section>
+</div>
+
+<div class="tip" id="tip" hidden></div>
+
+<script>
+// ---- tiny sample model (same shape the library uses) ----
+const categories = ['Bikes', 'Components', 'Clothing', 'Accessories'];
+const regions = ['North', 'West', 'South'];
+const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const base = { Bikes: 410000, Components: 168000, Clothing: 74000, Accessories: 39000 };
+const margin = { Bikes: 0.22, Components: 0.31, Clothing: 0.38, Accessories: 0.46 };
+const regionF = { North: 0.42, West: 0.35, South: 0.23 };
+const season = [0.62,0.66,0.8,0.92,1.08,1.2,1.26,1.18,1.0,0.94,1.1,1.34];
+const rows = [];
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (const c of categories) for (const r of regions) months.forEach((m, i) => {
+  const amount = base[c] / 12 * regionF[r] * 3 * season[i] * (0.9 + rnd() * 0.2);
+  rows.push({ c, r, m: i, amount, profit: amount * margin[c] * (0.92 + rnd() * 0.16), units: Math.round(amount / ({Bikes:1250,Components:240,Clothing:48,Accessories:22}[c])) });
+});
+const state = { region: null, category: null };
+const sum = (xs, k) => xs.reduce((a, x) => a + x[k], 0);
+const where = (o = {}) => rows.filter(x => (!state.region || x.r === state.region) && (o.ignoreCat || !state.category || x.c === state.category));
+
+// ---- formatting (mirrors prismbi formatValue) ----
+const fmtK = v => Math.abs(v) >= 1e6 ? '$' + (v/1e6).toFixed(2) + 'M' : Math.abs(v) >= 1e3 ? '$' + (v/1e3).toFixed(v >= 1e5 ? 0 : 1) + 'K' : '$' + v.toFixed(0);
+const fmtN = v => v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+const pct = v => (v * 100).toFixed(1) + '%';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const svgNS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, text) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+const niceTicks = (max, n = 4) => { const raw = max / n, p = Math.pow(10, Math.floor(Math.log10(raw))), step = [1,2,2.5,5,10].map(s => s*p).find(s => s >= raw); const t = []; for (let v = 0; v <= max + step * 0.001; v += step) t.push(v); if (t[t.length-1] < max) t.push(t[t.length-1] + step); return t; };
+const tip = document.getElementById('tip');
+const showTip = (e, html) => { tip.innerHTML = html; tip.hidden = false; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8); tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px'; };
+const hideTip = () => (tip.hidden = true);
+
+// ---- slicer ----
+const slicer = document.getElementById('slicer');
+regions.forEach(r => { const b = document.createElement('button'); b.className = 'tile'; b.id = 'tile-' + r; b.textContent = r; b.setAttribute('aria-pressed', 'false'); b.onclick = () => { state.region = state.region === r ? null : r; render(); }; slicer.appendChild(b); });
+const clearBtn = document.createElement('button'); clearBtn.className = 'clear'; clearBtn.id = 'clear-sel'; clearBtn.textContent = 'Clear selections'; clearBtn.onclick = () => { state.region = null; state.category = null; render(); }; slicer.appendChild(clearBtn);
+
+function cards() {
+  const cur = where(); const s = sum(cur, 'amount'), p = sum(cur, 'profit'), u = sum(cur, 'units');
+  const yoy = 0.084 + (state.region === 'South' ? -0.12 : state.region === 'West' ? 0.05 : 0) + (state.category === 'Clothing' ? -0.06 : 0);
+  const k = [
+    ['Total sales', fmtK(s), yoy, 'vs last year'],
+    ['Profit', fmtK(p), yoy + 0.021, 'vs last year'],
+    ['Margin', pct(p / s), 0.006, 'pts vs last year'],
+    ['Units sold', fmtN(u), yoy - 0.013, 'vs last year'],
+  ];
+  k.forEach(([lbl, val, d, vs], i) => {
+    const up = d >= 0;
+    document.getElementById('k' + (i + 1)).innerHTML = `<div class="lbl">${lbl}</div><div class="val">${val}</div><div class="delta"><b class="${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${(Math.abs(d) * 100).toFixed(1)}%</b> ${vs}</div>`;
+  });
+}
+
+function bars() {
+  const svg = document.getElementById('bars'); svg.replaceChildren();
+  const W = 360, H = 220, m = { l: 40, r: 8, t: 18, b: 26 };
+  const data = categories.map(c => ({ c, v: sum(where({ ignoreCat: true }).filter(x => x.c === c), 'amount') }));
+  const ticks = niceTicks(Math.max(...data.map(d => d.v)));
+  const max = ticks[ticks.length - 1];
+  const y = v => m.t + (H - m.t - m.b) * (1 - v / max);
+  ticks.forEach(t => { svg.appendChild(el('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: t === 0 ? css('--axis') : css('--grid'), 'stroke-width': 1 })); svg.appendChild(el('text', { x: m.l - 6, y: y(t) + 4, 'text-anchor': 'end', 'font-size': 10.5, fill: css('--t3') }, fmtK(t).replace('.0K', 'K'))); });
+  const band = (W - m.l - m.r) / data.length, bw = Math.min(24 * 1.6, band * 0.5);
+  data.forEach((d, i) => {
+    const x = m.l + band * i + (band - bw) / 2, top = y(d.v), h = y(0) - top, r = Math.min(4, h);
+    const dim = state.category && state.category !== d.c;
+    const path = el('path', { class: 'bar', d: `M${x},${y(0)} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${y(0)} Z`, fill: css('--s1'), opacity: dim ? 0.28 : 1, tabindex: 0, role: 'button', 'aria-label': `${d.c}: ${fmtK(d.v)}` });
+    path.addEventListener('click', ev => { ev.stopPropagation(); state.category = state.category === d.c ? null : d.c; render(); });
+    path.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); path.dispatchEvent(new MouseEvent('click')); } });
+    path.addEventListener('mousemove', ev => showTip(ev, `<b>${d.c}</b><br>Total sales: ${fmtK(d.v)}`));
+    path.addEventListener('mouseleave', hideTip);
+    svg.appendChild(path);
+    svg.appendChild(el('text', { x: x + bw / 2, y: top - 5, 'text-anchor': 'middle', 'font-size': 10.5, fill: css('--t2'), opacity: dim ? 0.4 : 1 }, fmtK(d.v)));
+    svg.appendChild(el('text', { x: x + bw / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: css('--t2') }, d.c));
+  });
+}
+
+function line() {
+  const svg = document.getElementById('line'); svg.replaceChildren();
+  document.getElementById('lineTitle').textContent = 'Monthly sales' + (state.category ? ' · ' + state.category : '');
+  const W = 500, H = 220, m = { l: 44, r: 14, t: 14, b: 26 };
+  const cur = where();
+  const data = months.map((_, i) => sum(cur.filter(x => x.m === i), 'amount'));
+  const ticks = niceTicks(Math.max(...data)); const max = ticks[ticks.length - 1];
+  const x = i => m.l + (W - m.l - m.r) * i / 11, y = v => m.t + (H - m.t - m.b) * (1 - v / max);
+  ticks.forEach(t => { svg.appendChild(el('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: t === 0 ? css('--axis') : css('--grid') })); svg.appendChild(el('text', { x: m.l - 6, y: y(t) + 4, 'text-anchor': 'end', 'font-size': 10.5, fill: css('--t3') }, fmtK(t).replace('.0K', 'K'))); });
+  months.forEach((mo, i) => svg.appendChild(el('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', 'font-size': 10.5, fill: css('--t3') }, mo)));
+  const pts = data.map((v, i) => `${x(i)},${y(v)}`);
+  svg.appendChild(el('path', { d: `M${x(0)},${y(0)} L${pts.join(' L')} L${x(11)},${y(0)} Z`, fill: css('--s1'), 'fill-opacity': 0.1 }));
+  svg.appendChild(el('path', { d: `M${pts.join(' L')}`, fill: 'none', stroke: css('--s1'), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  svg.appendChild(el('circle', { cx: x(11), cy: y(data[11]), r: 4, fill: css('--s1'), stroke: css('--surface'), 'stroke-width': 2 }));
+  svg.appendChild(el('text', { x: x(11) - 6, y: y(data[11]) - 10, 'text-anchor': 'end', 'font-size': 11, 'font-weight': 600, fill: css('--t1') }, fmtK(data[11])));
+  const cross = el('line', { y1: m.t, y2: y(0), stroke: css('--axis'), visibility: 'hidden' }); svg.appendChild(cross);
+  const dot = el('circle', { r: 4, fill: css('--s1'), stroke: css('--surface'), 'stroke-width': 2, visibility: 'hidden' }); svg.appendChild(dot);
+  const hit = el('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent' }); svg.appendChild(hit);
+  hit.addEventListener('mousemove', ev => {
+    const b = svg.getBoundingClientRect(); const px = (ev.clientX - b.left) * W / b.width;
+    const i = Math.max(0, Math.min(11, Math.round((px - m.l) / ((W - m.l - m.r) / 11))));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(data[i])); dot.setAttribute('visibility', 'visible');
+    showTip(ev, `<b>${months[i]} 2025</b><br>Total sales: ${fmtK(data[i])}`);
+  });
+  hit.addEventListener('mouseleave', () => { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); hideTip(); });
+}
+
+function donut() {
+  const svg = document.getElementById('donut'); svg.replaceChildren();
+  const cur = rows.filter(x => !state.category || x.c === state.category);
+  const data = regions.map((r, i) => ({ r, v: sum(cur.filter(x => x.r === r), 'amount'), col: css('--s' + (i + 1)) }));
+  const total = data.reduce((a, d) => a + d.v, 0); const cx = 120, cy = 85, R = 72, r0 = 48;
+  let a0 = -Math.PI / 2;
+  data.forEach(d => {
+    const a1 = a0 + 2 * Math.PI * d.v / total, gap = 0.012;
+    const s = a0 + gap, e = a1 - gap, large = e - s > Math.PI ? 1 : 0;
+    const p = (rad, a) => `${cx + rad * Math.cos(a)},${cy + rad * Math.sin(a)}`;
+    const dim = state.region && state.region !== d.r;
+    const seg = el('path', { d: `M${p(R, s)} A${R},${R} 0 ${large} 1 ${p(R, e)} L${p(r0, e)} A${r0},${r0} 0 ${large} 0 ${p(r0, s)} Z`, fill: d.col, opacity: dim ? 0.28 : 1, class: 'bar' });
+    seg.addEventListener('click', () => { state.region = state.region === d.r ? null : d.r; render(); });
+    seg.addEventListener('mousemove', ev => showTip(ev, `<b>${d.r}</b><br>${fmtK(d.v)} · ${pct(d.v / total)}`));
+    seg.addEventListener('mouseleave', hideTip);
+    svg.appendChild(seg); a0 = a1;
+  });
+  const shown = state.region ? data.find(d => d.r === state.region).v : total;
+  svg.appendChild(el('text', { x: cx, y: cy - 2, 'text-anchor': 'middle', 'font-size': 15, 'font-weight': 600, fill: css('--t1') }, fmtK(shown)));
+  svg.appendChild(el('text', { x: cx, y: cy + 15, 'text-anchor': 'middle', 'font-size': 10.5, fill: css('--t3') }, state.region || 'All regions'));
+  document.getElementById('donutLegend').innerHTML = data.map(d => `<span><i style="background:${d.col}"></i>${d.r} ${pct(d.v / total)}</span>`).join('');
+}
+
+function table() {
+  const cur = where({ ignoreCat: true });
+  const data = categories.map(c => { const xs = cur.filter(x => x.c === c); return { c, s: sum(xs, 'amount'), p: sum(xs, 'profit') }; });
+  const max = Math.max(...data.map(d => d.s)), S = sum(data, 's'), P = sum(data, 'p');
+  document.getElementById('tbl').innerHTML = `<thead><tr><th>Category</th><th class="r">Total sales</th><th class="r">Profit</th><th class="r">Margin</th><th class="r">Share</th></tr></thead><tbody>${
+    data.map(d => `<tr class="${state.category && state.category !== d.c ? 'dim' : ''}"><td>${d.c}</td><td class="r databar"><i style="width:${(d.s / max * 100).toFixed(1)}%"></i><span>${fmtK(d.s)}</span></td><td class="r">${fmtK(d.p)}</td><td class="r">${pct(d.p / d.s)}</td><td class="r">${pct(d.s / S)}</td></tr>`).join('')
+  }</tbody><tfoot><tr><td>Total</td><td class="r">${fmtK(S)}</td><td class="r">${fmtK(P)}</td><td class="r">${pct(P / S)}</td><td class="r">100.0%</td></tr></tfoot>`;
+}
+
+function render() {
+  regions.forEach(r => document.getElementById('tile-' + r).setAttribute('aria-pressed', String(state.region === r)));
+  cards(); bars(); line(); donut(); table();
+}
+document.getElementById('bars').addEventListener('click', () => { if (state.category) { state.category = null; render(); } });
+render();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+
+// code tabs
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  ['model', 'report', 'react', 'events'].forEach(p => (document.getElementById('pane-' + p).hidden = p !== b.dataset.pane));
+}));
+</script>
+</body>
+</html>
