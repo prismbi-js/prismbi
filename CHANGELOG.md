@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 (unreleased): Phase 2, part 1
+
+- **Narrowing down:** a right-click menu with Include, Exclude and Drill through. Drill-through pages (`page.drillthrough`) with carried filters, a Back button and `report.drillThrough()` / `back()`. Slicer sync groups. A hierarchy (tree) slicer. "Expand all down one level".
+- **Decomposition tree** with manual and automatic (High value / Low value) splits that cross-filter the page.
+- **New visuals:** waterfall, heatmap, and small multiples (`smallMultiples` role) for column, bar, line and area charts.
+- **Analytics:** reference lines and trend lines (`format.analytics`). Value-based colours (`format.colors.rules`, `format.colors.gradient`).
+- **Cross-highlighting** on line, area and scatter.
+- **Export** of any visual as PNG or SVG (header menu, `visual(id).exportImage()`, `toSvg()`).
+- Filters: `tuples` filters accept `exclude: true`.
+- Demo: Insights and Product details (drill-through) pages, synced year slicers. No more light-to-dark flash on load.
+
 ## 0.1.0 (unreleased): Phase 1
 
 First release: the core engine and essential visuals.

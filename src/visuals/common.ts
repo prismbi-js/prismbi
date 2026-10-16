@@ -276,6 +276,11 @@ export function interactive(ctx: RenderContext, el: Element, identity: DataPoint
     ctx.host.select(identity, { multi: me.ctrlKey || me.metaKey });
     ctx.host.emit('dataPointClick', { keys, identity, event: me });
   });
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    ctx.host.contextMenu(e as MouseEvent, identity);
+  });
   el.addEventListener('dblclick', (e) => {
     e.stopPropagation();
     if (ctx.host.drill.levels > 1 && ctx.host.drill.level < ctx.host.drill.levels - 1) ctx.host.drillDown(keys[keys.length - 1]);

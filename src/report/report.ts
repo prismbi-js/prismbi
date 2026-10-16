@@ -1,5 +1,6 @@
 import type { CellValue } from '../data/types';
-import { valueKey } from '../data/types';
+import { parseColumnRef, valueKey } from '../data/types';
+import type { ColumnRef } from '../data/types';
 import type { FilterSpec } from '../data/filters';
 import type { QueryResult } from '../data/query';
 import type { DataModel } from '../data/model';
@@ -16,6 +17,8 @@ import { FilterPane } from './filterPane';
 import type { ReportRuntime } from './runtime';
 import { injectStyles, themeVars } from './styles';
 import { Tooltip } from './tooltip';
+import { ContextMenu } from './contextMenu';
+import type { MenuItem } from './contextMenu';
 import type { TooltipRenderer } from './tooltip';
 import { VisualHost, identitiesToFilters } from './visualHost';
 
@@ -37,6 +40,11 @@ export interface PageDefinition {
   /** CSS background for the page plane. */
   background?: string;
   hidden?: boolean;
+  /**
+   * Make this a drill-through target: right-clicking a data point that carries one of these
+   * fields offers "Drill through: <page>". Typically combined with `hidden: true`.
+   */
+  drillthrough?: { fields: string[]; /** Carry the source visual's filters along (default true). */ keepAllFilters?: boolean };
 }
 
 export interface Bookmark {
@@ -82,6 +90,8 @@ interface PageState {
   hosts: Map<string, VisualHost>;
   slicers: Map<string, FilterSpec[]>;
   selection: { visualId: string; identities: DataPointIdentity[] } | null;
+  /** Filters applied by a drill-through into this page, and where to go back to. */
+  drillState: { filters: FilterSpec[]; from: number } | null;
 }
 
 /** Public handle to one visual. */
@@ -95,6 +105,12 @@ export interface VisualHandle {
   data(): QueryResult | null;
   drillUp(): void;
   drillDown(value: CellValue): void;
+  /** "Expand all down one level". */
+  expandAll(): void;
+  /** Standalone SVG snapshot. */
+  toSvg(): string;
+  /** Download as PNG or SVG. */
+  exportImage(type?: 'png' | 'svg', filename?: string): Promise<void>;
 }
 
 const DATE_TAG = '$date';
@@ -147,6 +163,7 @@ export class Report implements ReportRuntime {
   private tabs: HTMLElement;
   private toolbar: HTMLElement;
   private pane: FilterPane;
+  private ctxMenu: ContextMenu;
   private paneOpen: boolean;
   private chrome: Required<ReportChrome>;
   private unsubModel: () => void;
@@ -178,6 +195,7 @@ export class Report implements ReportRuntime {
     container.replaceChildren(this.root);
     this.tooltip = new Tooltip(this.root);
     this.tooltip.renderer = opts.tooltip;
+    this.ctxMenu = new ContextMenu(this.root);
     this.root.addEventListener('click', () => this.clearSelection());
     this.root.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -232,7 +250,7 @@ export class Report implements ReportRuntime {
     const found = this.findVisual(visualId);
     if (!found) return [];
     const { page, spec } = found;
-    const out: FilterSpec[] = [...this.reportFilters, ...(page.def.filters ?? []), ...(spec.filters ?? [])];
+    const out: FilterSpec[] = [...this.reportFilters, ...(page.def.filters ?? []), ...(page.drillState?.filters ?? []), ...(spec.filters ?? [])];
     for (const [sid, f] of page.slicers) if (sid !== visualId) out.push(...f);
     const sel = page.selection;
     if (sel && sel.visualId !== visualId && this.interactionMode(spec, sel.visualId) === 'filter') out.push(...identitiesToFilters(sel.identities));
@@ -289,8 +307,17 @@ export class Report implements ReportRuntime {
   setSlicerFilter(visualId: string, filters: FilterSpec[] | null): void {
     const page = this.findVisual(visualId)?.page;
     if (!page) throw new Error(`Visual "${visualId}" not found`);
-    if (filters && filters.length) page.slicers.set(visualId, filters);
-    else page.slicers.delete(visualId);
+    const apply = (pg: PageState, id: string) => {
+      if (filters && filters.length) pg.slicers.set(id, filters);
+      else pg.slicers.delete(id);
+    };
+    apply(page, visualId);
+    // slicers in the same sync group (on any page) share one selection
+    const group = (this.findVisual(visualId)!.spec.format?.slicer as { syncGroup?: string } | undefined)?.syncGroup;
+    if (group)
+      for (const pg of this.pages)
+        for (const v of pg.def.visuals)
+          if (v.id !== visualId && (v.format?.slicer as { syncGroup?: string } | undefined)?.syncGroup === group) apply(pg, v.id!);
     this.schedule();
     this.renderPane();
     this.emit('filtersChanged', { pageId: page.def.id!, scope: 'slicer', visualId, filters: filters ?? [] });
@@ -319,6 +346,76 @@ export class Report implements ReportRuntime {
     this._focused = this._focused === visualId ? null : visualId;
     for (const hst of this.page.hosts.values()) hst.el.classList.toggle('is-focus', hst.id === this._focused);
     this.schedule(visualId);
+  }
+
+  slicerTuples(visualId: string, columns: string[]): CellValue[][] {
+    const filters = this.filtersFor(visualId).filter((f) => f.op !== 'topN');
+    return this.model.query({ groupBy: columns, values: [], filters }).rows.map((r) => r.keys);
+  }
+
+  menu(x: number, y: number, items: MenuItem[]): void {
+    this.tooltip.hide();
+    this.ctxMenu.show(x, y, items);
+  }
+
+  /** Right-click menu for a data point: Include / Exclude / Drill through. */
+  showContextMenu(visualId: string, identity: DataPointIdentity, evt: MouseEvent): void {
+    const found = this.findVisual(visualId);
+    if (!found) return;
+    const items: MenuItem[] = [];
+    const def = getVisual(found.spec.type);
+    if (!def.isSlicer && identity.columns.length) {
+      items.push({ label: 'Include', hint: 'keep only this', onClick: () => this.setVisualFilters(visualId, [...(found.spec.filters ?? []), identityFilter(identity, false)]) });
+      items.push({ label: 'Exclude', hint: 'remove this', onClick: () => this.setVisualFilters(visualId, [...(found.spec.filters ?? []), identityFilter(identity, true)]) });
+    }
+    const targets = this.pages.filter((p) => p !== found.page && p.def.drillthrough?.fields.some((f) => identity.columns.some((c) => sameRef(c, f))));
+    targets.forEach((p, i) => items.push({ label: `Drill through: ${p.def.name}`, separator: i === 0 && items.length > 0, onClick: () => this.drillThrough(p.def.id!, identity, visualId) }));
+    if (found.page.selection) items.push({ label: 'Clear selection', separator: true, onClick: () => this.clearSelection() });
+    if (found.spec.filters?.length) items.push({ label: 'Clear visual filters', onClick: () => this.setVisualFilters(visualId, []) });
+    this.menu(evt.clientX, evt.clientY, items);
+  }
+
+  /**
+   * Navigate to a drill-through page, filtered to the data point (or to explicit filters).
+   * The target page shows a Back button.
+   */
+  drillThrough(pageIdOrName: string, target: DataPointIdentity | FilterSpec[], sourceVisualId?: string): void {
+    const ti = this.pageIndex(pageIdOrName);
+    if (ti < 0) throw new Error(`Page "${pageIdOrName}" not found`);
+    const page = this.pages[ti];
+    const dt = page.def.drillthrough;
+    let filters: FilterSpec[];
+    if (Array.isArray(target)) filters = target;
+    else {
+      filters = [];
+      const fields = dt?.fields ?? target.columns.map((c) => `'${c.table}'[${c.column}]`);
+      for (const f of fields) {
+        const k = target.columns.findIndex((c) => sameRef(c, f));
+        if (k >= 0) filters.push({ target: f, op: 'eq', value: target.values[k] });
+      }
+    }
+    if (sourceVisualId && dt?.keepAllFilters !== false) {
+      // carry the source context, minus report filters (already everywhere) and anything on the drill fields
+      const onDrillField = (f: FilterSpec) => f.op !== 'tuples' && filters.some((d) => d.op !== 'tuples' && sameRef(d.target, f.target));
+      const carried = this.filtersFor(sourceVisualId).filter((f) => !this.reportFilters.includes(f) && !onDrillField(f));
+      filters = [...carried, ...filters];
+    }
+    const from = this.current;
+    page.drillState = { filters, from };
+    for (const host of page.hosts.values()) host.invalidate();
+    if (ti !== this.current) this.showPage(ti);
+    else this.schedule();
+    this.emit('drillThrough', { fromPageId: this.pages[from].def.id!, toPageId: page.def.id!, visualId: sourceVisualId, filters });
+  }
+
+  /** Leave a drill-through page and return to where it was opened from. */
+  back(): void {
+    const p = this.page;
+    if (!p.drillState) return;
+    const from = p.drillState.from;
+    p.drillState = null;
+    for (const host of p.hosts.values()) host.invalidate();
+    this.showPage(Math.min(from, this.pages.length - 1));
   }
 
   domainIndex(table: string, column: string, value: CellValue): number {
@@ -378,7 +475,7 @@ export class Report implements ReportRuntime {
 
   addPage(def: PageDefinition, show = true): string {
     const d: PageDefinition = { ...def, id: def.id ?? uid('page'), visuals: def.visuals.map((v) => ({ ...v, id: v.id ?? uid('visual') })) };
-    this.pages.push({ def: d, el: null, hosts: new Map(), slicers: new Map(), selection: null });
+    this.pages.push({ def: d, el: null, hosts: new Map(), slicers: new Map(), selection: null, drillState: null });
     this.renderTabs();
     if (show) this.showPage(this.pages.length - 1);
     return d.id!;
@@ -500,6 +597,9 @@ export class Report implements ReportRuntime {
       data: () => getHost().lastResult,
       drillUp: () => getHost().drillUp(),
       drillDown: (v) => getHost().drillDown(v),
+      expandAll: () => getHost().expandAll(),
+      toSvg: () => getHost().toSvg(),
+      exportImage: (type, name) => getHost().exportImage(type, name),
     };
   }
 
@@ -582,6 +682,20 @@ export class Report implements ReportRuntime {
     const activeSpec = this.active ? p.def.visuals.find((v) => v.id === this.active) : undefined;
     if (activeSpec && !getVisual(activeSpec.type).static)
       sections.push({ scope: 'visual' as const, title: 'Filters on this visual', filters: activeSpec.filters ?? [], set: (f: FilterSpec[]) => this.setVisualFilters(activeSpec.id!, f) });
+    if (p.drillState) {
+      const ds = p.drillState;
+      sections.push({
+        scope: 'page' as const,
+        title: 'Drill through',
+        filters: ds.filters,
+        set: (f: FilterSpec[]) => {
+          ds.filters = f;
+          for (const host of p.hosts.values()) host.invalidate();
+          this.schedule();
+          this.renderPane();
+        },
+      });
+    }
     sections.push({ scope: 'page' as const, title: 'Filters on this page', filters: p.def.filters ?? [], set: (f: FilterSpec[]) => this.setPageFilters(p.def.id!, f) });
     sections.push({ scope: 'report' as const, title: 'Filters on all pages', filters: this.reportFilters, set: (f: FilterSpec[]) => this.setReportFilters(f) });
     this.pane.render(sections);
@@ -590,7 +704,18 @@ export class Report implements ReportRuntime {
   private renderToolbar(): void {
     this.toolbar.hidden = !this.chrome.toolbar;
     if (this.toolbar.hidden) return;
-    this.toolbar.replaceChildren(h('div', { class: 'pbi-toolbar-title' }, this.name));
+    this.toolbar.replaceChildren();
+    const ds = this.page.drillState;
+    if (ds) {
+      const fromName = this.pages[ds.from]?.def.name ?? 'Back';
+      const back = h('button', { type: 'button', class: 'pbi-btn pbi-back', 'aria-label': `Back to ${fromName}` }, `← ${fromName}`);
+      back.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.back();
+      });
+      this.toolbar.append(back);
+    }
+    this.toolbar.append(h('div', { class: 'pbi-toolbar-title' }, this.name));
     const btn = (label: string, onClick: () => void, pressed?: boolean) => {
       const b = h('button', { type: 'button', class: 'pbi-btn', 'aria-pressed': pressed === undefined ? undefined : String(pressed) }, label);
       b.addEventListener('click', (e) => {
@@ -698,10 +823,23 @@ export class Report implements ReportRuntime {
     this.unsubModel();
     for (const p of this.pages) for (const host of p.hosts.values()) host.destroy();
     this.tooltip.destroy();
+    this.ctxMenu.destroy();
     this.root.remove();
   }
 }
 
 function structuredCloneSafe<T>(v: T): T {
   return JSON.parse(JSON.stringify(toPlain(v)), reviveDates) as T;
+}
+
+function sameRef(a: ColumnRef | string, b: ColumnRef | string): boolean {
+  const x = typeof a === 'string' ? parseColumnRef(a) : a;
+  const y = typeof b === 'string' ? parseColumnRef(b) : b;
+  return x.table === y.table && x.column === y.column;
+}
+
+/** Filter that keeps (or removes) exactly one data point. */
+export function identityFilter(identity: DataPointIdentity, exclude: boolean): FilterSpec {
+  if (identity.columns.length === 1) return { target: identity.columns[0], op: exclude ? 'notIn' : 'in', values: [identity.values[0]] };
+  return { targets: identity.columns, op: 'tuples', tuples: [identity.values], exclude };
 }

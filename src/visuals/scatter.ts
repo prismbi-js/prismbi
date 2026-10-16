@@ -3,6 +3,7 @@ import { linearScale } from '../render/scales';
 import { defineVisual } from './registry';
 import { drawValueAxisY, emptyState, identityOf, interactive, markOpacity, renderLegend, valueAxisFormatter, withLegend } from './common';
 import type { DataPointIdentity } from './types';
+import { drawReferenceLines, linearFit } from './analytics';
 
 export const scatter = defineVisual({
   type: 'scatter',
@@ -15,6 +16,7 @@ export const scatter = defineVisual({
     { name: 'y', displayName: 'Y-axis', kind: 'measure', required: true },
     { name: 'size', displayName: 'Size', kind: 'measure' },
   ],
+  supportsHighlight: true,
   render(ctx) {
     const d = ctx.role('details');
     const l = ctx.role('legend');
@@ -60,6 +62,13 @@ export const scatter = defineVisual({
     for (const tick of x.ticks) g.append(s('text', { x: x(tick), y: bottom + fs + 4, 'text-anchor': 'middle', class: 'pbi-tick', fill: t.foregroundMuted }, fmtX(tick)));
     g.append(s('text', { x: (left + width) / 2, y: height - 4, 'text-anchor': 'middle', class: 'pbi-axis-title', fill: t.foregroundSecondary }, xField.name));
 
+    drawReferenceLines(ctx, g, y, 'y', [left, width - 8], ys, yField);
+    const fit = ctx.format.analytics.trendLine ? linearFit(xs.map((v, i) => [v, ys[i]] as [number, number])) : null;
+    if (fit) {
+      const [x0, x1] = x.domain;
+      const tl = ctx.format.analytics.trendLine;
+      g.append(s('line', { x1: x(x0), x2: x(x1), y1: y(fit.intercept + fit.slope * x0), y2: y(fit.intercept + fit.slope * x1), stroke: (typeof tl === 'object' && tl.color) || t.foregroundSecondary, 'stroke-width': 1.5, 'stroke-dasharray': '6 4', class: 'pbi-trend', 'pointer-events': 'none' }));
+    }
     const marks = s('g');
     g.append(marks);
     // draw bigger bubbles first so small ones stay clickable
@@ -70,7 +79,9 @@ export const scatter = defineVisual({
       const radius = sField ? 4 + Math.sqrt(sizes[i] / maxSize) * Math.min(28, width / 18) : 5;
       const keys = d.indices.map((k) => r.keys[k]);
       const identity = identityOf(dFields, keys);
-      const c = s('circle', { cx: x(xs[i]), cy: y(ys[i]), r: radius, fill: color, 'fill-opacity': sField ? 0.7 : 1, stroke: t.surface, 'stroke-width': 2, opacity: markOpacity(ctx, identity) });
+      // highlighted points keep full strength; the rest fade (cross-highlight from other visuals)
+      const dimmed = r.highlights ? r.highlights[yi] === null || r.highlights[xi] === null : false;
+      const c = s('circle', { cx: x(xs[i]), cy: y(ys[i]), r: radius, fill: color, 'fill-opacity': sField ? 0.7 : 1, stroke: t.surface, 'stroke-width': 2, opacity: dimmed ? 0.25 : markOpacity(ctx, identity) });
       interactive(
         ctx,
         c,

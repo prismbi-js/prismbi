@@ -3,6 +3,8 @@ import { bandScale, linearScale, pointScale } from '../render/scales';
 import type { RenderContext } from './types';
 import { defineVisual } from './registry';
 import type { Series } from './common';
+import { drawReferenceLines, drawTrendLine } from './analytics';
+import { renderSmallMultiples } from './multiples';
 import { categoryLabelLayout, drawCategoryLabels, drawValueAxisY, emptyState, labelFormatter, markOpacity, mergeIdentity, pivot, renderLegend, tooltipItems, valueAxisFormatter, withLegend } from './common';
 
 type Kind = 'line' | 'area' | 'stackedArea' | 'combo';
@@ -36,6 +38,7 @@ function linePath(pts: ([number, number] | null)[], smooth: boolean): string {
 }
 
 function renderLine(ctx: RenderContext, kind: Kind): void {
+  if (kind !== 'combo' && renderSmallMultiples(ctx, (panel) => renderLine(panel, kind), kind === 'stackedArea')) return;
   const pv = pivot(ctx, 'category', 'legend', 'values');
   let lineSeries: Series[] = [];
   let colSeries: Series[] = [];
@@ -146,7 +149,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
         marks.append(s('path', { d: `M${upper.map((p) => p.join(',')).join('L')}L${low.map((p) => p.join(',')).join('L')}Z`, fill: se.color, 'fill-opacity': stacked ? 0.55 : f.lines.areaOpacity, stroke: 'none', 'pointer-events': 'none' }));
       }
     }
-    const path = s('path', { d: linePath(pts, f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: se.identity ? markOpacity(ctx, se.identity) : 1, class: 'pbi-line' });
+    const path = s('path', { d: linePath(pts, f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: se.highlights ? 0.3 : se.identity ? markOpacity(ctx, se.identity) : 1, class: 'pbi-line' });
     if (ctx.animate && f.animation.enabled) {
       path.style.strokeDasharray = '4000';
       path.style.strokeDashoffset = '4000';
@@ -154,6 +157,11 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       path.style.animationDuration = `${f.animation.duration * 2}ms`;
     }
     marks.append(path);
+    if (se.highlights && !stacked) {
+      // cross-highlight: the selected portion drawn solid over the faded full line
+      const hp = se.highlights.map((v, i) => (v === null ? null : ([xAt(i), scale(v)] as [number, number])));
+      marks.append(s('path', { d: linePath(hp, f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', class: 'pbi-line pbi-line-highlight', 'pointer-events': 'none' }));
+    }
     const showMarkers = f.lines.markers === true || (f.lines.markers === 'auto' && categories.length <= 16);
     if (showMarkers)
       pts.forEach((p, i) => {
@@ -163,6 +171,9 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       });
     if (stacked) se.values.forEach((v, i) => (base[i] += v ?? 0));
   });
+
+  drawReferenceLines(ctx, g, scale, 'y', [left, width - right], all.flatMap((se) => se.values.filter((v): v is number => v !== null)), valueField);
+  if (!stacked) lineSeries.forEach((se) => drawTrendLine(ctx, g, se.values, xAt, scale, se.color));
 
   // end labels (value at the end of each line)
   if (endLabels) {
@@ -217,6 +228,11 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     ctx.host.select(categories[i].identity, { multi: e.ctrlKey || e.metaKey });
     ctx.host.emit('dataPointClick', { keys: categories[i].keys, identity: categories[i].identity, event: e });
   });
+  hit.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    ctx.host.contextMenu(e, categories[indexAt(e)].identity);
+  });
   hit.addEventListener('dblclick', (e) => {
     e.stopPropagation();
     if (ctx.host.drill.levels > 1 && ctx.host.drill.level < ctx.host.drill.levels - 1) {
@@ -247,10 +263,11 @@ const ROLES = [
   { name: 'category', displayName: 'X-axis', kind: 'grouping' as const, multiple: true, drillable: true },
   { name: 'legend', displayName: 'Legend', kind: 'grouping' as const },
   { name: 'values', displayName: 'Y-axis', kind: 'measure' as const, multiple: true, required: true },
+  { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const },
 ];
 
-export const lineChart = defineVisual({ type: 'line', displayName: 'Line chart', category: 'chart', roles: ROLES, defaultSort: 'key', render: (c) => renderLine(c, 'line') });
-export const areaChart = defineVisual({ type: 'area', displayName: 'Area chart', category: 'chart', roles: ROLES, defaultSort: 'key', render: (c) => renderLine(c, 'area') });
+export const lineChart = defineVisual({ type: 'line', displayName: 'Line chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'line') });
+export const areaChart = defineVisual({ type: 'area', displayName: 'Area chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'area') });
 export const stackedAreaChart = defineVisual({ type: 'stackedArea', displayName: 'Stacked area chart', category: 'chart', roles: ROLES, defaultSort: 'key', render: (c) => renderLine(c, 'stackedArea') });
 export const comboChart = defineVisual({
   type: 'lineClusteredColumn',

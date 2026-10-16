@@ -7,6 +7,9 @@ import { card, gauge, kpi, multiRowCard } from './cards';
 import { matrix, table } from './table';
 import { slicer } from './slicer';
 import { textBox } from './text';
+import { waterfall } from './waterfall';
+import { heatmap } from './heatmap';
+import { decompositionTree } from './decomposition';
 
 export const builtinVisuals = {
   clusteredColumn,
@@ -32,6 +35,9 @@ export const builtinVisuals = {
   matrix,
   slicer,
   textBox,
+  waterfall,
+  heatmap,
+  decompositionTree,
 };
 
 let registered = false;
@@ -63,4 +69,7 @@ export function registerBuiltinVisuals(): void {
   registerVisual(matrix);
   registerVisual(slicer);
   registerVisual(textBox, ['textbox']);
+  registerVisual(waterfall);
+  registerVisual(heatmap);
+  registerVisual(decompositionTree, ['decomp']);
 }

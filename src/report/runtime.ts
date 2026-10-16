@@ -5,6 +5,7 @@ import type { Theme } from '../theme/theme';
 import type { DataPointIdentity } from '../visuals/types';
 import type { Tooltip } from './tooltip';
 import type { ReportEvents } from './events';
+import type { MenuItem } from './contextMenu';
 
 /** What a VisualHost needs from the report it lives in. */
 export interface ReportRuntime {
@@ -28,4 +29,7 @@ export interface ReportRuntime {
   setActiveVisual(visualId: string | null): void;
   toggleFocus(visualId: string): void;
   domainIndex(table: string, column: string, value: CellValue): number;
+  slicerTuples(visualId: string, columns: string[]): CellValue[][];
+  showContextMenu(visualId: string, identity: DataPointIdentity, evt: MouseEvent): void;
+  menu(x: number, y: number, items: MenuItem[]): void;
 }

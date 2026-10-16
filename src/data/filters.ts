@@ -34,6 +34,8 @@ export interface TupleFilterSpec {
   targets: (string | ColumnRef)[];
   op: 'tuples';
   tuples: CellValue[][];
+  /** Keep everything except these combinations ("Exclude"). */
+  exclude?: boolean;
 }
 
 /** Keep the N groups with the highest/lowest value of `by` (visual-level Top N). */
@@ -98,8 +100,8 @@ export function compileFilter(spec: ColumnFilterSpec | TupleFilterSpec): Columns
     return {
       kind: 'columns',
       columns,
-      key: `tuples(${columns.map(columnRefToString).join(',')})=${stableKey(t.tuples.map((tu) => tu.map(valueKey)))}`,
-      test: (vals) => set.has(stableKey(vals.map(valueKey))),
+      key: `tuples${t.exclude ? '!' : ''}(${columns.map(columnRefToString).join(',')})=${stableKey(t.tuples.map((tu) => tu.map(valueKey)))}`,
+      test: t.exclude ? (vals) => !set.has(stableKey(vals.map(valueKey))) : (vals) => set.has(stableKey(vals.map(valueKey))),
       spec,
     };
   }

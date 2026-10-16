@@ -9,7 +9,10 @@ PrismBI gives you every Power BI way of narrowing data down, and each one is scr
 | Visual filters | one visual | filter pane (click the visual first), `report.setVisualFilters()`, `visual.filters` |
 | Slicers | other visuals on the page | user, `report.setSlicerSelection()` |
 | Cross-filter / cross-highlight | other visuals on the page | clicking data points, legend entries or table rows |
-| Drill | one visual | double-click a data point, or the header ↑ / ⇊ |
+| Drill | one visual | double-click a data point, or the header ↑ / ⇊ / ⤓ |
+| Include / Exclude | one visual (becomes a visual filter) | right-click a data point |
+| Drill-through | a target page | right-click a data point, `report.drillThrough()` |
+| Decomposition tree | other visuals on the page | clicking nodes in the tree |
 
 All of them compose with AND.
 
@@ -27,6 +30,7 @@ All of them compose with AND.
 | `tiles` | a handful of values | buttons. Click selects one value, Ctrl/⌘+click adds more (`single: false` makes every click add) |
 | `between` | numbers and dates (default for dates) | from/to inputs plus a dual-thumb slider |
 | `relative` | dates | Last, Next or This N days, weeks, months or years |
+| tree | hierarchies (several fields) | tri-state checkboxes, expand/collapse, search. Emits an exact path filter, so "Road Bikes" under Bikes doesn't also match another category's "Road Bikes" |
 
 A slicer filters every other visual on its page, but not itself. Its own list of values is narrowed by the other filters and slicers, so you get cascading slicers for free.
 
@@ -35,11 +39,26 @@ report.setSlicerSelection('region', [{ target: 'Region[Name]', op: 'in', values:
 report.setSlicerSelection('region', null); // clear
 ```
 
+### Hierarchy slicer
+
+```ts
+{ type: 'slicer', fields: { field: ['Product[Category]', 'Product[Subcategory]', 'Product[Name]'] } }
+```
+
+### Sync slicers across pages
+
+Slicers with the same `syncGroup` share one selection on every page, whatever their style:
+
+```ts
+{ type: 'slicer', fields: { field: 'Date[Year]' }, format: { slicer: { style: 'tiles', syncGroup: 'year' } } }   // page 1
+{ type: 'slicer', fields: { field: 'Date[Year]' }, format: { slicer: { style: 'dropdown', syncGroup: 'year' } } } // page 2
+```
+
 ## Cross-filtering and cross-highlighting
 
 Clicking a data point selects it. **Ctrl** or **⌘** + click adds to the selection, clicking the same point again clears it, and clicking empty space or pressing **Esc** clears everything. Every other visual on the page reacts:
 
-- **highlight** is the default for column, bar, pie, donut, treemap and funnel. They keep their full values faded and draw the selected portion solid.
+- **highlight** is the default for column, bar, line, area, pie, donut, treemap, funnel and scatter. They keep their full values faded and draw the selected portion solid.
 - **filter** is the default for everything else. They re-query with the selection as a filter.
 - **none** means the visual ignores selections.
 
@@ -69,6 +88,44 @@ report.visual('trend').drillUp();
 report.on('drill', (e) => console.log(e.level, e.path));
 ```
 
+**Expand all down one level** (header ⤓, or `report.visual(id).expandAll()`) shows two levels together, e.g. "Bikes · Road Bikes". Drill up collapses it again.
+
+## Right-click: Include, Exclude, Drill through
+
+Right-clicking any data point, table row or matrix row opens a menu:
+
+- **Include** keeps only that data point in this visual. **Exclude** removes it. Both are added as visual-level filters, so they show in the filter pane and can be cleared there or with **Clear visual filters**.
+- **Drill through: <page>** appears for every page whose `drillthrough.fields` match the data point.
+- **Clear selection** appears when something is selected.
+
+## Drill-through pages
+
+```ts
+{
+  id: 'product-detail',
+  name: 'Product details',
+  hidden: true,                                    // reachable only via drill-through
+  drillthrough: { fields: ['Product[Category]', 'Product[Name]'], keepAllFilters: true },
+  visuals: [ /* cards, trends, tables about one product */ ],
+}
+```
+
+Drilling through filters the target page to the data point's values for those fields. When `keepAllFilters` is on (the default), the target also gets the source visual's filters: slicers, page and visual filters, and the selection. A **← Back** button appears in the toolbar, and the filter pane gets a "Drill through" section you can edit.
+
+```ts
+report.drillThrough('product-detail', [{ target: 'Product[Name]', op: 'eq', value: 'Road-150' }]);
+report.back();
+report.on('drillThrough', (e) => console.log(e.fromPageId, '→', e.toPageId, e.filters));
+```
+
+## Decomposition tree
+
+```ts
+{ type: 'decompositionTree', fields: { values: 'Total Sales', explainBy: ['Product[Category]', 'Region[Group]', 'Sales[Channel]'] } }
+```
+
+Pick a field to split the total by, click a node, and split that node by another field. Each step narrows the analysis, and the selected path cross-filters the rest of the page. **High value (auto)** and **Low value (auto)** pick the field whose biggest (or smallest) member stands out most.
+
 ## The filter pane
 
 Turn it on with `chrome: { filterPane: true }` (a toolbar toggle) or `'open'`. It lists filter cards for **this visual** (the last one clicked), **this page** and **all pages**. Each card has three modes:
@@ -88,7 +145,7 @@ type FilterSpec =
   | { target, op: 'between', min?, max? }                       // inclusive, open-ended allowed
   | { target, op: 'contains' | 'notContains' | 'startsWith' | 'endsWith', value } // case-insensitive
   | { target, op: 'isBlank' | 'isNotBlank' }
-  | { targets: ['T[a]', 'T[b]'], op: 'tuples', tuples: [[a1, b1], [a2, b2]] }  // multi-column selections
+  | { targets: ['T[a]', 'T[b]'], op: 'tuples', tuples: [[a1, b1], [a2, b2]], exclude?: true }  // multi-column selections
   | { target, op: 'topN', n: 5, by: 'Total Sales', direction?: 'top' | 'bottom' };
 ```
 
@@ -130,6 +187,7 @@ report.reset();               // clear slicers, selection and drill on the curre
 | `pageChanged` | `{ pageId, name }` |
 | `rendered` | `{ visualId, ms }` |
 | `error` | `{ visualId, error }` |
+| `drillThrough` | `{ fromPageId, toPageId, visualId?, filters }` |
 | `themeChanged`, `bookmarkApplied` | `{ name }` |
 
 ```ts

@@ -35,7 +35,7 @@ export interface VisualSpec {
   /** Visual-specific per-type interaction override: `{ [otherVisualId]: 'filter' | 'highlight' | 'none' }`. */
   interactionsFrom?: Record<string, 'filter' | 'highlight' | 'none'>;
   /** Persisted drill state. */
-  drill?: { level: number; path: CellValue[]; /** Levels shown for all members ("go to next level"). */ skip?: number[] };
+  drill?: { level: number; path: CellValue[]; /** Levels shown for all members ("go to next level"). */ skip?: number[]; /** "Expand all down": show levels path.length..level together. */ expanded?: boolean };
   hidden?: boolean;
   className?: string;
   /** Inline CSS for the visual container. */
@@ -76,6 +76,10 @@ export interface VisualHostApi {
   readonly currentFilter: FilterSpec[] | null;
   /** Domain for slicers: distinct values of a column under all *other* filters. */
   domain(column: string): CellValue[];
+  /** Existing combinations of several columns under all *other* filters (hierarchy slicers). */
+  domainTuples(columns: string[]): CellValue[][];
+  /** Open the data-point context menu (Include / Exclude / Drill through). */
+  contextMenu(evt: MouseEvent, identity: DataPointIdentity): void;
   drillDown(value: CellValue): void;
   drillUp(): void;
   readonly drill: { level: number; path: CellValue[]; levels: number };

@@ -13,4 +13,5 @@ export interface ReportEvents {
   error: { visualId: string; error: Error };
   themeChanged: { name: string };
   bookmarkApplied: { name: string };
+  drillThrough: { fromPageId: string; toPageId: string; visualId?: string; filters: FilterSpec[] };
 }

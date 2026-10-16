@@ -7,7 +7,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | Phase | Theme | Release | Status |
 |---|---|---|---|
 | 1 | Core engine and essential visuals | `0.1` | ✅ Implemented (this repo) |
-| 2 | Pro visuals and deeper interactivity | `0.2` | Planned |
+| 2 | Pro visuals and deeper interactivity | `0.2` | 🟡 In progress (narrowing-down & analytics shipped) |
 | 3 | Advanced modeling and DAX coverage | `0.3` | Planned |
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | Planned |
 | 5 | Scale, performance and data connectors | `0.5` | Planned |
@@ -15,7 +15,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. Today the whole engine plus 23 visuals is **≈52 KB min+gzip**.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. Today the whole engine plus 26 visuals is **≈62 KB min+gzip** (budget 65 KB). Per-visual imports for even leaner builds are planned in Phase 5.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -83,18 +83,32 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ---
 
-## Phase 2: Pro visuals and deeper interactivity
+## Phase 2: Pro visuals and deeper interactivity 🟡
 
 **Goal:** match Power BI's full core visual set and interaction model.
 
-- Visuals: waterfall, ribbon, decomposition tree, key influencers (statistical), small multiples for every cartesian chart, a bullet chart, a heatmap, a calendar heatmap, a sankey, a box plot, a histogram, a radar chart, a choropleth or bubble map (pluggable tile and geo source), and an image or shape visual
-- Continuous axes (numeric or time scales, log scale), reference lines (constant, average, median, percentile), trend lines, a forecast band, error bars, a zoom slider
-- Highlight support on line, area and scatter. "Expand all down one level" for hierarchies. Drill-through pages with a back button and drill-through filters
-- Conditional formatting everywhere: field-value, rules and gradients on chart colours, titles and backgrounds
+### Shipped (branch `phase-2`)
+- [x] **Right-click menu** on any data point, table or matrix row: **Include**, **Exclude** (become visual filters), **Drill through**, Clear selection, Clear visual filters. Keyboard navigable.
+- [x] **Drill-through pages**: `page.drillthrough.fields`, carry-over of the source visual's filters (`keepAllFilters`), a **← Back** button, a "Drill through" section in the filter pane, `report.drillThrough()` / `report.back()`, and a `drillThrough` event
+- [x] **Slicer sync groups** (`format.slicer.syncGroup`): one selection shared by slicers on any page
+- [x] **Hierarchy slicer**: several fields give a tree with tri-state checkboxes, search and expand/collapse, and emit an exact path (tuples) filter
+- [x] **Expand all down one level** for drill hierarchies (combined labels, e.g. "Bikes · Road Bikes")
+- [x] **Cross-highlighting on line, area and scatter** (the full series fades and the selected part draws solid)
+- [x] **Analytics**: reference lines (constant, average, median, min, max, percentile, with labels and `{value}` templating) and trend lines (least squares) on column, bar, line, area and scatter
+- [x] **Value-based colours**: `colors.rules` (first match wins) and `colors.gradient` (min → mid → max) on single-series charts
+- [x] **New visuals**: waterfall (running total and connectors), heatmap (sequential ramp with a gradient legend), **decomposition tree** (split by any field, click to narrow down, plus automatic "High value / Low value" splits that cross-filter the page), **small multiples** for column, bar, line and area charts (shared axis, one legend)
+- [x] **Export image**: PNG (2×) and SVG per visual from the header export menu, `visual(id).toSvg()` / `exportImage()`
+- [x] 14 new integration tests (82 in total)
+
+### Remaining
+- Visuals: ribbon, key influencers (statistical), a bullet chart, a calendar heatmap, a sankey, a box plot, a histogram, a radar chart, a choropleth or bubble map (pluggable tile and geo source), and an image or shape visual
+- Continuous axes (numeric or time, log scale), a forecast band, error bars, a zoom slider
+- Conditional formatting on titles and backgrounds (field-value driven)
 - Report tooltips: a tooltip page rendered inside the tooltip
-- Slicer sync across pages (sync groups), a hierarchy slicer, cascading slicers, "edit interactions" UI
-- Export: PNG and SVG per visual, PDF per page, underlying-data export
+- "Edit interactions" UI (`interactionsFrom` already exists as an API)
+- PDF export per page
 - Animation of transitions between data states (not just entry)
+- Persist the decomposition tree's splits in the report JSON (they live in visual state today)
 - Mobile layout per page
 
 **Acceptance:** visual regression tests (Playwright screenshots) on every visual in both themes. Keyboard-only walkthrough of every interaction. Lighthouse accessibility score ≥95 on the demo.
@@ -129,6 +143,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 **Goal:** millions of rows in the browser, and live data.
 
 - Execution in a Web Worker (off the main thread), with streaming results and cancellation
+- Per-visual entry points (`prismbi/visuals/waterfall`, …) and a core entry without auto-registration, for builds that only pay for the visuals they use
 - Bitmap or roaring indexes, dictionary-encoded columns, typed arrays, vectorised aggregations
 - Optional engines: Apache Arrow tables, DuckDB-WASM pushdown (DAX query → SQL), or a server-side engine on Node
 - Connectors: CSV, JSON, Parquet, REST/GraphQL, SQL (via a backend adapter), Google Sheets, streaming/WebSocket. Incremental refresh and scheduled refresh in the server runtime.

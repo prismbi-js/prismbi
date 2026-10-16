@@ -30,26 +30,31 @@ A `FieldSpec` is one of:
 
 | Type (aliases) | Roles | Notes |
 |---|---|---|
-| `clusteredColumn` (`column`) | `category`* (drillable, multiple) · `legend` · `values`* (multiple) | Sorted by first value, descending, unless the category is a number, a date or has sort-by |
+| `clusteredColumn` (`column`) | `category`* (drillable, multiple) · `legend` · `values`* (multiple) · `smallMultiples` | Sorted by first value, descending, unless the category is a number, a date or has sort-by |
 | `stackedColumn`, `percentStackedColumn` | same | 2 px gaps between segments. Categories sorted by total |
 | `clusteredBar` (`bar`), `stackedBar`, `percentStackedBar` | same | Horizontal versions |
-| `line` | `category`* (drillable) · `legend` · `values`* | Crosshair tooltip, end labels (four or fewer series), markers (16 or fewer points) |
+| `line` | `category`* (drillable) · `legend` · `values`* · `smallMultiples` | Crosshair tooltip, end labels (four or fewer series), markers (16 or fewer points), cross-highlight |
 | `area`, `stackedArea` | same | 10% area wash. Stacked area sums series |
 | `lineClusteredColumn` (`combo`) | `category`* · `legend` (columns) · `values` (columns) · `lineValues` | **One shared value axis** by design. A second y-axis is a known chart anti-pattern |
+| `waterfall` | `category`* (drillable) · `values`* | Running total with connectors, increase / decrease / total colours, optional total bar |
 | `pie`, `donut` | `legend`* (drillable) · `values`* | Folds slices past the palette into "Other". Donut shows a centre total |
 | `treemap` | `category`* (drillable) · `values`* | Squarified layout |
 | `funnel` | `category`* · `values`* | Shows % of first stage |
-| `scatter` (`bubble`) | `details`* · `legend` · `x`* · `y`* · `size` | Bubble area ∝ size |
+| `scatter` (`bubble`) | `details`* · `legend` · `x`* · `y`* · `size` | Bubble area ∝ size. Cross-highlight, trend line |
+| `heatmap` | `rows`* · `columns`* · `values`* | Sequential single-hue ramp, gradient legend, cell labels when they fit |
+| `decompositionTree` (`decomp`) | `values`* · `explainBy`* (multiple) | Split a total level by level, click nodes to narrow down, automatic "High value / Low value" splits. Cross-filters the page |
 | `card` | `value`* · `delta` | Auto-sized callout value, signed delta with good/bad colour |
 | `multiRowCard` | `category` · `values`* | One card per group |
 | `kpi` | `trend` · `value`* · `target` | Headline is the last trend point. Shows % vs goal and a sparkline |
 | `gauge` | `value`* · `min` · `max` · `target` | 180° arc |
 | `table` | `columns`* (columns and measures mixed) | Click a header to sort. Totals, conditional formatting, incremental rendering |
 | `matrix` | `rows` (hierarchy) · `columns` · `values`* | Expand/collapse, column pivot, real subtotals and totals |
-| `slicer` | `field`* | list · dropdown · tiles · between · relative date |
+| `slicer` | `field`* (several fields give a hierarchy tree) | list · dropdown · tiles · between · relative date · tree. Sync groups across pages |
 | `text` (`textbox`) | `values` (optional) | Mini-markdown with `{{Measure name}}` placeholders |
 
 `*` marks a required role.
+
+**Small multiples:** put a field in `smallMultiples` (column, bar, line and area charts) to get one panel per member, with a shared value axis and a single legend. Configure it with `format.smallMultiples: { columns?, sharedAxis: true, minWidth: 160, minHeight: 110 }`.
 
 ## Common format options
 
@@ -68,7 +73,11 @@ format: {
   dataLabels: { show: false, format, displayUnits: 'auto', decimals, fontSize, color, position: 'auto' },
   categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto'|0|45|90 },
   valueAxis:  { show: true, displayUnits: 'auto', decimals, min, max, gridlines: true, tickCount: 5 },
-  colors:     { default, palette: [...], series: { 'Total Sales': '#...' }, categories: { 'Bikes': '#...' } },
+  colors:     { default, palette: [...], series: { 'Total Sales': '#...' }, categories: { 'Bikes': '#...' },
+                rules: [{ op: '<', value: 0, color: '#d03b3b' }],      // single-series charts, first match wins
+                gradient: { min: '#cde2fb', max: '#0d366b' } },        // single-series charts, by value
+  analytics:  { referenceLines: [{ type: 'average' | 'median' | 'min' | 'max' | 'percentile' | 'constant', value?, percentile?, label?: 'Goal {value}' | false, color?, dash? }],
+                trendLine: false | true | { color } },
   bars:       { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },
   lines:      { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true },
   animation:  { enabled: true, duration: 280 },
@@ -113,6 +122,15 @@ format: { slicer: {
 
 // text
 format: { text: { content: '# Heading\n**{{Total Sales}}** this period. [Docs](https://example.com)' } }
+
+// waterfall
+format: { waterfall: { showTotal: true, totalLabel: 'Total', increaseColor, decreaseColor, totalColor } }
+
+// decomposition tree
+format: { decomposition: { maxNodes: 10, aiSplits: true, columnWidth: 190 } }
+
+// slicer sync group (any style)
+format: { slicer: { syncGroup: 'year' } }
 ```
 
 ## Header actions
@@ -120,8 +138,8 @@ format: { text: { content: '# Heading\n**{{Total Sales}}** this period. [Docs](h
 Hovering or focusing a visual shows its header icons:
 - **⤢ Focus mode** fills the page. Esc exits.
 - **▦ Show as table** displays the query result as a table.
-- **⇩ Export data (CSV)** exports the current result.
-- **↑ Drill up** and **⇊ Go to next level** appear when a drillable role has several fields.
+- **⇩ Export** opens a menu: data (CSV), image (PNG at 2×), image (SVG). The same is available in code as `report.visual(id).exportCsv()`, `.exportImage('png' | 'svg')` and `.toSvg()`.
+- **↑ Drill up**, **⇊ Go to next level** and **⤓ Expand all down one level** appear when a drillable role has several fields.
 - **⌫ Clear selections** appears on slicers.
 
 Each of these can be turned off through `format.header`.

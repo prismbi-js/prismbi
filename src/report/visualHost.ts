@@ -10,6 +10,7 @@ import type { VisualFormat } from '../visuals/format';
 import { getVisual } from '../visuals/registry';
 import type { DataPointIdentity, RenderContext, RoleBinding, VisualDefinition, VisualHostApi, VisualSpec } from '../visuals/types';
 import type { ReportRuntime } from './runtime';
+import { CSS, themeVars } from './styles';
 
 const asArray = (f: FieldSpec | FieldSpec[] | undefined): FieldSpec[] => (f === undefined ? [] : Array.isArray(f) ? f : [f]);
 const fieldRef = (f: FieldSpec) => (typeof f === 'string' ? f : (f.field ?? f.expression ?? ''));
@@ -139,7 +140,7 @@ export class VisualHost {
     const role = this.def.roles.find((r) => r.drillable);
     const levels = role ? this.fields(role.name).length : 0;
     const d = this.spec.drill ?? { level: 0, path: [] };
-    return { role, levels, level: Math.min(d.level, Math.max(0, levels - 1)), path: d.path ?? [], skip: d.skip ?? [] };
+    return { role, levels, level: Math.min(d.level, Math.max(0, levels - 1)), path: d.path ?? [], skip: d.skip ?? [], expanded: !!d.expanded };
   }
 
   /** Build the query plus role → result-position bindings. */
@@ -152,10 +153,12 @@ export class VisualHost {
     for (const r of this.def.roles) {
       let fs = this.fields(r.name);
       if (r.drillable && fs.length > 1) {
-        fs.slice(0, drill.level).forEach((f, i) => {
+        // drill mode: parents filtered, one level shown; expand mode: levels path.length..level shown together
+        const fixed = drill.expanded ? Math.min(drill.path.length, drill.level) : drill.level;
+        fs.slice(0, fixed).forEach((f, i) => {
           if (!drill.skip.includes(i)) drillFilters.push({ target: fieldRef(f), op: 'eq', value: drill.path[i] ?? null });
         });
-        fs = [fs[drill.level]];
+        fs = drill.expanded ? fs.slice(fixed, drill.level + 1) : [fs[drill.level]];
       }
       if (r.kind === 'any') continue;
       const isGroup = r.kind === 'grouping';
@@ -295,10 +298,14 @@ export class VisualHost {
     if (f.header.show) {
       if (f.header.drill && drill.levels > 1) {
         icon('↑', 'Drill up', () => this.drillUp(), undefined);
-        if (drill.level < drill.levels - 1) icon('⇊', 'Go to next level', () => this.nextLevel());
+        if (drill.level < drill.levels - 1) {
+          icon('⇊', 'Go to next level', () => this.nextLevel());
+          icon('⤓', 'Expand all down one level', () => this.expandAll());
+        }
       }
       if (f.header.showAsTable && !this.def.static && !this.def.isSlicer) icon('▦', this.showTable ? 'Show visual' : 'Show as table', () => ((this.showTable = !this.showTable), this.render()), this.showTable);
-      if (f.header.exportData && !this.def.static && !this.def.isSlicer) icon('⇩', 'Export data (CSV)', () => this.exportCsv());
+      if (f.header.exportData && !this.def.static && !this.def.isSlicer)
+        icons.append(this.exportButton());
       if (this.def.isSlicer && this.rt.slicerFilter(this.id)) icon('⌫', 'Clear selections', () => this.setFilter(null));
       if (f.header.focusMode) icon(this.rt.focused === this.id ? '✕' : '⤢', this.rt.focused === this.id ? 'Exit focus mode' : 'Focus mode', () => this.rt.toggleFocus(this.id));
     }
@@ -316,9 +323,10 @@ export class VisualHost {
       text.append(title);
     }
     if (f.title.subtitle) text.append(h('div', { class: 'pbi-subtitle' }, f.title.subtitle));
-    if (drill.levels > 1 && drill.level > 0) {
+    const crumbLevels = drill.expanded ? Math.min(drill.path.length, drill.level) : drill.level;
+    if (drill.levels > 1 && crumbLevels > 0) {
       const role = drill.role!;
-      const names = this.fields(role.name).slice(0, drill.level);
+      const names = this.fields(role.name).slice(0, crumbLevels);
       text.append(h('div', { class: 'pbi-drill-crumb' }, names.map((n, i) => `${fieldRef(n).replace(/^.*\[|\]$/g, '')}: ${formatValue(drill.path[i] ?? null)}`).join(' › ')));
     }
     this.header.append(text, icons);
@@ -369,7 +377,7 @@ export class VisualHost {
 
   drillDown(value: CellValue): void {
     const d = this.drillInfo();
-    if (d.level >= d.levels - 1) return;
+    if (d.level >= d.levels - 1 || d.expanded) return;
     this.spec.drill = { level: d.level + 1, path: [...d.path.slice(0, d.level), value], skip: d.skip.filter((i) => i < d.level) };
     this.afterDrill();
   }
@@ -377,6 +385,12 @@ export class VisualHost {
   drillUp(): void {
     const d = this.drillInfo();
     if (d.level === 0) return;
+    if (d.expanded) {
+      // collapse one expanded level; back to plain drill mode once a single level remains
+      const level = d.level - 1;
+      this.spec.drill = { level, path: d.path.slice(0, level), skip: d.skip.filter((i) => i < level), expanded: level > d.path.length };
+      return this.afterDrill();
+    }
     this.spec.drill = { level: d.level - 1, path: d.path.slice(0, d.level - 1), skip: d.skip.filter((i) => i < d.level - 1) };
     this.afterDrill();
   }
@@ -388,6 +402,80 @@ export class VisualHost {
     // the current level stays unfiltered ("skip"): all members of the next level are shown
     this.spec.drill = { level: d.level + 1, path: [...d.path.slice(0, d.level), null], skip: [...d.skip.filter((i) => i < d.level), d.level] };
     this.afterDrill();
+  }
+
+  /** "Expand all down one level": show the next level for every member, combined with the current one. */
+  expandAll(): void {
+    const d = this.drillInfo();
+    if (d.level >= d.levels - 1) return;
+    const path = d.expanded ? d.path : d.path.slice(0, d.level);
+    this.spec.drill = { level: d.level + 1, path, skip: d.skip.filter((i) => i < path.length), expanded: true };
+    this.afterDrill();
+  }
+
+  private exportButton(): HTMLElement {
+    const b = h('button', { type: 'button', class: 'pbi-icon', title: 'Export', 'aria-label': 'Export', 'aria-haspopup': 'menu' }, '⇩');
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = b.getBoundingClientRect();
+      this.rt.menu(r.left, r.bottom + 4, [
+        { label: 'Export data', hint: 'CSV', onClick: () => this.exportCsv() },
+        { label: 'Export image', hint: 'PNG', onClick: () => void this.exportImage('png') },
+        { label: 'Export image', hint: 'SVG', onClick: () => void this.exportImage('svg') },
+      ]);
+    });
+    return b;
+  }
+
+  /** Standalone SVG snapshot of the visual (HTML content embedded via foreignObject, styles inlined). */
+  toSvg(): string {
+    const w = Math.max(1, Math.round(this.el.offsetWidth || this.size.w + 24 || 600));
+    const hh = Math.max(1, Math.round(this.el.offsetHeight || this.size.h + 60 || 400));
+    const clone = this.el.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.pbi-icons').forEach((n) => n.remove());
+    clone.classList.remove('is-focus', 'is-active');
+    clone.style.width = `${w}px`;
+    clone.style.height = `${hh}px`;
+    const vars = Object.entries(themeVars(this.rt.theme)).map(([k, v]) => `${k}:${v}`).join(';');
+    const body = new XMLSerializer().serializeToString(clone);
+    const css = CSS.replace(/<\/style/gi, '');
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hh}" viewBox="0 0 ${w} ${hh}">` +
+      `<foreignObject x="0" y="0" width="${w}" height="${hh}">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml" class="pbi-report pbi-export" data-mode="${this.rt.theme.mode}" style="${vars};height:${hh}px;background:transparent">` +
+      `<style>${css.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</style>${body}</div></foreignObject></svg>`
+    );
+  }
+
+  /** Download the visual as PNG (2× resolution) or SVG. */
+  async exportImage(type: 'png' | 'svg' = 'png', filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.${type}`): Promise<void> {
+    const svgText = this.toSvg();
+    let blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+    if (type === 'png') {
+      const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Could not rasterise the visual'));
+        img.src = url;
+      });
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const c2d = canvas.getContext('2d')!;
+      c2d.fillStyle = this.rt.theme.surface;
+      c2d.fillRect(0, 0, canvas.width, canvas.height);
+      c2d.scale(scale, scale);
+      c2d.drawImage(img, 0, 0);
+      blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG export failed'))), 'image/png'));
+    }
+    const href = URL.createObjectURL(blob);
+    const a = h('a', { href, download: filename });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
   }
 
   private afterDrill(): void {
@@ -424,11 +512,13 @@ export class VisualHost {
         return self.rt.slicerFilter(self.id);
       },
       domain: (column) => self.rt.slicerDomain(self.id, column),
+      domainTuples: (columns) => self.rt.slicerTuples(self.id, columns),
+      contextMenu: (evt, identity) => self.rt.showContextMenu(self.id, identity, evt),
       drillDown: (v) => self.drillDown(v),
       drillUp: () => self.drillUp(),
       get drill() {
         const d = self.drillInfo();
-        return { level: d.level, path: d.path, levels: d.levels };
+        return { level: d.level, path: d.path, levels: d.expanded ? d.level + 1 : d.levels };
       },
       setState(patch) {
         Object.assign(self.localState, patch);

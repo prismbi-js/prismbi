@@ -7,6 +7,7 @@
     <style>
       html, body { height: 100%; margin: 0; }
       body { display: flex; flex-direction: column; font: 13px system-ui, sans-serif; background: #f9f9f7; }
+      @media (prefers-color-scheme: dark) { body:not(.light) { background: #0d0d0d; color: #f0efec; color-scheme: dark; } }
       body.dark { background: #0d0d0d; color: #f0efec; }
       .demo-bar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid rgba(0,0,0,.08); flex-wrap: wrap; }
       body.dark .demo-bar { border-color: rgba(255,255,255,.1); }

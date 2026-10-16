@@ -1,6 +1,6 @@
 import { h } from '../render/svg';
 import type { CellValue } from '../data/types';
-import { compareValues, valueKey } from '../data/types';
+import { compareValues, parseColumnRef, valueKey } from '../data/types';
 import type { ColumnFilterSpec } from '../data/filters';
 import { formatValue } from '../format/format';
 import { defineVisual } from './registry';
@@ -20,6 +20,8 @@ export interface SlicerFormat {
   placeholder?: string;
   /** Initial relative-date setting. */
   relative?: { anchor?: 'last' | 'next' | 'this'; n?: number; unit?: 'days' | 'weeks' | 'months' | 'years'; includeToday?: boolean };
+  /** Slicers sharing a sync group (on any page) share one selection. */
+  syncGroup?: string;
 }
 
 let uidSeq = 0;
@@ -250,12 +252,102 @@ function renderRelative(ctx: RenderContext, target: string, fmt: SlicerFormat, c
   container.append(h('div', { class: 'pbi-relative' }, h('div', { class: 'pbi-relative-row' }, anchor, n, unit, clear), h('div', { class: 'pbi-relative-desc' }, desc)));
 }
 
+interface TreeNode {
+  key: string;
+  label: string;
+  depth: number;
+  path: CellValue[];
+  children: TreeNode[];
+  leaves: string[];
+}
+
+/** Hierarchy slicer: several fields form a tree; selections become a precise tuples filter on the full path. */
+function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerFormat, container: HTMLElement): void {
+  const tuples = ctx.host.domainTuples(targets);
+  const cols = targets.map((t) => parseColumnRef(t));
+  const formats = cols.map((c) => ctx.model.table(c.table).column(c.column).format);
+  const keyOf = (path: CellValue[]) => JSON.stringify(path.map(valueKey));
+  const root: TreeNode = { key: '[]', label: '', depth: -1, path: [], children: [], leaves: [] };
+  const byKey = new Map<string, TreeNode>([[root.key, root]]);
+  const leafPath = new Map<string, CellValue[]>();
+  for (const tu of tuples) {
+    const lk = keyOf(tu);
+    leafPath.set(lk, tu);
+    let parent = root;
+    parent.leaves.push(lk);
+    for (let d = 0; d < tu.length; d++) {
+      const path = tu.slice(0, d + 1);
+      const k = keyOf(path);
+      let node = byKey.get(k);
+      if (!node) {
+        node = { key: k, label: tu[d] === null ? '(Blank)' : formatValue(tu[d], formats[d]), depth: d, path, children: [], leaves: [] };
+        byKey.set(k, node);
+        parent.children.push(node);
+      }
+      node.leaves.push(lk);
+      parent = node;
+    }
+  }
+  const cur = ctx.host.currentFilter?.[0];
+  const selected = new Set<string>(cur && cur.op === 'tuples' ? cur.tuples.map(keyOf) : []);
+  const st = ctx.host.state as { expanded?: string[]; search?: string };
+  const expanded = new Set(st.expanded ?? []);
+  const q = (st.search ?? '').toLowerCase();
+
+  const emit = (next: Set<string>) => {
+    if (!next.size) return ctx.host.setFilter(null);
+    ctx.host.setFilter([{ targets, op: 'tuples', tuples: [...next].map((k) => leafPath.get(k)!) }]);
+  };
+  const toggle = (node: TreeNode) => {
+    const next = fmt.single ? new Set<string>() : new Set(selected);
+    const all = node.leaves.every((l) => selected.has(l));
+    if (all && !fmt.single) node.leaves.forEach((l) => next.delete(l));
+    else if (!(fmt.single && all)) node.leaves.forEach((l) => next.add(l));
+    emit(next);
+  };
+
+  if (fmt.search !== false) {
+    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: st.search ?? '' }) as HTMLInputElement;
+    input.addEventListener('change', () => ctx.host.setState({ search: input.value }));
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && ctx.host.setState({ search: input.value }));
+    container.append(input);
+  }
+  const list = h('div', { class: 'pbi-slicer-list pbi-tree', role: 'tree', 'aria-multiselectable': String(!fmt.single) });
+  const matches = (n: TreeNode): boolean => !q || n.label.toLowerCase().includes(q) || n.children.some(matches);
+  const draw = (n: TreeNode) => {
+    if (!matches(n)) return;
+    const hasKids = n.children.length > 0;
+    const open = hasKids && (expanded.has(n.key) || !!q);
+    const count = n.leaves.filter((l) => selected.has(l)).length;
+    const checked = count > 0 && count === n.leaves.length;
+    const input = h('input', { type: fmt.single ? 'radio' : 'checkbox', checked, 'aria-label': n.label }) as HTMLInputElement;
+    input.indeterminate = count > 0 && !checked;
+    input.addEventListener('change', () => toggle(n));
+    const row = h('div', { class: 'pbi-slicer-item pbi-tree-item', role: 'treeitem', 'aria-expanded': hasKids ? String(open) : undefined, 'aria-selected': String(checked), style: `padding-left:${n.depth * 16}px` });
+    if (hasKids) {
+      const btn = h('button', { type: 'button', class: 'pbi-tree-toggle', 'aria-label': `${open ? 'Collapse' : 'Expand'} ${n.label}` }, open ? '▾' : '▸');
+      btn.addEventListener('click', () => {
+        const next = new Set(expanded);
+        if (next.has(n.key)) next.delete(n.key);
+        else next.add(n.key);
+        ctx.host.setState({ expanded: [...next] });
+      });
+      row.append(btn);
+    } else row.append(h('span', { class: 'pbi-tree-spacer' }));
+    row.append(h('label', {}, input, h('span', {}, n.label)));
+    list.append(row);
+    if (open) n.children.forEach(draw);
+  };
+  root.children.forEach(draw);
+  container.append(list);
+}
+
 export const slicer = defineVisual({
   type: 'slicer',
   displayName: 'Slicer',
   category: 'slicer',
   isSlicer: true,
-  roles: [{ name: 'field', displayName: 'Field', kind: 'grouping', required: true }],
+  roles: [{ name: 'field', displayName: 'Field (several fields = hierarchy)', kind: 'grouping', required: true, multiple: true }],
   defaultFormat: { header: { showAsTable: false, exportData: false, focusMode: false }, title: { show: true } },
   buildQuery(b) {
     // slicers query their domain through host.domain(); the base query only resolves field metadata
@@ -263,10 +355,16 @@ export const slicer = defineVisual({
     return f ? { groupBy: [typeof f === 'string' ? f : f.field!], values: [], filters: [], limit: 1 } : null;
   },
   render(ctx) {
-    const f = ([] as unknown[]).concat(ctx.spec.fields?.field ?? [])[0] as string | { field: string } | undefined;
+    const all = ([] as unknown[]).concat(ctx.spec.fields?.field ?? []) as (string | { field: string })[];
+    const f = all[0];
     if (!f) return emptyState(ctx, 'Add a field');
     const target = typeof f === 'string' ? f : f.field;
     const fmt = (ctx.format.slicer ?? {}) as SlicerFormat;
+    if (all.length > 1) {
+      const tree = h('div', { class: 'pbi-slicer pbi-slicer-tree' });
+      ctx.root.replaceChildren(tree);
+      return renderHierarchy(ctx, all.map((x) => (typeof x === 'string' ? x : x.field)), fmt, tree);
+    }
     const field = ctx.data.groups[0];
     const style: SlicerStyle = fmt.style ?? (field?.type === 'date' ? 'between' : 'list');
     const container = h('div', { class: `pbi-slicer pbi-slicer-${style}` });

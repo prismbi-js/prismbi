@@ -1,5 +1,17 @@
 import type { DisplayUnits } from '../format/format';
 
+export interface ReferenceLine {
+  type: 'constant' | 'average' | 'median' | 'min' | 'max' | 'percentile';
+  /** For `constant`. */
+  value?: number;
+  /** 0–100 for `percentile`. */
+  percentile?: number;
+  /** Label text; `{value}` is replaced by the formatted value. Default: type + value. */
+  label?: string | false;
+  color?: string;
+  dash?: boolean;
+}
+
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
 export interface VisualFormat {
   title: { show: boolean; text?: string; subtitle?: string; fontSize?: number; color?: string; align: 'left' | 'center' | 'right'; bold: boolean };
@@ -40,6 +52,15 @@ export interface VisualFormat {
     default?: string;
     /** Replace the theme palette for this visual. */
     palette?: string[];
+    /** Conditional colours by value (single-series charts). First matching rule wins. */
+    rules?: { op: '>' | '>=' | '<' | '<=' | '=' | '<>' | 'between'; value: number; value2?: number; color: string }[];
+    /** Colour scale by value (single-series charts): min → (mid) → max. */
+    gradient?: { min?: string; mid?: string; max?: string };
+  };
+  analytics: {
+    referenceLines: ReferenceLine[];
+    /** Linear trend line per series (column, bar, line, area, scatter). */
+    trendLine: boolean | { color?: string };
   };
   bars: { maxThickness: number; radius: number; gap: number; categoryGap: number };
   lines: { width: number; markers: boolean | 'auto'; smooth: boolean; area: boolean; areaOpacity: number; endLabels: boolean };
@@ -60,6 +81,7 @@ export const baseFormat: VisualFormat = {
   categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto', gridlines: false },
   valueAxis: { show: true, displayUnits: 'auto', gridlines: true, tickCount: 5 },
   colors: {},
+  analytics: { referenceLines: [], trendLine: false },
   bars: { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },
   lines: { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true },
   animation: { enabled: true, duration: 280 },

@@ -190,6 +190,11 @@ export const table = defineVisual({
             ctx.host.select(identity, { multi: e.ctrlKey || e.metaKey });
             ctx.host.emit('dataPointClick', { keys: r.keys, identity, event: e });
           });
+          tr.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            ctx.host.contextMenu(e, identity);
+          });
         }
         tbody.append(tr);
       }
@@ -373,6 +378,11 @@ export const matrix = defineVisual({
       tr.addEventListener('click', (e) => {
         e.stopPropagation();
         ctx.host.select(identity, { multi: e.ctrlKey || e.metaKey });
+      });
+      tr.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ctx.host.contextMenu(e, identity);
       });
       tbody.append(tr);
       if (open) (childrenOf.get(pk) ?? []).forEach((p) => addRow(lvl + 1, p));

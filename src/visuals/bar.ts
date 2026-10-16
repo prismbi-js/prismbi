@@ -21,6 +21,8 @@ import {
   withLegend,
 } from './common';
 import { fitText } from '../render/svg';
+import { renderSmallMultiples } from './multiples';
+import { drawReferenceLines, drawTrendLine, hasValueColors, valueColor } from './analytics';
 
 type Mode = 'clustered' | 'stacked' | 'percent';
 
@@ -28,9 +30,11 @@ const ROLES = [
   { name: 'category', displayName: 'Axis', kind: 'grouping' as const, multiple: true, drillable: true },
   { name: 'legend', displayName: 'Legend', kind: 'grouping' as const },
   { name: 'values', displayName: 'Values', kind: 'measure' as const, multiple: true, required: true },
+  { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const },
 ];
 
 function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
+  if (renderSmallMultiples(ctx, (panel) => renderBars(panel, horizontal, mode), mode !== 'clustered')) return;
   const pv = pivot(ctx, 'category', 'legend', 'values', mode !== 'clustered');
   if (!pv.categories.length || !pv.series.length) return emptyState(ctx);
   const { categories, series } = pv;
@@ -68,6 +72,10 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
   const labelFmt = labelFormatter(ctx, valueField);
   const fs = t.labelFontSize;
   const showLabels = f.dataLabels.show;
+  const useValueColors = series.length === 1 && !pv.legendField && hasValueColors(ctx);
+  const colorOf = (se: (typeof series)[number], v: number | null) => (useValueColors ? valueColor(ctx, v, [lo, hi], se.color) : se.color);
+  // reference lines use stack totals for stacked charts, raw values otherwise
+  const refValues = mode === 'clustered' ? series.flatMap((se) => se.values.filter((v): v is number => v !== null)) : categories.map((_, ci) => series.reduce((a, se) => a + (norm(se.values[ci], ci) ?? 0), 0));
 
   // ---- layout
   const svg = s('svg', { width, height, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Bar chart' });
@@ -109,13 +117,13 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           const identity = mergeIdentity(cat.identity, se.identity);
           const hl = se.highlights?.[ci];
           const op = markOpacity(ctx, identity);
-          const path = s('path', { d: barPath(x, Math.min(y0, y1), thick, Math.abs(y1 - y0), f.bars.radius, v >= 0 ? 'top' : 'bottom'), fill: se.color, opacity: se.highlights ? 0.3 : op });
+          const path = s('path', { d: barPath(x, Math.min(y0, y1), thick, Math.abs(y1 - y0), f.bars.radius, v >= 0 ? 'top' : 'bottom'), fill: colorOf(se, v), opacity: se.highlights ? 0.3 : op });
           interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
           animateIn(ctx, path, v >= 0 ? 'bottom' : 'top');
           marks.append(path);
           if (se.highlights && hl !== null && hl !== undefined) {
             const yh = scale(hl);
-            const hp = s('path', { d: barPath(x, Math.min(y0, yh), thick, Math.abs(yh - y0), f.bars.radius, hl >= 0 ? 'top' : 'bottom'), fill: se.color, 'pointer-events': 'none' });
+            const hp = s('path', { d: barPath(x, Math.min(y0, yh), thick, Math.abs(yh - y0), f.bars.radius, hl >= 0 ? 'top' : 'bottom'), fill: colorOf(se, v), 'pointer-events': 'none' });
             marks.append(hp);
           }
           if (showLabels) {
@@ -152,7 +160,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           }
           const identity = mergeIdentity(cat.identity, se.identity);
           const op = markOpacity(ctx, identity);
-          const path = s('path', { d: isEnd ? barPath(x, yTop, thick, hgt, f.bars.radius, v >= 0 ? 'top' : 'bottom') : `M${x},${yTop}h${thick}v${hgt}h${-thick}Z`, fill: se.color, opacity: se.highlights ? 0.3 : op });
+          const path = s('path', { d: isEnd ? barPath(x, yTop, thick, hgt, f.bars.radius, v >= 0 ? 'top' : 'bottom') : `M${x},${yTop}h${thick}v${hgt}h${-thick}Z`, fill: colorOf(se, v), opacity: se.highlights ? 0.3 : op });
           interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
           animateIn(ctx, path, 'bottom');
           marks.append(path);
@@ -160,7 +168,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           if (se.highlights && hl !== null && hl !== undefined) {
             const hv = norm(hl, ci) ?? 0;
             const yh = scale(base + hv);
-            marks.append(s('path', { d: `M${x},${Math.min(ya, yh)}h${thick}v${Math.abs(yh - ya)}h${-thick}Z`, fill: se.color, 'pointer-events': 'none' }));
+            marks.append(s('path', { d: `M${x},${Math.min(ya, yh)}h${thick}v${Math.abs(yh - ya)}h${-thick}Z`, fill: colorOf(se, v), 'pointer-events': 'none' }));
           }
           if (showLabels) {
             const text = labelFmt(mode === 'percent' ? v : se.values[ci]);
@@ -170,6 +178,9 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         });
       }
     });
+    drawReferenceLines(ctx, g, scale, 'y', [left, width - right], refValues, valueField);
+    if (mode === 'clustered') series.forEach((se) => drawTrendLine(ctx, g, se.values, (i) => band(i) + band.bandwidth / 2, scale, se.color));
+    else drawTrendLine(ctx, g, refValues, (i) => band(i) + band.bandwidth / 2, scale, t.foregroundSecondary);
     return;
   }
 
@@ -203,14 +214,14 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         const xb = scale(v);
         const identity = mergeIdentity(cat.identity, se.identity);
         const op = markOpacity(ctx, identity);
-        const path = s('path', { d: barPath(Math.min(xa, xb), y, Math.abs(xb - xa), thick, f.bars.radius, v >= 0 ? 'right' : 'left'), fill: se.color, opacity: se.highlights ? 0.3 : op });
+        const path = s('path', { d: barPath(Math.min(xa, xb), y, Math.abs(xb - xa), thick, f.bars.radius, v >= 0 ? 'right' : 'left'), fill: colorOf(se, v), opacity: se.highlights ? 0.3 : op });
         interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
         animateIn(ctx, path, v >= 0 ? 'left' : 'right');
         marks.append(path);
         const hl = se.highlights?.[ci];
         if (se.highlights && hl !== null && hl !== undefined) {
           const xh = scale(hl);
-          marks.append(s('path', { d: barPath(Math.min(xa, xh), y, Math.abs(xh - xa), thick, f.bars.radius, hl >= 0 ? 'right' : 'left'), fill: se.color, 'pointer-events': 'none' }));
+          marks.append(s('path', { d: barPath(Math.min(xa, xh), y, Math.abs(xh - xa), thick, f.bars.radius, hl >= 0 ? 'right' : 'left'), fill: colorOf(se, v), 'pointer-events': 'none' }));
         }
         if (showLabels)
           marks.append(s('text', { x: v >= 0 ? xb + 5 : xb - 5, y: y + thick / 2 + fs / 3, 'text-anchor': v >= 0 ? 'start' : 'end', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary, opacity: op }, labelFmt(v)));
@@ -241,7 +252,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         }
         const identity = mergeIdentity(cat.identity, se.identity);
         const op = markOpacity(ctx, identity);
-        const path = s('path', { d: isEnd ? barPath(x, y, w, thick, f.bars.radius, v >= 0 ? 'right' : 'left') : `M${x},${y}h${w}v${thick}h${-w}Z`, fill: se.color, opacity: se.highlights ? 0.3 : op });
+        const path = s('path', { d: isEnd ? barPath(x, y, w, thick, f.bars.radius, v >= 0 ? 'right' : 'left') : `M${x},${y}h${w}v${thick}h${-w}Z`, fill: colorOf(se, v), opacity: se.highlights ? 0.3 : op });
         interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
         animateIn(ctx, path, 'left');
         marks.append(path);
@@ -253,6 +264,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
       });
     }
   });
+  drawReferenceLines(ctx, g, scale, 'x', [4, bottom], refValues, valueField);
 }
 
 function barVisual(type: string, displayName: string, horizontal: boolean, mode: Mode): VisualDefinition {
