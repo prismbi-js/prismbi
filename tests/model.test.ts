@@ -112,6 +112,11 @@ describe('query engine', () => {
     expect(r.rows.find((x) => x.keys[0] === 'Bikes' && x.keys[1] === 'South')?.values[0]).toBe(2000);
   });
 
+  it('rejects unrelated groupings when no measure is present', () => {
+    const orphan = new DataModel().addTable('A', [{ x: 'a1' }, { x: 'a2' }]).addTable('B', [{ y: 'b1' }, { y: 'b2' }]);
+    expect(() => orphan.query({ groupBy: ['A[x]', 'B[y]'] })).toThrow(/need at least one measure/);
+  });
+
   it('applies implicit aggregations', () => {
     const r = m.query({ groupBy: ['Region[Name]'], values: ['Sales[Qty]', { field: 'Sales[Amount]', aggregation: 'avg' }, { field: 'Sales[OrderId]', aggregation: 'distinctCount' }] });
     expect(r.values.map((v) => v.name)).toEqual(['Sum of Qty', 'Average of Amount', 'Count (Distinct) of OrderId']);
