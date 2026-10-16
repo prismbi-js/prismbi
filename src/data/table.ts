@@ -138,6 +138,12 @@ export class DataTable {
     this.distinctCache.delete(col.name);
   }
 
+  removeColumn(name: string): void {
+    this.columns.delete(name);
+    this.indexes.delete(name);
+    this.distinctCache.delete(name);
+  }
+
   /** Hash index: value key → ascending row indices. */
   index(column: string): Map<unknown, number[]> {
     let idx = this.indexes.get(column);

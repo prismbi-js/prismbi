@@ -236,6 +236,31 @@ export class DataModel {
     return this.rels;
   }
 
+  /** Change a relationship's direction or active state. */
+  updateRelationship(index: number, patch: Partial<Pick<Relationship, 'crossFilter' | 'active'>>): this {
+    const r = this.rels[index];
+    if (!r) throw new Error(`Relationship #${index} not found`);
+    Object.assign(r, patch);
+    this.changed();
+    return this;
+  }
+
+  removeRelationship(index: number): this {
+    if (!this.rels[index]) throw new Error(`Relationship #${index} not found`);
+    this.rels.splice(index, 1);
+    this.rels.forEach((r, i) => (r.index = i));
+    this.changed();
+    return this;
+  }
+
+  /** Remove a (calculated) column. */
+  removeColumn(table: string, column: string): this {
+    this.table(table).removeColumn(column);
+    this.rels = this.rels.filter((r) => !((r.fromTable === table && r.fromColumn === column) || (r.toTable === table && r.toColumn === column))).map((r, i) => ({ ...r, index: i }));
+    this.changed();
+    return this;
+  }
+
   /** Find the relationship between two columns (either orientation). */
   findRelationship(a: ColumnRef, b: ColumnRef): Relationship | undefined {
     const same = (t: string, c: string, r: ColumnRef) => t === r.table && c === r.column;

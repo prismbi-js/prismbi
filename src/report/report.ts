@@ -12,12 +12,15 @@ import type { DeepPartial } from '../utils';
 import { Emitter, uid } from '../utils';
 import { getVisual } from '../visuals/registry';
 import type { DataPointIdentity, VisualSpec } from '../visuals/types';
+import type { VisualFormat } from '../visuals/format';
 import type { ReportEvents } from './events';
 import { FilterPane } from './filterPane';
 import type { ReportRuntime } from './runtime';
 import { injectStyles, themeVars } from './styles';
 import { Tooltip } from './tooltip';
 import { ContextMenu } from './contextMenu';
+import { EditController, findFreeSpot } from './editing';
+import { REPORT_SCHEMA_VERSION, migrateReport } from './migrate';
 import type { MenuItem } from './contextMenu';
 import type { TooltipRenderer } from './tooltip';
 import { VisualHost, identitiesToFilters } from './visualHost';
@@ -60,6 +63,8 @@ export interface Bookmark {
 }
 
 export interface ReportDefinition {
+  /** Schema version (see migrateReport). */
+  version?: number;
   name?: string;
   pages: PageDefinition[];
   /** Filters on all pages. */
@@ -166,6 +171,7 @@ export class Report implements ReportRuntime {
   private toolbar: HTMLElement;
   private pane: FilterPane;
   private ctxMenu: ContextMenu;
+  private editor: EditController | null = null;
   private paneOpen: boolean;
   private chrome: Required<ReportChrome>;
   private unsubModel: () => void;
@@ -343,8 +349,86 @@ export class Report implements ReportRuntime {
     if (this.active === visualId) return;
     this.active = visualId;
     for (const host of this.page.hosts.values()) host.el.classList.toggle('is-active', host.id === visualId);
+    this.editor?.markSelection();
     this.renderPane();
     this.renderInteractionOverlays();
+    this.emit('visualSelected', { visualId });
+  }
+
+  /** The active (selected) visual on the current page. */
+  get selectedVisual(): string | null {
+    return this.active;
+  }
+
+  // ================================================================= edit mode
+
+  /** Design mode: select, drag and resize visuals on the grid (visual content is not interactive). */
+  setEditMode(on: boolean): void {
+    if (on === !!this.editor) return;
+    if (on) {
+      this.editor = new EditController({
+        page: () => this.editPageInfo(),
+        select: (id) => this.setActiveVisual(id),
+        selected: () => this.active,
+        commitLayout: (id, layout) => this.updateVisual(id, { layout }),
+      });
+      this.root.classList.add('is-editing');
+      for (const p of this.pages) for (const host of p.hosts.values()) this.editor.decorate(host.id, host.el);
+      this.editor.paintGrid();
+    } else {
+      for (const p of this.pages) for (const host of p.hosts.values()) this.editor!.undecorate(host.el);
+      this.editor = null;
+      this.root.classList.remove('is-editing');
+    }
+    this.schedule();
+  }
+
+  get editMode(): boolean {
+    return !!this.editor;
+  }
+
+  private editPageInfo() {
+    const p = this.page;
+    if (!p?.el) return null;
+    const l = p.def.layout ?? {};
+    return { el: p.el, cols: l.columns ?? 12, rowHeight: l.rowHeight ?? 44, gap: l.gap ?? 12, visuals: new Map([...p.hosts].map(([id, hst]) => [id, hst.el])), specs: p.def.visuals };
+  }
+
+  /** Merged format (defaults ← theme ← spec) of a visual, as the format pane shows it. */
+  visualFormat(id: string): VisualFormat {
+    const found = this.findVisual(id);
+    if (!found) throw new Error(`Visual "${id}" not found`);
+    const host = found.page.hosts.get(id) ?? new VisualHost(this, found.spec);
+    const f = host.format();
+    if (!found.page.hosts.has(id)) host.destroy();
+    return f;
+  }
+
+  /** Grid position where a w×h visual fits on a page. */
+  findFreeSpot(w: number, h: number, pageId?: string): { x: number; y: number } {
+    const p = pageId ? this.pages[this.pageIndex(pageId)] : this.page;
+    return findFreeSpot(p.def.visuals, p.def.layout?.columns ?? 12, w, h);
+  }
+
+  /** Copy a visual (offset into free space). Returns the new id. */
+  duplicateVisual(id: string): string {
+    const found = this.findVisual(id);
+    if (!found) throw new Error(`Visual "${id}" not found`);
+    const copy = JSON.parse(JSON.stringify(toPlain(found.spec)), reviveDates) as VisualSpec;
+    delete copy.id;
+    const l = copy.layout ?? { x: 0, y: 0, w: 4, h: 6 };
+    copy.layout = { ...l, ...findFreeSpot(found.page.def.visuals, found.page.def.layout?.columns ?? 12, l.w, l.h) };
+    return this.addVisual(copy, found.page.def.id);
+  }
+
+  /** Bring a visual to the front or send it to the back (layout.z). */
+  arrange(id: string, where: 'front' | 'back'): void {
+    const found = this.findVisual(id);
+    if (!found) return;
+    const zs = found.page.def.visuals.map((v) => v.layout?.z ?? 0);
+    const z = where === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
+    const l = found.spec.layout ?? { x: 0, y: 0, w: 4, h: 6 };
+    this.updateVisual(id, { layout: { ...l, z } });
   }
 
   toggleFocus(visualId: string): void {
@@ -498,6 +582,7 @@ export class Report implements ReportRuntime {
     target.page.hosts.get(targetId)?.invalidate();
     this.schedule(targetId);
     this.renderInteractionOverlays();
+    this.changedDefinition('interaction');
   }
 
   private renderInteractionOverlays(): void {
@@ -608,7 +693,78 @@ export class Report implements ReportRuntime {
     this.pages.push({ def: d, el: null, hosts: new Map(), slicers: new Map(), selection: null, drillState: null });
     this.renderTabs();
     if (show) this.showPage(this.pages.length - 1);
+    this.changedDefinition('addPage');
     return d.id!;
+  }
+
+  /** Change a page's name, layout, background, visibility, drill-through or tooltip settings. */
+  updatePage(idOrName: string, patch: Partial<Omit<PageDefinition, 'id' | 'visuals'>>): void {
+    const p = this.pages[this.pageIndex(idOrName)];
+    if (!p) throw new Error(`Page "${idOrName}" not found`);
+    Object.assign(p.def, patch);
+    if (p.el) {
+      this.applyPageLayout(p);
+      p.el.setAttribute('aria-label', p.def.name);
+      for (const host of p.hosts.values()) host.invalidate();
+      this.editor?.paintGrid();
+    }
+    this.renderTabs();
+    this.schedule();
+    this.changedDefinition('updatePage');
+  }
+
+  /** Move a page to a new position in the tab order. */
+  movePage(idOrName: string, toIndex: number): void {
+    const i = this.pageIndex(idOrName);
+    if (i < 0) return;
+    const currentId = this.page.def.id;
+    const [p] = this.pages.splice(i, 1);
+    this.pages.splice(Math.max(0, Math.min(this.pages.length, toIndex)), 0, p);
+    this.current = this.pages.findIndex((x) => x.def.id === currentId);
+    this.renderTabs();
+    this.changedDefinition('movePage');
+  }
+
+  /** Copy a page with all its visuals. Returns the new page id. */
+  duplicatePage(idOrName: string): string {
+    const p = this.pages[this.pageIndex(idOrName)];
+    if (!p) throw new Error(`Page "${idOrName}" not found`);
+    const copy = JSON.parse(JSON.stringify(toPlain(p.def)), reviveDates) as PageDefinition;
+    delete copy.id;
+    copy.name = `${p.def.name} (copy)`;
+    copy.visuals = copy.visuals.map(({ id: _id, ...v }) => v);
+    const id = this.addPage(copy, false);
+    this.movePage(id, this.pageIndex(p.def.id!) + 1);
+    return id;
+  }
+
+  /** Replace the whole definition (used by undo/redo and "open report"). Theme and listeners are kept. */
+  load(input: ReportDefinition | string): void {
+    const def = migrateReport(input, reviveDates);
+    const keepPage = this.page?.def.id;
+    for (const p of this.pages) {
+      for (const host of p.hosts.values()) host.destroy();
+      p.el?.remove();
+    }
+    this.pages = [];
+    this.active = null;
+    this._focused = null;
+    this.name = def.name ?? this.name;
+    this.reportFilters = def.filters ?? [];
+    this.bookmarks = def.bookmarks ?? [];
+    for (const p of def.pages) this.addPage(p, false);
+    if (!this.pages.length) this.addPage({ name: 'Page 1', visuals: [] }, false);
+    const idx = keepPage ? this.pageIndex(keepPage) : -1;
+    this.showPage(idx >= 0 ? idx : 0, false);
+    this.emit('visualSelected', { visualId: null });
+  }
+
+  private suppressChanges = 0;
+
+  /** Notify listeners (studio history, autosave) that the definition changed. */
+  private changedDefinition(reason: string): void {
+    if (this.suppressChanges) return;
+    this.emit('definitionChanged', { reason });
   }
 
   removePage(idOrName: string): void {
@@ -619,6 +775,7 @@ export class Report implements ReportRuntime {
     p.el?.remove();
     if (!this.pages.length) this.addPage({ name: 'Page 1', visuals: [] }, false);
     this.showPage(Math.min(this.current, this.pages.length - 1), false);
+    this.changedDefinition('removePage');
   }
 
   goToPage(idOrName: string): void {
@@ -649,6 +806,7 @@ export class Report implements ReportRuntime {
     else if (p.el.parentElement !== this.pageScroll) this.pageScroll.append(p.el);
     this.applyPageLayout(p);
     p.el!.hidden = false;
+    this.editor?.paintGrid();
     this.renderTabs();
     this.renderToolbar();
     this.renderPane();
@@ -658,6 +816,9 @@ export class Report implements ReportRuntime {
 
   private mountPage(p: PageState, parent: HTMLElement): void {
     p.el = h('div', { class: 'pbi-page', role: 'tabpanel', 'aria-label': p.def.name });
+    p.el.addEventListener('pointerdown', (e) => {
+      if (this.editor && e.target === p.el) this.setActiveVisual(null);
+    });
     parent.append(p.el);
     for (const spec of p.def.visuals) this.mountVisual(p, spec);
   }
@@ -674,6 +835,7 @@ export class Report implements ReportRuntime {
     const host = new VisualHost(this, spec);
     p.hosts.set(host.id, host);
     p.el!.append(host.el);
+    this.editor?.decorate(host.id, host.el);
     return host;
   }
 
@@ -690,6 +852,7 @@ export class Report implements ReportRuntime {
       this.mountVisual(p, s);
       this.schedule(s.id);
     }
+    this.changedDefinition('addVisual');
     return s.id;
   }
 
@@ -700,8 +863,10 @@ export class Report implements ReportRuntime {
     const host = found.page.hosts.get(id);
     if (host) {
       host.update(found.spec);
+      if (this.editor) this.editor.decorate(id, host.el);
       this.schedule();
     }
+    this.changedDefinition('updateVisual');
   }
 
   removeVisual(id: string): void {
@@ -712,7 +877,9 @@ export class Report implements ReportRuntime {
     found.page.hosts.delete(id);
     found.page.slicers.delete(id);
     if (found.page.selection?.visualId === id) found.page.selection = null;
+    if (this.active === id) this.setActiveVisual(null);
     this.schedule();
+    this.changedDefinition('removeVisual');
   }
 
   visual(id: string): VisualHandle {
@@ -787,6 +954,7 @@ export class Report implements ReportRuntime {
     this.renderPane();
     const filters = scope === 'report' ? this.reportFilters : scope === 'page' ? (page.def.filters ?? []) : (this.findVisual(visualId!)?.spec.filters ?? []);
     this.emit('filtersChanged', { pageId: page.def.id!, scope, visualId, filters });
+    this.changedDefinition('filters');
   }
 
   /** Clear slicers, selection, drill state and pane filters on the current page. */
@@ -944,12 +1112,12 @@ export class Report implements ReportRuntime {
 
   /** Serialisable report definition (pages, visuals, filters, bookmarks). Dates are tagged and revived by {@link Report.parse}. */
   toJSON(): ReportDefinition {
-    return toPlain({ name: this.name, pages: this.pages.map((p) => p.def), filters: this.reportFilters, bookmarks: this.bookmarks }) as ReportDefinition;
+    return toPlain({ version: REPORT_SCHEMA_VERSION, name: this.name, pages: this.pages.map((p) => p.def), filters: this.reportFilters, bookmarks: this.bookmarks }) as ReportDefinition;
   }
 
   /** Parse a JSON string produced from {@link Report.toJSON}. */
   static parse(json: string): ReportDefinition {
-    return JSON.parse(json, reviveDates) as ReportDefinition;
+    return migrateReport(json, reviveDates);
   }
 
   /** Force every visual to re-query (e.g. after mutating data in place). */

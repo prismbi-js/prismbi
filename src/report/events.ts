@@ -14,4 +14,8 @@ export interface ReportEvents {
   themeChanged: { name: string };
   bookmarkApplied: { name: string };
   drillThrough: { fromPageId: string; toPageId: string; visualId?: string; filters: FilterSpec[] };
+  /** Something in the report definition changed (pages, visuals, layout, filters, interactions). */
+  definitionChanged: { reason: string };
+  /** Design-time selection changed (edit mode) or a visual was activated. */
+  visualSelected: { visualId: string | null };
 }

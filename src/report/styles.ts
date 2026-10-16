@@ -235,6 +235,17 @@ export const CSS = /* css */ `
 .pbi-ei{position:absolute;top:6px;right:6px;z-index:5;display:flex;border:1px solid var(--pbi-accent);border-radius:6px;overflow:hidden;background:var(--pbi-surface);box-shadow:0 2px 8px rgb(0 0 0/.12)}
 .pbi-ei button{border:0;background:none;padding:4px 8px;font-size:11px;cursor:pointer;color:var(--pbi-fg-2)}
 .pbi-ei button[aria-pressed=true]{background:var(--pbi-accent);color:#fff}
+.pbi-report.is-editing .pbi-page{background-image:linear-gradient(to right,color-mix(in srgb,var(--pbi-fg) 6%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--pbi-fg) 6%,transparent) 1px,transparent 1px);background-size:var(--pbi-grid-col,80px) var(--pbi-grid-row,56px);background-position:var(--pbi-gap) var(--pbi-gap)}
+.pbi-edit{position:absolute;inset:-1px;z-index:30;cursor:move;border:1px dashed transparent;border-radius:inherit;touch-action:none;outline:none}
+.pbi-visual:hover>.pbi-edit{border-color:color-mix(in srgb,var(--pbi-accent) 50%,transparent)}
+.pbi-visual[data-selected]>.pbi-edit{border:2px solid var(--pbi-accent)}
+.pbi-visual.is-dragging{opacity:.85;z-index:40;box-shadow:0 12px 30px rgb(0 0 0/.25)}
+.pbi-handle{position:absolute;width:10px;height:10px;background:var(--pbi-surface);border:2px solid var(--pbi-accent);border-radius:3px;display:none}
+.pbi-visual[data-selected]>.pbi-edit .pbi-handle{display:block}
+.pbi-handle-n{top:-6px;left:calc(50% - 5px);cursor:ns-resize}.pbi-handle-s{bottom:-6px;left:calc(50% - 5px);cursor:ns-resize}
+.pbi-handle-e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}.pbi-handle-w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}
+.pbi-handle-ne{top:-6px;right:-6px;cursor:nesw-resize}.pbi-handle-sw{bottom:-6px;left:-6px;cursor:nesw-resize}
+.pbi-handle-nw{top:-6px;left:-6px;cursor:nwse-resize}.pbi-handle-se{bottom:-6px;right:-6px;cursor:nwse-resize}
 .pbi-datatable-wrap{overflow:auto;height:100%}
 @media (prefers-reduced-motion:reduce){.pbi-report *{animation:none!important;transition:none!important}}
 `;
