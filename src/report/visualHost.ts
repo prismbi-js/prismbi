@@ -133,8 +133,27 @@ export class VisualHost {
 
   // ------------------------------------------------------------ query
 
-  private fields(role: string): FieldSpec[] {
-    return asArray(this.spec.fields?.[role]);
+  fields(role: string): FieldSpec[] {
+    // hierarchies expand to their levels; field parameters to the fields their slicer selected
+    const out: FieldSpec[] = [];
+    for (const f of asArray(this.spec.fields?.[role])) {
+      const ref = typeof f === 'string' ? f : f.field;
+      if (ref && isColumnRefString(ref)) {
+        const levels = this.rt.model.resolveHierarchy(ref);
+        if (levels) {
+          out.push(...levels);
+          continue;
+        }
+        // a slicer on a field parameter shows the parameter itself, everything else shows the picked fields
+        const picked = this.def.isSlicer ? null : this.rt.model.resolveFieldParameter(ref, this.rt.filtersFor(this.id));
+        if (picked) {
+          out.push(...picked);
+          continue;
+        }
+      }
+      out.push(f);
+    }
+    return out;
   }
 
   private drillInfo() {
@@ -248,6 +267,7 @@ export class VisualHost {
       data,
       model: this.rt.model,
       role: roleFn,
+      fields: (r) => this.fields(r),
       colorFor: (field, value, fallback) => this.colorFor(f, field, value, fallback),
       seriesColor: (name, i) => f.colors.series?.[name] ?? (i === 0 && f.colors.default ? f.colors.default : this.palette(f)[i] ?? this.rt.theme.otherColor),
       fmt: (field, v, opts) => formatValue(v, field?.format, { locale: this.rt.locale, ...opts }),

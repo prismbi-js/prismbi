@@ -214,7 +214,7 @@ function stripAst({ ast: _ast, ...rest }: ResolvedValue): QueryField {
 }
 
 /** Distinct combinations of group columns that exist under the filter context ("auto-exist"). */
-function groupCombos(model: DataModel, cols: ColumnRef[], ctx: Filter[], hasValues: boolean): CellValue[][] {
+export function groupCombos(model: DataModel, cols: ColumnRef[], ctx: Filter[], hasValues: boolean): CellValue[][] {
   const tables = [...new Set(cols.map((c) => c.table))];
   const dedupe = (rowsIter: Iterable<CellValue[]>) => {
     const m = new Map<string, CellValue[]>();

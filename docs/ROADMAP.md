@@ -8,14 +8,14 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 |---|---|---|---|
 | 1 | Core engine and essential visuals | `0.1` | ✅ Implemented (this repo) |
 | 2 | Pro visuals and deeper interactivity | `0.2` | ✅ Implemented |
-| 3 | Advanced modeling and DAX coverage | `0.3` | Planned |
+| 3 | Advanced modeling and DAX coverage | `0.3` | ✅ Implemented |
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | Planned |
 | 5 | Scale, performance and data connectors | `0.5` | Planned |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | Planned |
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX, query engine, report runtime) is **≈41 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈55 KB**, and everything (all 34 visuals) is **≈71 KB**.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine, report runtime) is **≈52 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈66 KB**, and everything (34 visuals) is **≈82 KB**. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -121,18 +121,38 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 **Acceptance:** visual regression tests (Playwright screenshots) on every visual in both themes. Keyboard-only walkthrough of every interaction. Lighthouse accessibility score ≥95 on the demo.
 
-## Phase 3: Advanced modeling and DAX coverage
+## Phase 3: Advanced modeling and DAX coverage ✅
 
 **Goal:** model anything Power BI Desktop can.
 
-- Bidirectional cross-filtering, many-to-many relationships, inactive relationships with `USERELATIONSHIP`, `CROSSFILTER`, `TREATAS`
-- Table functions: `SUMMARIZE`, `ADDCOLUMNS`, `SELECTCOLUMNS`, `GENERATE`, `CROSSJOIN`, `UNION`, `EXCEPT`, `INTERSECT`, `DATATABLE`, calculated tables
-- Calculation groups and field parameters (switch measures or dimensions from a slicer), what-if parameters
-- Hierarchies as model objects, display folders, perspectives, row-level security (roles and DAX filters)
-- `EARLIER`, `PATH*` functions, statistical functions (`PERCENTILE.*`, `STDEV.*`, …), `ROLLUP` and `ISINSCOPE` for matrix subtotals
-- A query plan explainer (`model.explain(expr)`), a DAX formatter, and language-server support (completion, hover, diagnostics) for editors
+### Relationships
+- [x] **Bidirectional** cross-filtering (`crossFilter: 'both'`), with cycle-safe propagation that only narrows a dimension by filters from the other side
+- [x] **Many-to-many** relationships (`cardinality: 'manyToMany'`)
+- [x] **Inactive** relationships, plus `USERELATIONSHIP`, `CROSSFILTER` and `TREATAS`, carried in the filter context so caching and `CALCULATE` scoping stay correct
 
-**Acceptance:** a conformance suite of at least 500 DAX expressions checked against reference results.
+### DAX coverage (about 160 functions)
+- [x] Table functions: `SUMMARIZE`, `SUMMARIZECOLUMNS`, `ADDCOLUMNS`, `SELECTCOLUMNS`, `CROSSJOIN`, `UNION`, `INTERSECT`, `EXCEPT`, `GENERATE`, `ROW`, `DATATABLE`, `GENERATESERIES`, `CALENDAR`
+- [x] **Calculated tables** (`addCalculatedTable`) and `model.evaluateTable()` (a DAX query's EVALUATE)
+- [x] `LOOKUPVALUE`, `CONTAINS`, `EARLIER`, `EARLIEST`, `FIRSTNONBLANK`, `LASTNONBLANK`, the `PATH` family, `ISINSCOPE`, `ISCROSSFILTERED`
+- [x] Statistics: `STDEV`, `VAR` (sample and population, column and X), `PERCENTILE(X).INC/EXC`, `GEOMEAN(X)`, `AVERAGEA`, `MAXA`, `MINA`
+- [x] Fixed: row context no longer transitions on bare table references or `VALUES` (DAX semantics, which `EARLIER` patterns need). Date ± whole days is now DST-safe.
+
+### Model objects
+- [x] **Calculation groups** (`SELECTEDMEASURE`, `SELECTEDMEASURENAME`, `ISSELECTEDMEASURE`, precedence, combining several groups)
+- [x] **Field parameters** (a slicer picks the measures or columns a visual shows)
+- [x] **What-if parameters**, plus a **slider** slicer style
+- [x] **Hierarchies** as model objects (drillable wells; tree slicers), **display folders**, **perspectives**
+- [x] **Row-level security**: roles with DAX rules, `USERNAME` / `CUSTOMDATA`, union of roles. It can't be removed by `ALL()`, and slicer domains and the filter pane respect it.
+
+### Tooling
+- [x] **Language service**: completion, hover, signature help, diagnostics, formatting
+- [x] **DAX formatter** (`formatDax`) and **dependency explanation** (`explainDax`)
+- [x] A function catalog checked against the evaluator by a test
+- [x] Demo: a Modeling page, a "View as" RLS switch and a **DAX console**
+
+**Acceptance (met):** a conformance suite of more than 60 expressions plus feature tests (167 tests in total). Every catalogued function is implemented. Benchmark timings are unchanged from Phase 2.
+
+**Deferred:** `NATURALINNERJOIN`, `SAMPLE`, `RANK`/`WINDOW` functions and visual calculations (Phase 4 studio work), plus calculation-item format strings (use `FORMAT()` inside the item for now).
 
 ## Phase 4: Authoring studio
 

@@ -9,6 +9,7 @@ export interface Column {
   hidden?: boolean;
   sortBy?: string;
   description?: string;
+  folder?: string;
   /** Set when the column is computed from a DAX expression. */
   expression?: string;
 }
@@ -91,6 +92,7 @@ export class DataTable {
         hidden: s.hidden,
         sortBy: s.sortBy,
         description: s.description,
+        folder: s.folder,
       });
     }
   }

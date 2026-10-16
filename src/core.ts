@@ -5,13 +5,13 @@
  */
 // data & model
 export { DataModel } from './data/model';
-export type { FieldInfo, Measure, Relationship } from './data/model';
+export type { CalculationGroup, CalculationGroupDef, CalculationItemDef, FieldInfo, FieldParameterDef, Measure, Relationship, WhatIfParameterDef } from './data/model';
 export { DataTable, inferType } from './data/table';
 export type { Column } from './data/table';
 export { generateDateTable } from './data/dates';
 export type { DateTableOptions } from './data/dates';
 export { compileFilter } from './data/filters';
-export type { ColumnFilterSpec, Filter, FilterOp, FilterSpec, TopNFilterSpec, TupleFilterSpec } from './data/filters';
+export type { ColumnFilterSpec, Filter, FilterOp, FilterSpec, RelFilter, TopNFilterSpec, TupleFilterSpec } from './data/filters';
 export type { Aggregation, FieldSpec, QueryField, QueryResult, QueryRow, QuerySpec } from './data/query';
 export { columnRefToString, compareValues, parseColumnRef } from './data/types';
 export type { CellValue, ColumnRef, ColumnSchema, DataType, MeasureDef, RelationshipDef, Row } from './data/types';
@@ -20,6 +20,12 @@ export type { CellValue, ColumnRef, ColumnSchema, DataType, MeasureDef, Relation
 export { parseDax, tokenize, DaxSyntaxError } from './dax/parser';
 export { DaxError, Evaluator } from './dax/evaluator';
 export type { Expr } from './dax/ast';
+export { formatDax } from './dax/format';
+export type { FormatDaxOptions } from './dax/format';
+export { DAX_FUNCTIONS, DAX_KEYWORDS } from './dax/functions';
+export type { DaxFunctionInfo } from './dax/functions';
+export { DaxLanguageService, explainDax } from './dax/language';
+export type { DaxCompletion, DaxDiagnostic, DaxExplanation, DaxHover, DaxSignatureHelp } from './dax/language';
 
 // formatting & theming
 export { formatValue, formatDate, formatCompact, setDefaultLocale, FORMAT_PRESETS } from './format/format';

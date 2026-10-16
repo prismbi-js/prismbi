@@ -16,6 +16,24 @@
       body.dark .demo-bar button { border-color: rgba(255,255,255,.2); }
       #stats { font: 12px ui-monospace, Consolas, monospace; opacity: .7; }
       #app { flex: 1; min-height: 0; }
+      .view-as { display: inline-flex; gap: 6px; align-items: center; }
+      .view-as select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(0,0,0,.15); background: transparent; color: inherit; }
+      body.dark .view-as select { border-color: rgba(255,255,255,.2); }
+      .view-as option { color: #0b0b0b; }
+      .dax-console { position: fixed; right: 16px; top: 56px; bottom: 16px; width: min(560px, calc(100vw - 32px)); z-index: 2000; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #fcfcfb; color: #0b0b0b; border: 1px solid rgba(0,0,0,.12); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.25); }
+      body.dark .dax-console { background: #1a1a19; color: #f0efec; border-color: rgba(255,255,255,.12); }
+      .dax-console header { display: flex; gap: 10px; align-items: baseline; }
+      .dax-console header span { font-size: 11px; opacity: .6; margin-right: auto; }
+      .dax-console header button, .dax-actions button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(127,127,127,.35); background: transparent; color: inherit; cursor: pointer; }
+      .dax-console textarea { min-height: 140px; resize: vertical; font: 13px/1.5 ui-monospace, Consolas, monospace; padding: 10px; border-radius: 8px; border: 1px solid rgba(127,127,127,.35); background: transparent; color: inherit; }
+      .dax-suggest { list-style: none; margin: -4px 0 0; padding: 4px; border: 1px solid rgba(127,127,127,.35); border-radius: 8px; max-height: 210px; overflow: auto; }
+      .dax-suggest li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 8px; border-radius: 5px; cursor: pointer; font: 12px ui-monospace, Consolas, monospace; }
+      .dax-suggest li small { opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dax-suggest li[aria-selected=true] { background: rgba(42,120,214,.18); }
+      .dax-diag { font-size: 12px; } .dax-diag .error { color: #d03b3b; } .dax-diag .warning { color: #b07800; } .dax-diag .ok { opacity: .6; }
+      .dax-actions { display: flex; gap: 8px; align-items: center; } .dax-sig { font: 11px ui-monospace, Consolas, monospace; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dax-result { overflow: auto; flex: 1; font-size: 12px; } .dax-result table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+      .dax-result th, .dax-result td { text-align: left; padding: 4px 8px; border-bottom: 1px solid rgba(127,127,127,.25); } .dax-result .error { color: #d03b3b; white-space: pre-wrap; }
     </style>
   </head>
   <body>
@@ -26,6 +44,8 @@
       <button id="bookmark" type="button">Save bookmark</button>
       <button id="restore" type="button" disabled>Restore bookmark</button>
       <button id="json" type="button">Log report JSON</button>
+      <label class="view-as">View as <select id="view-as"><option value="all">Everyone</option><option value="europe">Europe role</option><option value="manager">Germany manager (USERNAME)</option></select></label>
+      <button id="dax" type="button">DAX console</button>
     </div>
     <div id="app"></div>
     <script type="module" src="./main.ts"></script>

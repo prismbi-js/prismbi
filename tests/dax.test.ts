@@ -197,6 +197,6 @@ describe('errors', () => {
   });
 
   it('names unsupported functions', () => {
-    expect(() => ev('PATHCONTAINS(1, 2)')).toThrow(/not supported/);
+    expect(() => ev('NOTAFUNCTION(1, 2)')).toThrow(/not supported/);
   });
 });

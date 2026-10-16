@@ -2,7 +2,7 @@
 
 **Power BI-style data modeling and interactive reports for the web, written in TypeScript.**
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It has zero dependencies: about 41 KB min+gzip for the core, about 55 KB for a typical dashboard, and about 71 KB with every visual. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It has zero dependencies: about 52 KB min+gzip for the core, about 66 KB for a typical dashboard, and about 82 KB with every visual. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install prismbi
@@ -40,7 +40,9 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 
 | | |
 |---|---|
-| **Real BI semantics** | Filter context, row context, context transition, `CALCULATE` with `ALL`, `ALLEXCEPT`, `ALLSELECTED` and `KEEPFILTERS`, time intelligence, auto-exist grouping, and true (non-additive) totals |
+| **Real BI semantics** | Filter context, row context, context transition, `CALCULATE` with `ALL`, `ALLEXCEPT`, `ALLSELECTED`, `KEEPFILTERS`, `USERELATIONSHIP` and `CROSSFILTER`, time intelligence, table functions, auto-exist grouping, and true (non-additive) totals. About 160 DAX functions |
+| **Advanced modeling** | Bidirectional, many-to-many and inactive relationships, calculated tables, calculation groups, field and what-if parameters, hierarchies, perspectives, row-level security |
+| **Developer tooling** | DAX language service (completion, hover, diagnostics, signature help), formatter, dependency explanation, `evaluateTable()` queries |
 | **Slice and narrow down** | Slicers (list, dropdown, tiles, range, relative date, hierarchy tree, synced across pages), cross-filter and cross-highlight, Ctrl+click multi-select, right-click Include / Exclude, drill down / up / expand all, drill-through pages with Back, a decomposition tree, report, page and visual filters, a filter pane with Basic, Advanced and Top N, bookmarks |
 | **34 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps, decomposition tree, card, multi-row card, KPI, gauge, table, matrix, slicer, text, and small multiples for cartesian charts |
 | **Light and fast** | Zero dependencies, columnar engine with hash indexes and caches, `requestAnimationFrame`-batched rendering. Typical queries on 30k rows: under 40 ms cold, under 1 ms warm |
@@ -71,7 +73,9 @@ import { PrismReport, PrismVisual } from 'prismbi/react';
 
 - [Getting started](docs/guide/getting-started.md)
 - [Data modeling](docs/guide/data-model.md): tables, relationships, measures, calculated columns, date tables
+- [Advanced modeling](docs/guide/advanced-modeling.md): relationships, calculation groups, parameters, hierarchies, RLS
 - [Expressions (DAX) reference](docs/guide/expressions.md)
+- [DAX tooling](docs/guide/tooling.md): language service, formatter, dependency explanation
 - [Visuals reference](docs/guide/visuals.md): every visual, its data roles and format options
 - [Slicing, filtering and interactions](docs/guide/interactions.md)
 - [Theming and formatting](docs/guide/theming.md)

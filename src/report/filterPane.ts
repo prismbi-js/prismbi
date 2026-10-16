@@ -143,7 +143,7 @@ export class FilterPane {
 
     if (mode === 'basic') {
       const cf = f as ColumnFilterSpec;
-      const domain = this.model.table(col.table).distinct(col.column);
+      const domain = this.model.valuesOf(col, []); // respects row-level security
       const selected = new Set((cf.op === 'in' ? cf.values ?? [] : []).map(valueKey));
       const q = this.search.get(key) ?? '';
       if (domain.length > 8) {

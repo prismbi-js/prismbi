@@ -21,7 +21,7 @@ PrismBI measures and calculated columns use a DAX-compatible syntax and semantic
 
 - **BLANK:** `BLANK() + 1 = 1`, `BLANK() * 5 = BLANK`, and `BLANK() = 0` and `BLANK() = ""` are TRUE. `DIVIDE` returns BLANK, or its third argument, when dividing by zero.
 - **Filter context:** aggregations see the rows visible under the current filters, which come from slicers, visual grouping, page and report filters, and `CALCULATE`.
-- **Row context:** iterators (`SUMX`, `FILTER`, …) and calculated columns evaluate per row. Inside them, `Table[Column]` reads the current row.
+- **Row context:** iterators (`SUMX`, `FILTER`, …) and calculated columns evaluate per row. Inside them, `Table[Column]` reads the current row. A bare table reference or `VALUES()` inside a row context still sees the whole filter context (no transition), so `FILTER(Sales, Sales[Amount] > EARLIER(Sales[Amount]))` in a calculated column scans every row.
 - **Context transition:** a measure reference or `CALCULATE` inside a row context turns the current row into filters. For example, `MAXX(Products, [Total Sales])` gives the best-selling product's sales.
 - **CALCULATE filter arguments:**
   - `Table[Col] = value` or any boolean expression over **one column** replaces the existing filters on that column.
@@ -30,6 +30,7 @@ PrismBI measures and calculated columns use a DAX-compatible syntax and semantic
   - `ALLEXCEPT(Table, Table[Col]…)` removes all except the listed columns.
   - `ALLSELECTED(...)` removes only the filters introduced by the visual's own grouping, which gives "share of what's selected".
   - `KEEPFILTERS(expr)` intersects with existing filters instead of replacing them.
+  - `USERELATIONSHIP(a, b)` activates an inactive relationship. `CROSSFILTER(a, b, BOTH | ONEWAY | NONE)` changes a relationship's direction for that evaluation.
 
 ## Function reference
 
@@ -49,6 +50,21 @@ These need a date table related to your facts. See [data-model.md](data-model.md
 
 Used inside `CALCULATE`, these clear the other filters on the date table (Power BI "mark as date table" behaviour). So `CALCULATE([Sales], SAMEPERIODLASTYEAR(Date[Date]))` works inside a visual grouped by `Date[Year]`.
 
+### Relationships & lookups
+`USERELATIONSHIP` · `CROSSFILTER` · `TREATAS(table, col…)` · `LOOKUPVALUE(result, searchCol, value, …, [alternate])` · `CONTAINS(table, col, value, …)`
+
+### Table functions
+`SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · `GENERATESERIES` · `CALENDAR` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
+
+### Statistical
+`STDEV.S` · `STDEV.P` · `VAR.S` · `VAR.P` · `STDEVX.S` · `STDEVX.P` · `VARX.S` · `VARX.P` · `PERCENTILE.INC` · `PERCENTILE.EXC` · `PERCENTILEX.INC` · `PERCENTILEX.EXC` · `GEOMEAN` · `GEOMEANX` · `AVERAGEA` · `MAXA` · `MINA`
+
+### Row context, parent-child & scope
+`EARLIER(col, [n])` · `EARLIEST` · `PATH(id, parent)` · `PATHLENGTH` · `PATHITEM` · `PATHITEMREVERSE` · `PATHCONTAINS` · `ISINSCOPE(col)` · `ISCROSSFILTERED`
+
+### Calculation groups & security
+`SELECTEDMEASURE` · `SELECTEDMEASURENAME` · `ISSELECTEDMEASURE` · `USERNAME` · `USERPRINCIPALNAME` · `CUSTOMDATA`. See [advanced modeling](advanced-modeling.md).
+
 ### Logical
 `IF` · `IFERROR` · `SWITCH` (including `SWITCH(TRUE(), …)`) · `AND` · `OR` · `NOT` · `TRUE` · `FALSE` · `BLANK` · `ISBLANK` · `ISNUMBER` · `ISTEXT` · `ISEMPTY` · `COALESCE`
 
@@ -56,10 +72,18 @@ Used inside `CALCULATE`, these clear the other filters on the date table (Power 
 `DIVIDE` · `ABS` · `ROUND` · `ROUNDUP` · `ROUNDDOWN` · `TRUNC` · `INT` · `CEILING` · `FLOOR` · `SQRT` · `POWER` · `MOD` · `EXP` · `LN` · `LOG` · `LOG10` · `SIGN` · `PI`
 
 ### Text
-`CONCATENATE` · `UPPER` · `LOWER` · `LEN` · `TRIM` · `LEFT` · `RIGHT` · `MID` · `SUBSTITUTE` · `REPT` · `SEARCH` · `FIND` · `CONTAINSSTRING` · `EXACT` · `VALUE` · `FORMAT(value, "format")`
+`CONCATENATE` · `COMBINEVALUES` · `UPPER` · `LOWER` · `LEN` · `TRIM` · `LEFT` · `RIGHT` · `MID` · `SUBSTITUTE` · `REPT` · `SEARCH` · `FIND` · `CONTAINSSTRING` · `EXACT` · `VALUE` · `FORMAT(value, "format")`
 
 ### Date and time
-`DATE` · `TODAY` · `NOW` · `YEAR` · `QUARTER` · `MONTH` · `DAY` · `HOUR` · `MINUTE` · `WEEKDAY(date, [1|2|3])` · `WEEKNUM` · `EOMONTH` · `EDATE` · `DATEDIFF(start, end, DAY|WEEK|MONTH|QUARTER|YEAR|HOUR|MINUTE|SECOND)` · date arithmetic (`date + 1` adds a day, `date - date` gives days)
+`DATE` · `DATEVALUE` · `TODAY` · `NOW` · `UTCNOW` · `UTCTODAY` · `YEAR` · `QUARTER` · `MONTH` · `DAY` · `HOUR` · `MINUTE` · `SECOND` · `WEEKDAY(date, [1|2|3])` · `WEEKNUM` · `EOMONTH` · `EDATE` · `NETWORKDAYS` · `DATEDIFF(start, end, DAY|WEEK|MONTH|QUARTER|YEAR|HOUR|MINUTE|SECOND)` · date arithmetic (`date + 1` adds a day, `date - date` gives days)
+
+## Querying with table expressions
+
+```ts
+model.evaluateTable('SUMMARIZECOLUMNS(Products[Category], "Sales", [Total Sales], "Margin", [Margin %])');
+```
+
+This works like a DAX query's `EVALUATE` and returns `{ columns, rows }`. Editor tooling (completion, diagnostics, formatting) is covered in [tooling.md](tooling.md).
 
 ## Patterns
 

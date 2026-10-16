@@ -123,7 +123,7 @@ export const table = /* @__PURE__ */ defineVisual({
     };
   },
   render(ctx) {
-    const fields = ([] as FieldSpec[]).concat(ctx.spec.fields?.columns ?? []);
+    const fields = ctx.fields('columns');
     const tf = (ctx.format.table ?? {}) as TableFormat;
     const { data } = ctx;
     if (!data.rows.length) return emptyState(ctx);
@@ -257,7 +257,7 @@ export const matrix = /* @__PURE__ */ defineVisual({
     const rowFields = rowRole.indices.map((i) => data.groups[i]);
     const colField = colRole.indices.length ? data.groups[colRole.indices[0]] : undefined;
     const valueFields = valRole.indices.map((i) => data.values[i]);
-    const valueSpecs = ([] as FieldSpec[]).concat(ctx.spec.fields?.values ?? []);
+    const valueSpecs = ctx.fields('values');
     const filters = data.baseFilters as never[];
     const colKeys: CellValue[] = colField ? [...new Map(data.rows.map((r) => [valueKey(r.keys[colRole.indices[0]]), r.keys[colRole.indices[0]]])).values()] : [];
     if (colField) {

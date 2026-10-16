@@ -125,7 +125,7 @@ format: { matrix: { expandAll: false, columnTotals: true, conditional: { /* as t
 
 // slicer
 format: { slicer: {
-  style: 'list' | 'dropdown' | 'tiles' | 'between' | 'relative',   // dates default to 'between'
+  style: 'list' | 'dropdown' | 'tiles' | 'between' | 'relative' | 'slider',   // dates default to 'between'; 'slider' = one value (what-if)
   single: false, search: true, selectAll: true, orientation: 'horizontal', placeholder: 'All',
   relative: { anchor: 'last'|'next'|'this', n: 30, unit: 'days'|'weeks'|'months'|'years', includeToday: true },
 } }

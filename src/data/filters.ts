@@ -51,7 +51,7 @@ export interface TopNFilterSpec {
 export type FilterSpec = ColumnFilterSpec | TupleFilterSpec | TopNFilterSpec;
 
 /** Compiled filter that the engine understands. */
-export type Filter = ColumnsFilter | RowsFilter;
+export type Filter = ColumnsFilter | RowsFilter | RelFilter;
 
 export interface ColumnsFilter {
   kind: 'columns';
@@ -70,6 +70,21 @@ export interface RowsFilter {
   table: string;
   rows: Set<number>;
   key: string;
+}
+
+/**
+ * Relationship modifier carried in the filter context (USERELATIONSHIP / CROSSFILTER).
+ * `rel` is the relationship's index in the model.
+ */
+export interface RelFilter {
+  kind: 'rel';
+  rel: number;
+  mode: 'activate' | 'both' | 'oneway' | 'none';
+  key: string;
+}
+
+export function relFilter(rel: number, mode: RelFilter['mode']): RelFilter {
+  return { kind: 'rel', rel, mode, key: `rel#${rel}#${mode}` };
 }
 
 export type FilterContext = readonly Filter[];
@@ -183,6 +198,7 @@ export function overrideFilters(ctx: FilterContext, add: Filter[]): Filter[] {
     (f) =>
       !add.some((n) => {
         if (n.kind === 'rows' && f.kind === 'rows') return n.table === f.table;
+        if (n.kind === 'rel' && f.kind === 'rel') return n.rel === f.rel;
         if (n.kind === 'columns' && f.kind === 'columns') {
           // a single-column filter overrides any filter that touches that column
           if (n.columns.length === 1) return f.columns.some((c) => c.table === n.columns[0].table && c.column === n.columns[0].column);
@@ -195,5 +211,6 @@ export function overrideFilters(ctx: FilterContext, add: Filter[]): Filter[] {
 }
 
 export function filterTouchesTable(f: Filter, tables: Set<string>): boolean {
+  if (f.kind === 'rel') return false;
   return f.kind === 'rows' ? tables.has(f.table) : f.columns.some((c) => tables.has(c.table));
 }

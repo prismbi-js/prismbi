@@ -29,7 +29,7 @@ model.addRelationship({ from: 'Sales[ProductId]', to: 'Products[Id]' });
 
 - `from` is the many side and `to` is the one side. The `to` column must hold unique values, and PrismBI checks this.
 - Filters flow from one to many, so a filter on `Products[Category]` narrows `Sales`. A filter on `Sales` does not narrow `Products`. Chains work, e.g. `Sales → Products → Subcategory → Category` (snowflake).
-- `crossFilter: 'both'`, many-to-many and inactive relationships are planned for Phase 3.
+- Two-way filtering (`crossFilter: 'both'`), many-to-many (`cardinality: 'manyToMany'`) and inactive relationships (`active: false` plus `USERELATIONSHIP`) are covered in [advanced modeling](advanced-modeling.md).
 
 ## Measures
 
@@ -89,6 +89,10 @@ const result = model.query({
 | `includeEmpty` | Keep rows where every value is blank |
 
 Implicit aggregations: `sum` (the default for numbers), `count` (the default for text), `avg`, `min`, `max`, `median`, `distinctCount`, `countRows`, `first`, `last`.
+
+## More modeling
+
+Calculated tables, calculation groups, field and what-if parameters, hierarchies, perspectives and row-level security are covered in [advanced modeling](advanced-modeling.md).
 
 ## Field list and metadata
 

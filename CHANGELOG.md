@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (unreleased): Phase 3
+
+- **Relationships:** `crossFilter: 'both'`, `cardinality: 'manyToMany'`, inactive relationships, `USERELATIONSHIP`, `CROSSFILTER`, `TREATAS`.
+- **DAX:** about 45 new functions. Table functions (`SUMMARIZE`, `SUMMARIZECOLUMNS`, `ADDCOLUMNS`, `SELECTCOLUMNS`, `CROSSJOIN`, `UNION`, `INTERSECT`, `EXCEPT`, `GENERATE`, `ROW`, `DATATABLE`, `GENERATESERIES`, `CALENDAR`), `LOOKUPVALUE`, `CONTAINS`, `EARLIER`, the `PATH` family, statistics, `ISINSCOPE`, `ISCROSSFILTERED`, `FIRSTNONBLANK`, `LASTNONBLANK`, `USERNAME`, `NETWORKDAYS` and more.
+- **Model:** `addCalculatedTable`, `evaluateTable`, `addCalculationGroup`, `addFieldParameter`, `addWhatIfParameter`, `addHierarchy`, display folders, `addPerspective`, `addRole` / `setRoles` (row-level security).
+- **Visuals:** field parameters and hierarchies expand in every field well. New `slider` slicer style.
+- **Tooling:** `DaxLanguageService` (completion, hover, signature help, diagnostics, format), `formatDax`, `explainDax`, `DAX_FUNCTIONS` catalog.
+- **Fixes:** a bare table reference or `VALUES` in a row context no longer transitions to the current row. Date ± days is DST-safe. Variable names keep their case. The filter pane respects RLS.
+- Demo: Modeling page, "View as" RLS switch, DAX console.
+
+
 ## 0.2.0 (unreleased): Phase 2
 
 ### Part 2

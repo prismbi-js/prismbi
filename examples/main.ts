@@ -1,6 +1,7 @@
 import { DataModel, Report } from 'prismbi';
 import type { Bookmark } from 'prismbi';
 import { makeSales, products, regions } from './data';
+import { mountDaxConsole } from './console';
 
 // ---------------------------------------------------------------- model
 const t0 = performance.now();
@@ -26,7 +27,33 @@ const model = new DataModel()
   .addMeasure('Sales YTD', 'TOTALYTD([Total Sales], Date[Date])', { format: '$#,0' })
   .addMeasure('Sales Target', '[Sales LY] * 1.1', { format: '$#,0' })
   .addMeasure('Sales Change', '[Total Sales] - [Sales LY]', { format: '$#,0' })
-  .addMeasure('Share of Category', 'DIVIDE([Total Sales], CALCULATE([Total Sales], ALLSELECTED(Product)))', { format: '0.0%' });
+  .addMeasure('Share of Category', 'DIVIDE([Total Sales], CALCULATE([Total Sales], ALLSELECTED(Product)))', { format: '0.0%' })
+  // ---- Phase 3 modeling
+  .addCalculatedColumn('Sales', 'ShipDate', 'Sales[OrderDate] + 3', { type: 'date' })
+  .addRelationship({ from: 'Sales[ShipDate]', to: 'Date[Date]', active: false })
+  .addMeasure('Sales by Ship Date', 'CALCULATE([Total Sales], USERELATIONSHIP(Sales[ShipDate], Date[Date]))', { format: '$#,0' })
+  .addHierarchy('Product', 'Product Hierarchy', ['Category', 'Subcategory', 'Name'])
+  .addHierarchy('Date', 'Calendar', ['Year', 'YearQuarter', 'MonthYear'])
+  .addFieldParameter('Metric', [
+    { label: 'Sales', field: 'Total Sales' },
+    { label: 'Profit', field: 'Total Profit' },
+    { label: 'Orders', field: 'Orders' },
+    { label: 'Units', field: 'Units' },
+  ])
+  .addCalculationGroup({
+    name: 'Time Calc',
+    column: 'Calculation',
+    items: [
+      { name: 'Current', expression: 'SELECTEDMEASURE()' },
+      { name: 'Prior year', expression: 'CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR(Date[Date]))' },
+      { name: 'YoY %', expression: 'VAR py = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR(Date[Date])) RETURN IF(ISBLANK(py), BLANK(), FORMAT(DIVIDE(SELECTEDMEASURE() - py, py), "+0.0%;-0.0%"))' },
+      { name: 'YTD', expression: 'TOTALYTD(SELECTEDMEASURE(), Date[Date])' },
+    ],
+  })
+  .addWhatIfParameter('Price Change', { min: -0.2, max: 0.2, step: 0.05, default: 0, format: '0%' })
+  .addMeasure('Projected Sales', '[Total Sales] * (1 + [Price Change Value])', { format: '$#,0' })
+  .addRole('Europe', { Region: 'Region[Group] = "Europe"' })
+  .addRole('Region manager', { Region: 'Region[Region] = USERNAME()' });
 const modelMs = performance.now() - t0;
 
 // ---------------------------------------------------------------- report
@@ -154,6 +181,21 @@ const report = new Report(document.getElementById('app')!, {
       ],
     },
     {
+      id: 'modeling',
+      name: 'Modeling',
+      layout: { columns: 12, rowHeight: 40 },
+      visuals: [
+        { id: 'm-note', type: 'text', layout: { x: 0, y: 0, w: 12, h: 1 }, format: { text: { content: 'Field parameter, calculation group, what-if parameter, hierarchies and an inactive relationship. Use **View as** above for row-level security and **DAX console** to query the model.' } } },
+        { id: 'm-metric', type: 'slicer', title: 'Metric (field parameter)', layout: { x: 0, y: 1, w: 5, h: 2 }, fields: { field: 'Metric[Metric]' }, format: { slicer: { style: 'tiles', single: true } } },
+        { id: 'm-price', type: 'slicer', title: 'Price change (what-if)', layout: { x: 5, y: 1, w: 4, h: 2 }, fields: { field: "'Price Change'[Price Change]" }, format: { slicer: { style: 'slider' } } },
+        { id: 'm-proj', type: 'card', title: 'Projected sales', layout: { x: 9, y: 1, w: 3, h: 2 }, fields: { value: 'Projected Sales' } },
+        { id: 'm-chart', type: 'clusteredColumn', title: 'Selected metric by product hierarchy', layout: { x: 0, y: 3, w: 6, h: 7 }, fields: { category: 'Product[Product Hierarchy]', values: 'Metric[Metric]' }, format: { title: { subtitle: 'Pick a metric above · double-click to drill' }, dataLabels: { show: true } } },
+        { id: 'm-calc', type: 'matrix', title: 'Time calculations (calculation group)', layout: { x: 6, y: 3, w: 6, h: 7 }, fields: { rows: 'Product[Category]', columns: "'Time Calc'[Calculation]", values: 'Total Sales' } },
+        { id: 'm-ship', type: 'line', title: 'Order date vs ship date (inactive relationship)', layout: { x: 0, y: 10, w: 7, h: 6 }, fields: { category: 'Date[MonthYear]', values: ['Total Sales', 'Sales by Ship Date'] }, format: { categoryAxis: { type: 'categorical' } } },
+        { id: 'm-cal', type: 'clusteredColumn', title: 'Sales by calendar hierarchy', layout: { x: 7, y: 10, w: 5, h: 6 }, fields: { category: 'Date[Calendar]', values: 'Total Sales' }, format: { title: { subtitle: 'Year → Quarter → Month' } } },
+      ],
+    },
+    {
       id: 'tip-cat',
       name: 'Category tooltip',
       tooltip: { width: 320, height: 210 },
@@ -218,6 +260,16 @@ document.getElementById('bookmark')!.addEventListener('click', () => {
 });
 restore.addEventListener('click', () => saved && report.applyBookmark(saved));
 document.getElementById('json')!.addEventListener('click', () => console.log(JSON.stringify(report.toJSON(), null, 2)));
+
+// ---- row-level security switch and DAX console
+const viewAs = document.getElementById('view-as') as HTMLSelectElement;
+viewAs.addEventListener('change', () => {
+  const v = viewAs.value;
+  if (v === 'all') model.setRoles(null);
+  else if (v === 'europe') model.setRoles(['Europe']);
+  else model.setRoles(['Region manager'], { user: 'Germany' });
+});
+mountDaxConsole(model, document.getElementById('dax') as HTMLButtonElement);
 
 Object.assign(window, { report, model });
 

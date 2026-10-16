@@ -1,11 +1,13 @@
 import type { BinaryOp, Expr } from './ast';
 
-type TokType = 'num' | 'str' | 'ident' | 'qtable' | 'bracket' | 'op' | 'lparen' | 'rparen' | 'lbrace' | 'rbrace' | 'comma' | 'eof';
+export type TokType = 'num' | 'str' | 'ident' | 'qtable' | 'bracket' | 'op' | 'lparen' | 'rparen' | 'lbrace' | 'rbrace' | 'comma' | 'eof';
 
-interface Token {
+export interface Token {
   type: TokType;
   value: string;
   pos: number;
+  /** Offset just past the token. */
+  end: number;
 }
 
 export class DaxSyntaxError extends Error {
@@ -21,6 +23,8 @@ export function tokenize(src: string): Token[] {
   const out: Token[] = [];
   let i = 0;
   while (i < src.length) {
+    const prev = out[out.length - 1];
+    if (prev && prev.end < 0) prev.end = i;
     const ch = src[i];
     if (/\s/.test(ch)) {
       i++;
@@ -39,7 +43,7 @@ export function tokenize(src: string): Token[] {
     const start = i;
     if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(src[i + 1] ?? ''))) {
       const m = /^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/.exec(src.slice(i))!;
-      out.push({ type: 'num', value: m[0], pos: start });
+      out.push({ type: 'num', value: m[0], pos: start, end: -1 });
       i += m[0].length;
       continue;
     }
@@ -59,7 +63,7 @@ export function tokenize(src: string): Token[] {
         }
         s += src[i++];
       }
-      out.push({ type: 'str', value: s, pos: start });
+      out.push({ type: 'str', value: s, pos: start, end: -1 });
       continue;
     }
     if (ch === "'") {
@@ -78,37 +82,39 @@ export function tokenize(src: string): Token[] {
         }
         s += src[i++];
       }
-      out.push({ type: 'qtable', value: s, pos: start });
+      out.push({ type: 'qtable', value: s, pos: start, end: -1 });
       continue;
     }
     if (ch === '[') {
       const end = src.indexOf(']', i);
       if (end < 0) throw new DaxSyntaxError('Unterminated [reference]', start, src);
-      out.push({ type: 'bracket', value: src.slice(i + 1, end).trim(), pos: start });
+      out.push({ type: 'bracket', value: src.slice(i + 1, end).trim(), pos: start, end: -1 });
       i = end + 1;
       continue;
     }
     if (/[A-Za-z_À-￿]/.test(ch)) {
       const m = /^[A-Za-z_À-￿][A-Za-z0-9_.À-￿]*/.exec(src.slice(i))!;
-      out.push({ type: 'ident', value: m[0], pos: start });
+      out.push({ type: 'ident', value: m[0], pos: start, end: -1 });
       i += m[0].length;
       continue;
     }
     const simple: Record<string, TokType> = { '(': 'lparen', ')': 'rparen', '{': 'lbrace', '}': 'rbrace', ',': 'comma', ';': 'comma' };
     if (simple[ch]) {
-      out.push({ type: simple[ch], value: ch, pos: start });
+      out.push({ type: simple[ch], value: ch, pos: start, end: -1 });
       i++;
       continue;
     }
     const op = OPS.find((o) => src.startsWith(o, i));
     if (op) {
-      out.push({ type: 'op', value: op, pos: start });
+      out.push({ type: 'op', value: op, pos: start, end: -1 });
       i += op.length;
       continue;
     }
     throw new DaxSyntaxError(`Unexpected character "${ch}"`, start, src);
   }
-  out.push({ type: 'eof', value: '', pos: src.length });
+  const last = out[out.length - 1];
+  if (last && last.end < 0) last.end = src.length;
+  out.push({ type: 'eof', value: '', pos: src.length, end: src.length });
   return out;
 }
 
@@ -275,7 +281,7 @@ class Parser {
         }
         if (upper === 'TRUE') return { type: 'boolean', value: true };
         if (upper === 'FALSE') return { type: 'boolean', value: false };
-        if (this.vars.some((s) => s.has(upper)) && this.peek().type !== 'bracket') return { type: 'varRef', name: upper };
+        if (this.vars.some((s) => s.has(upper)) && this.peek().type !== 'bracket') return { type: 'varRef', name: t.value };
         return this.tableOrColumn(t.value);
       }
       default:

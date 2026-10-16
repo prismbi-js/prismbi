@@ -20,6 +20,8 @@ export interface ColumnSchema {
   /** Sort this column by another column of the same table (e.g. MonthName by MonthNumber). */
   sortBy?: string;
   description?: string;
+  /** Display folder in field lists. */
+  folder?: string;
 }
 
 export type CrossFilterDirection = 'single' | 'both';
@@ -29,9 +31,12 @@ export interface RelationshipDef {
   from: string | ColumnRef;
   /** One side, `'Products[Id]'` or ColumnRef. */
   to: string | ColumnRef;
-  /** Phase 1 supports `'single'` (one → many). `'both'` is accepted and treated as `'single'`. */
+  /** `'single'`: filters flow from `to` to `from`. `'both'`: also from `from` back to `to`. */
   crossFilter?: CrossFilterDirection;
+  /** Inactive relationships only filter inside `CALCULATE(..., USERELATIONSHIP(...))`. */
   active?: boolean;
+  /** `'manyToMany'` allows duplicates on the `to` side (no RELATED across it). */
+  cardinality?: 'manyToOne' | 'manyToMany';
 }
 
 export interface MeasureDef {

@@ -46,8 +46,8 @@ export const decompositionTree = /* @__PURE__ */ defineVisual({
     return { ...base, groupBy: [], values: b.fields('values').slice(0, 1) };
   },
   render(ctx) {
-    const valueSpec = ([] as FieldSpec[]).concat(ctx.spec.fields?.values ?? [])[0];
-    const dims = ([] as FieldSpec[]).concat(ctx.spec.fields?.explainBy ?? []).map(ref);
+    const valueSpec = ctx.fields('values')[0];
+    const dims = ctx.fields('explainBy').map(ref);
     if (!valueSpec || !dims.length) return emptyState(ctx, 'Add a value to analyze and fields to explain by');
     const vField = ctx.data.values[0];
     const total = ctx.data.rows[0]?.values[0] ?? null;

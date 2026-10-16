@@ -111,6 +111,8 @@ export interface RenderContext {
   data: QueryResult;
   model: DataModel;
   role(name: string): RoleBinding;
+  /** Fields bound to a role, with hierarchies and field parameters expanded. */
+  fields(role: string): FieldSpec[];
   /** Stable colour for an entity (colour follows the entity, never its rank). */
   colorFor(field: QueryField | undefined, value: CellValue, fallbackIndex?: number): string;
   seriesColor(name: string, index: number): string;

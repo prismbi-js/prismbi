@@ -2,7 +2,8 @@ import type { Expr } from './ast';
 import type { CellValue, ColumnRef } from '../data/types';
 import { compareValues, valueKey } from '../data/types';
 import type { ColumnsFilter, Filter } from '../data/filters';
-import { compileFilter, contextKey, overrideFilters, rowsFilter } from '../data/filters';
+import { compileFilter, contextKey, overrideFilters, relFilter, rowsFilter } from '../data/filters';
+import { groupCombos, groupFilter } from '../data/query';
 import type { DataModel } from '../data/model';
 import { formatValue } from '../format/format';
 
@@ -38,6 +39,8 @@ export interface EvalContext {
   filters: readonly Filter[];
   rows?: readonly RowBinding[];
   vars?: ReadonlyMap<string, Value>;
+  /** Measure being rewritten by a calculation item (SELECTEDMEASURE). */
+  selectedMeasure?: string;
 }
 
 /** CALCULATE modifiers returned by ALL/REMOVEFILTERS/ALLEXCEPT/ALLSELECTED/KEEPFILTERS. */
@@ -54,9 +57,13 @@ const CONTEXT_FUNCS = new Set([
   'SUMX', 'AVERAGEX', 'MINX', 'MAXX', 'COUNTX', 'COUNTAX', 'MEDIANX', 'CONCATENATEX', 'RANKX', 'PRODUCTX', 'PRODUCT',
   'CALCULATE', 'CALCULATETABLE', 'FILTER', 'ALL', 'ALLSELECTED', 'ALLEXCEPT', 'REMOVEFILTERS', 'VALUES', 'DISTINCT', 'SELECTEDVALUE',
   'HASONEVALUE', 'ISFILTERED', 'TOPN', 'RELATEDTABLE', 'FIRSTDATE', 'LASTDATE', 'TOTALYTD', 'TOTALMTD', 'TOTALQTD',
+  'SUMMARIZE', 'SUMMARIZECOLUMNS', 'ADDCOLUMNS', 'SELECTCOLUMNS', 'LOOKUPVALUE', 'EARLIER', 'EARLIEST', 'ISINSCOPE', 'ISCROSSFILTERED', 'TREATAS', 'CONTAINS',
+  'STDEV.S', 'STDEV.P', 'VAR.S', 'VAR.P', 'STDEVX.S', 'STDEVX.P', 'VARX.S', 'VARX.P', 'PERCENTILE.INC', 'PERCENTILE.EXC', 'PERCENTILEX.INC', 'PERCENTILEX.EXC', 'GEOMEAN', 'GEOMEANX', 'FIRSTNONBLANK', 'LASTNONBLANK', 'AVERAGEA', 'MAXA', 'MINA',
 ]);
 
 const MS_DAY = 86_400_000;
+
+const UNHANDLED = Symbol('unhandled');
 
 function isTable(v: Value): v is TableValue {
   return v !== null && typeof v === 'object' && !(v instanceof Date) && 'kind' in v;
@@ -142,8 +149,9 @@ export class Evaluator {
       case 'table':
         return this.evalTable(e, ctx);
       case 'varRef': {
-        if (!ctx.vars?.has(e.name)) throw new DaxError(`Variable ${e.name} is not defined`);
-        return ctx.vars.get(e.name)!;
+        const vname = e.name.toUpperCase();
+        if (!ctx.vars?.has(vname)) throw new DaxError(`Variable ${e.name} is not defined`);
+        return ctx.vars.get(vname)!;
       }
       case 'var': {
         const vars = new Map(ctx.vars ?? []);
@@ -180,7 +188,12 @@ export class Evaluator {
       case '+':
       case '-': {
         if (a === null && b === null) return null;
-        if (a instanceof Date && !(b instanceof Date)) return new Date(a.getTime() + (op === '+' ? 1 : -1) * num(b) * MS_DAY);
+        if (a instanceof Date && !(b instanceof Date)) {
+          const n = (op === '+' ? 1 : -1) * num(b);
+          // whole days use calendar arithmetic so DST never shifts the time of day
+          if (Number.isInteger(n)) return new Date(a.getFullYear(), a.getMonth(), a.getDate() + n, a.getHours(), a.getMinutes(), a.getSeconds(), a.getMilliseconds());
+          return new Date(a.getTime() + n * MS_DAY);
+        }
         if (a instanceof Date && b instanceof Date && op === '-') return (a.getTime() - b.getTime()) / MS_DAY;
         return op === '+' ? num(a) + num(b) : num(a) - num(b);
       }
@@ -264,6 +277,15 @@ export class Evaluator {
   private callMeasure(name: string, ctx: EvalContext): CellValue {
     const m = this.model.measure(name);
     const filters = this.transition(ctx);
+    const calc = this.activeCalcItem(filters);
+    if (calc) {
+      const ckey = `${name}@${calc.table}:${calc.item.name}::${contextKey(filters)}`;
+      const chit = this.measureCache.get(ckey);
+      if (chit !== undefined || this.measureCache.has(ckey)) return chit ?? null;
+      const v = this.evalScalar(calc.item.ast, { filters: calc.inner, selectedMeasure: name });
+      this.measureCache.set(ckey, v);
+      return v;
+    }
     const key = `${name}::${contextKey(filters)}`;
     const hit = this.measureCache.get(key);
     if (hit !== undefined || this.measureCache.has(key)) return hit ?? null;
@@ -279,12 +301,32 @@ export class Evaluator {
     }
   }
 
+  /** The calculation item selected (exactly one) for the highest-precedence active calculation group. */
+  private activeCalcItem(filters: readonly Filter[]): { table: string; item: { name: string; ast: Expr }; inner: Filter[] } | null {
+    const groups = this.model.calculationGroups();
+    if (!groups.length) return null;
+    for (const g of groups) {
+      const touches = (f: Filter) => (f.kind === 'rows' ? f.table === g.table : f.kind === 'columns' && f.columns.some((c) => c.table === g.table));
+      if (!filters.some(touches)) continue;
+      const vals = this.model.valuesOf({ table: g.table, column: g.column }, filters);
+      if (vals.length !== 1) continue;
+      const item = g.items.get(String(vals[0]));
+      if (!item) continue;
+      // evaluate the item without this group's filter so it is applied once
+      return { table: g.table, item, inner: filters.filter((f) => !touches(f)) };
+    }
+    return null;
+  }
+
   /** Context transition: row context becomes equivalent filter context. */
   private transition(ctx: EvalContext): Filter[] {
     let filters = [...ctx.filters];
     for (const b of ctx.rows ?? []) {
       if (b.kind === 'row') filters = overrideFilters(filters, [rowsFilter(b.table, [b.row])]);
-      else filters = overrideFilters(filters, b.columns.map((c, i) => compileFilter({ target: c, op: 'eq', value: b.values[i] })));
+      else {
+        const real = b.columns.map((c, i) => ({ c, v: b.values[i] })).filter((x) => x.c.table && this.model.hasTable(x.c.table) && this.model.table(x.c.table).hasColumn(x.c.column));
+        filters = overrideFilters(filters, real.map((x) => compileFilter({ target: x.c, op: 'eq', value: x.v })));
+      }
     }
     return filters;
   }
@@ -299,11 +341,12 @@ export class Evaluator {
   private evalTable(e: Expr, ctx: EvalContext): TableValue {
     if (e.type === 'table') {
       if (!this.model.hasTable(e.name)) throw new DaxError(`Table '${e.name}' not found`);
-      return { kind: 'rows', table: e.name, rows: this.model.rowsOf(e.name, this.transition(ctx)) };
+      // a table reference sees the filter context; an outer row context does not transition
+      return { kind: 'rows', table: e.name, rows: this.model.rowsOf(e.name, ctx.filters) };
     }
     if (e.type === 'column') {
       const col = this.model.resolveColumn({ table: e.table, column: e.column });
-      return { kind: 'tuples', columns: [col], tuples: this.model.valuesOf(col, this.transition(ctx)).map((v) => [v]) };
+      return { kind: 'tuples', columns: [col], tuples: this.model.valuesOf(col, ctx.filters).map((v) => [v]) };
     }
     const v = this.eval(e, ctx);
     if (!isTable(v)) throw new DaxError('A table expression was expected');
@@ -386,13 +429,14 @@ export class Evaluator {
         if (m.table === '*') return [];
         // removing filters from a table removes them from its expanded table too
         const exp = this.model.expanded(m.table);
-        return filters.filter((f) => !(f.kind === 'rows' ? exp.has(f.table) : f.columns.every((c) => exp.has(c.table))));
+        return filters.filter((f) => f.kind === 'rel' || !(f.kind === 'rows' ? exp.has(f.table) : f.columns.every((c) => exp.has(c.table))));
       }
       case 'removeColumns':
-        return filters.filter((f) => f.kind === 'rows' || !f.columns.some((c) => m.columns.some((d) => d.table === c.table && d.column === c.column)));
+        return filters.filter((f) => f.kind !== 'columns' || !f.columns.some((c) => m.columns.some((d) => d.table === c.table && d.column === c.column)));
       case 'allExcept': {
         const exp = this.model.expanded(m.table);
         return filters.filter((f) => {
+          if (f.kind === 'rel') return true;
           if (f.kind === 'rows') return !exp.has(f.table);
           if (!f.columns.every((c) => exp.has(c.table))) return true;
           return f.columns.every((c) => m.keep.some((k) => k.table === c.table && k.column === c.column));
@@ -416,6 +460,7 @@ export class Evaluator {
     if (a.type === 'call') {
       switch (a.name) {
         case 'ALL':
+        case 'ALLNOBLANKROW':
         case 'REMOVEFILTERS':
           if (a.args.length === 0) return { mod: 'removeTable', table: '*' } as never;
           if (a.args[0].type === 'table') return { mod: 'removeTable', table: a.args[0].name };
@@ -435,7 +480,16 @@ export class Evaluator {
           return { mod: 'keep', filters: inner.filters };
         }
         case 'USERELATIONSHIP':
-          throw new DaxError('USERELATIONSHIP is planned for Phase 3 (inactive relationships)');
+        case 'CROSSFILTER': {
+          const a1 = this.colArg(a.args[0], a.name);
+          const a2 = this.colArg(a.args[1], a.name);
+          const rel = this.model.findRelationship(a1, a2);
+          if (!rel) throw new DaxError(`${a.name}: no relationship between '${a1.table}'[${a1.column}] and '${a2.table}'[${a2.column}]`);
+          if (a.name === 'USERELATIONSHIP') return { filters: [relFilter(rel.index, 'activate')] };
+          const dir = this.intervalArg(a.args[2]);
+          const mode = dir === 'BOTH' ? 'both' : dir === 'NONE' ? 'none' : 'oneway';
+          return { filters: [relFilter(rel.index, mode)] };
+        }
       }
     }
     if (a.type === 'binary' || (a.type === 'unary' && a.op === 'NOT') || (a.type === 'call' && ['NOT', 'AND', 'OR', 'CONTAINSSTRING', 'ISBLANK'].includes(a.name))) {
@@ -665,11 +719,11 @@ export class Evaluator {
       case 'CALCULATE': {
         if (!args.length) throw new DaxError('CALCULATE expects an expression');
         const filters = this.applyModifiers([...ctx.filters], args.slice(1), ctx);
-        return this.evalScalar(args[0], { filters, vars: ctx.vars });
+        return this.evalScalar(args[0], { filters, vars: ctx.vars, selectedMeasure: ctx.selectedMeasure });
       }
       case 'CALCULATETABLE': {
         const filters = this.applyModifiers([...ctx.filters], args.slice(1), ctx);
-        return this.evalTable(args[0], { filters, vars: ctx.vars });
+        return this.evalTable(args[0], { filters, vars: ctx.vars, selectedMeasure: ctx.selectedMeasure });
       }
       case 'FILTER': {
         const t = this.evalTable(args[0], ctx);
@@ -678,6 +732,7 @@ export class Evaluator {
         return { ...t, tuples: t.tuples.filter((_, i) => keep[i]) };
       }
       case 'ALL':
+      case 'ALLNOBLANKROW':
       case 'REMOVEFILTERS':
       case 'ALLSELECTED': {
         if (!args.length) throw new DaxError(`${name} without arguments is only valid as a CALCULATE filter`);
@@ -698,7 +753,7 @@ export class Evaluator {
       case 'DISTINCT': {
         if (args[0]?.type === 'table') return this.evalTable(args[0], ctx);
         const col = this.colArg(args[0], name);
-        return { kind: 'tuples', columns: [col], tuples: this.model.valuesOf(col, this.transition(ctx)).map((v) => [v]) };
+        return { kind: 'tuples', columns: [col], tuples: this.model.valuesOf(col, ctx.filters).map((v) => [v]) };
       }
       case 'TOPN': {
         const n = num(s(0));
@@ -723,7 +778,7 @@ export class Evaluator {
         const filters = this.transition(ctx);
         if (args[0]?.type === 'table') {
           const tname = args[0].name;
-          return filters.some((f) => (f.kind === 'rows' ? f.table === tname : f.columns.some((c) => c.table === tname)));
+          return filters.some((f) => (f.kind === 'rows' ? f.table === tname : f.kind === 'columns' && f.columns.some((c) => c.table === tname)));
         }
         const col = this.colArg(args[0], name);
         return filters.some((f) => f.kind === 'columns' && f.columns.some((c) => c.table === col.table && c.column === col.column));
@@ -760,7 +815,7 @@ export class Evaluator {
         let filters = this.removeFilters(this.transition(ctx), { mod: 'removeTable', table: dates.clearTable! });
         filters = overrideFilters(filters, [this.tableAsFilter(dates)]);
         if (args[2]) filters = this.applyModifiers(filters, [args[2]], { filters });
-        return this.evalScalar(args[0], { filters, vars: ctx.vars });
+        return this.evalScalar(args[0], { filters, vars: ctx.vars, selectedMeasure: ctx.selectedMeasure });
       }
       case 'SAMEPERIODLASTYEAR':
         return this.shiftDates(args, ctx, -1, 'YEAR');
@@ -986,7 +1041,400 @@ export class Evaluator {
         throw new DaxError(`Unknown DATEDIFF interval ${unit}`);
       }
     }
+    const more = this.callMore(name, args, ctx);
+    if (more !== UNHANDLED) return more;
     throw new DaxError(`Function ${name} is not supported (yet). See docs/guide/expressions.md for the supported list.`);
+  }
+
+  // ------------------------------------------------------------ Phase 3: tables, lookups, stats, security, calc groups
+
+  /** Any table value as tuples (physical rows expand to all their columns). */
+  private toTuples(t: TableValue): TuplesTable {
+    if (t.kind === 'tuples') return t;
+    const tbl = this.model.table(t.table);
+    const cols = [...tbl.columns.keys()].map((c) => ({ table: t.table, column: c }));
+    return { kind: 'tuples', columns: cols, tuples: t.rows.map((r) => cols.map((c) => tbl.value(c.column, r))) };
+  }
+
+  /** Materialise a table expression into named columns + rows (DAX query EVALUATE). */
+  evalTableToRows(expr: Expr, ctx: EvalContext): { columns: string[]; rows: CellValue[][] } {
+    const t = this.toTuples(this.evalTable(expr, ctx));
+    const names = t.columns.map((c) => c.column);
+    const columns = t.columns.map((c, i) => (names.indexOf(c.column) !== i || names.lastIndexOf(c.column) !== i ? (c.table ? `${c.table}[${c.column}]` : c.column) : c.column));
+    return { columns, rows: t.tuples.map((tu) => [...tu]) };
+  }
+
+  /** Split trailing "Name", expr pairs. */
+  private namedPairs(args: Expr[], from: number, fn: string): { name: string; expr: Expr }[] {
+    const out: { name: string; expr: Expr }[] = [];
+    for (let i = from; i < args.length; i += 2) {
+      const n = args[i];
+      if (n.type !== 'string' || !args[i + 1]) throw new DaxError(`${fn}: expected "Name", expression pairs`);
+      out.push({ name: n.value, expr: args[i + 1] });
+    }
+    return out;
+  }
+
+  private tupleKey(tu: CellValue[]): string {
+    return JSON.stringify(tu.map(valueKey));
+  }
+
+  private stat(vals: number[], kind: 'stdevS' | 'stdevP' | 'varS' | 'varP'): CellValue {
+    const n = vals.length;
+    if (n === 0 || (n === 1 && (kind === 'stdevS' || kind === 'varS'))) return null;
+    const mean = vals.reduce((a, b) => a + b, 0) / n;
+    const ss = vals.reduce((a, b) => a + (b - mean) ** 2, 0);
+    const v = ss / (kind === 'stdevS' || kind === 'varS' ? n - 1 : n);
+    return kind.startsWith('stdev') ? Math.sqrt(v) : v;
+  }
+
+  private percentile(vals: number[], k: number, exclusive: boolean): CellValue {
+    const sorted = [...vals].sort((a, b) => a - b);
+    const n = sorted.length;
+    if (!n) return null;
+    if (k < 0 || k > 1) throw new DaxError('PERCENTILE: k must be between 0 and 1');
+    let rank: number;
+    if (exclusive) {
+      rank = k * (n + 1) - 1;
+      if (rank < 0 || rank > n - 1) throw new DaxError('PERCENTILE.EXC: k is outside the valid range for this many values');
+    } else rank = k * (n - 1);
+    const lo = Math.floor(rank);
+    const hi = Math.ceil(rank);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (rank - lo);
+  }
+
+  private callMore(name: string, args: Expr[], ctx: EvalContext): Value | typeof UNHANDLED {
+    const s = (i: number) => this.evalScalar(args[i], ctx);
+    const nums = (vals: CellValue[]) => vals.filter((v) => v !== null && v !== '').map(num);
+    const colNums = () => nums(this.columnValues(this.colArg(args[0], name), ctx));
+    const iterNums = () => nums(this.iterate(this.evalTable(args[0], ctx), args[1], ctx));
+    switch (name) {
+      // ---- table constructors & transformations
+      case 'SUMMARIZE': {
+        const base = this.evalTable(args[0], ctx);
+        let i = 1;
+        const groupCols: ColumnRef[] = [];
+        while (i < args.length && args[i].type === 'column') groupCols.push(this.colArg(args[i++], name));
+        const ext = this.namedPairs(args, i, name);
+        const seen = new Map<string, CellValue[]>();
+        if (base.kind === 'rows') {
+          for (const r of base.rows) {
+            const tu = groupCols.map((c) => this.model.relatedValue(base.table, r, c));
+            seen.set(this.tupleKey(tu), tu);
+          }
+        } else {
+          const idx = groupCols.map((c) => base.columns.findIndex((b) => b.table === c.table && b.column === c.column));
+          if (idx.some((x) => x < 0)) throw new DaxError('SUMMARIZE: group columns must belong to the table');
+          for (const row of base.tuples) {
+            const tu = idx.map((x) => row[x]);
+            seen.set(this.tupleKey(tu), tu);
+          }
+        }
+        const baseFilters = this.transition(ctx);
+        const tuples = [...seen.values()].map((tu) => {
+          if (!ext.length) return tu;
+          const f = overrideFilters(baseFilters, groupCols.map((c, k) => compileFilter({ target: c, op: 'eq', value: tu[k] })));
+          return [...tu, ...ext.map((x) => this.evalScalar(x.expr, { filters: f, vars: ctx.vars, selectedMeasure: ctx.selectedMeasure }))];
+        });
+        return { kind: 'tuples', columns: [...groupCols, ...ext.map((x) => ({ table: '', column: x.name }))], tuples };
+      }
+      case 'SUMMARIZECOLUMNS': {
+        let i = 0;
+        const groupCols: ColumnRef[] = [];
+        while (i < args.length && args[i].type === 'column') groupCols.push(this.colArg(args[i++], name));
+        const filterArgs: Expr[] = [];
+        while (i < args.length && args[i].type !== 'string') filterArgs.push(args[i++]);
+        const ext = this.namedPairs(args, i, name);
+        const filters = filterArgs.length ? this.applyModifiers([...ctx.filters], filterArgs, ctx) : this.transition(ctx);
+        const combos = groupCols.length ? groupCombos(this.model, groupCols, filters, ext.length > 0) : [[]];
+        const tuples: CellValue[][] = [];
+        for (const keys of combos) {
+          const f = [...filters, ...groupCols.map((c, k) => groupFilter(c, keys[k]))];
+          const vals = ext.map((x) => this.evalScalar(x.expr, { filters: f, vars: ctx.vars, selectedMeasure: ctx.selectedMeasure }));
+          if (ext.length && vals.every((v) => v === null)) continue;
+          tuples.push([...keys, ...vals]);
+        }
+        return { kind: 'tuples', columns: [...groupCols, ...ext.map((x) => ({ table: '', column: x.name }))], tuples };
+      }
+      case 'ADDCOLUMNS':
+      case 'SELECTCOLUMNS': {
+        const base = this.evalTable(args[0], ctx);
+        const ext = this.namedPairs(args, 1, name);
+        const asTuples = this.toTuples(base);
+        const binds = this.bindings(base);
+        const tuples = binds.map((b, r) => {
+          const vals = ext.map((x) => this.evalScalar(x.expr, { ...ctx, rows: [...(ctx.rows ?? []), b] }));
+          return name === 'ADDCOLUMNS' ? [...asTuples.tuples[r], ...vals] : vals;
+        });
+        const extCols = ext.map((x) => ({ table: '', column: x.name }));
+        return { kind: 'tuples', columns: name === 'ADDCOLUMNS' ? [...asTuples.columns, ...extCols] : extCols, tuples };
+      }
+      case 'CROSSJOIN': {
+        let acc: TuplesTable = { kind: 'tuples', columns: [], tuples: [[]] };
+        for (const a of args) {
+          const t = this.toTuples(this.evalTable(a, ctx));
+          const next: CellValue[][] = [];
+          for (const x of acc.tuples) for (const y of t.tuples) next.push([...x, ...y]);
+          if (next.length > 1_000_000) throw new DaxError('CROSSJOIN result too large');
+          acc = { kind: 'tuples', columns: [...acc.columns, ...t.columns], tuples: next };
+        }
+        return acc;
+      }
+      case 'UNION': {
+        const ts = args.map((a) => this.toTuples(this.evalTable(a, ctx)));
+        const width = ts[0]?.columns.length ?? 0;
+        if (ts.some((t) => t.columns.length !== width)) throw new DaxError('UNION: all tables need the same number of columns');
+        return { kind: 'tuples', columns: ts[0].columns, tuples: ts.flatMap((t) => t.tuples) };
+      }
+      case 'INTERSECT':
+      case 'EXCEPT': {
+        const a = this.toTuples(this.evalTable(args[0], ctx));
+        const b = this.toTuples(this.evalTable(args[1], ctx));
+        const keys = new Set(b.tuples.map((t) => this.tupleKey(t)));
+        return { ...a, clearTable: undefined, tuples: a.tuples.filter((t) => keys.has(this.tupleKey(t)) === (name === 'INTERSECT')) };
+      }
+      case 'GENERATE': {
+        const t1 = this.evalTable(args[0], ctx);
+        const left = this.toTuples(t1);
+        const binds = this.bindings(t1);
+        let rightCols: ColumnRef[] = [];
+        const tuples: CellValue[][] = [];
+        binds.forEach((b, i) => {
+          const t2 = this.toTuples(this.evalTable(args[1], { ...ctx, rows: [...(ctx.rows ?? []), b] }));
+          rightCols = t2.columns;
+          for (const y of t2.tuples) tuples.push([...left.tuples[i], ...y]);
+        });
+        return { kind: 'tuples', columns: [...left.columns, ...rightCols], tuples };
+      }
+      case 'ROW': {
+        const ext = this.namedPairs(args, 0, name);
+        return { kind: 'tuples', columns: ext.map((x) => ({ table: '', column: x.name })), tuples: [ext.map((x) => this.evalScalar(x.expr, ctx))] };
+      }
+      case 'DATATABLE': {
+        const data = args[args.length - 1];
+        if (data?.type !== 'list') throw new DaxError('DATATABLE: the last argument must be a list of rows {{...}, {...}}');
+        const cols: ColumnRef[] = [];
+        for (let i = 0; i < args.length - 1; i += 2) {
+          const n = args[i];
+          if (n.type !== 'string') throw new DaxError('DATATABLE: expected "Column", TYPE pairs');
+          cols.push({ table: '', column: n.value });
+        }
+        const tuples = data.items.map((row) => {
+          if (row.type !== 'list') throw new DaxError('DATATABLE: each row must be a list');
+          return row.items.map((x) => this.evalScalar(x, ctx));
+        });
+        return { kind: 'tuples', columns: cols, tuples };
+      }
+      case 'GENERATESERIES': {
+        const a = num(s(0));
+        const b = num(s(1));
+        const step = args[2] ? num(s(2)) : 1;
+        if (step <= 0) throw new DaxError('GENERATESERIES: step must be positive');
+        const tuples: CellValue[][] = [];
+        for (let v = a; v <= b + step / 1e9 && tuples.length < 1_000_000; v += step) tuples.push([+v.toPrecision(12)]);
+        return { kind: 'tuples', columns: [{ table: '', column: 'Value' }], tuples };
+      }
+      case 'CALENDAR': {
+        const a = s(0);
+        const b = s(1);
+        if (!(a instanceof Date) || !(b instanceof Date)) throw new DaxError('CALENDAR expects two dates');
+        const tuples: CellValue[][] = [];
+        for (let d = new Date(a.getFullYear(), a.getMonth(), a.getDate()); d <= b && tuples.length < 200_000; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) tuples.push([d]);
+        return { kind: 'tuples', columns: [{ table: '', column: 'Date' }], tuples };
+      }
+      case 'TREATAS': {
+        const t = this.toTuples(this.evalTable(args[0], ctx));
+        const cols = args.slice(1).map((x) => this.colArg(x, name));
+        if (cols.length !== t.columns.length) throw new DaxError('TREATAS: the number of columns must match the table');
+        return { kind: 'tuples', columns: cols, tuples: t.tuples };
+      }
+      case 'CONTAINS': {
+        const t = this.evalTable(args[0], ctx);
+        const tt = this.toTuples(t);
+        const conds: { idx: number; v: CellValue }[] = [];
+        for (let i = 1; i + 1 < args.length; i += 2) {
+          const c = this.colArg(args[i], name);
+          conds.push({ idx: tt.columns.findIndex((x) => x.table === c.table && x.column === c.column), v: s(i + 1) });
+        }
+        if (conds.some((c) => c.idx < 0)) throw new DaxError('CONTAINS: columns must belong to the table');
+        return tt.tuples.some((tu) => conds.every((c) => valueKey(tu[c.idx]) === valueKey(c.v)));
+      }
+
+      // ---- lookups & row context
+      case 'LOOKUPVALUE': {
+        const result = this.colArg(args[0], name);
+        const pairs: { col: ColumnRef; v: CellValue }[] = [];
+        let i = 1;
+        for (; i + 1 < args.length; i += 2) pairs.push({ col: this.colArg(args[i], name), v: s(i + 1) });
+        const alternate = i < args.length ? args[i] : undefined;
+        const t = this.model.table(result.table);
+        const found = new Map<unknown, CellValue>();
+        for (let r = 0; r < t.rowCount; r++) {
+          if (pairs.every((p) => valueKey(this.model.relatedValue(result.table, r, p.col)) === valueKey(p.v))) {
+            const v = t.value(result.column, r);
+            found.set(valueKey(v), v);
+          }
+        }
+        if (found.size === 1) return [...found.values()][0];
+        if (found.size === 0 || alternate) return alternate ? this.evalScalar(alternate, ctx) : null;
+        throw new DaxError('LOOKUPVALUE: a table of multiple values was supplied where a single value was expected');
+      }
+      case 'EARLIER':
+      case 'EARLIEST': {
+        const col = this.colArg(args[0], name);
+        const depth = name === 'EARLIER' ? (args[1] ? num(s(1)) : 1) : Infinity;
+        const matches = (ctx.rows ?? []).filter((b) => (b.kind === 'row' ? b.table === col.table : b.columns.some((c) => c.table === col.table && c.column === col.column)));
+        if (matches.length < 2) throw new DaxError(`${name} refers to an earlier row context which doesn't exist`);
+        const b = name === 'EARLIEST' ? matches[0] : matches[Math.max(0, matches.length - 1 - depth)];
+        if (b.kind === 'row') return this.model.table(b.table).value(col.column, b.row);
+        return b.values[b.columns.findIndex((c) => c.table === col.table && c.column === col.column)];
+      }
+      case 'PATH': {
+        const idCol = this.colArg(args[0], name);
+        const parentCol = this.colArg(args[1], name);
+        const t = this.model.table(idCol.table);
+        const idx = t.index(idCol.column);
+        let id = this.evalScalar(args[0], ctx);
+        const chain: string[] = [];
+        const guard = new Set<unknown>();
+        while (id !== null && id !== '') {
+          if (guard.has(valueKey(id))) throw new DaxError('PATH: circular parent/child relationship');
+          guard.add(valueKey(id));
+          chain.unshift(this.text(id));
+          const r = idx.get(valueKey(id))?.[0];
+          if (r === undefined) break;
+          id = t.value(parentCol.column, r);
+        }
+        return chain.join('|');
+      }
+      case 'PATHLENGTH': {
+        const p = this.text(s(0));
+        return p ? p.split('|').length : 0;
+      }
+      case 'PATHITEM':
+      case 'PATHITEMREVERSE': {
+        const parts = this.text(s(0)).split('|').filter((x) => x !== '');
+        const pos = num(s(1));
+        const item = name === 'PATHITEM' ? parts[pos - 1] : parts[parts.length - pos];
+        if (item === undefined) return null;
+        return args[2] && num(s(2)) === 1 ? Number(item) : item;
+      }
+      case 'PATHCONTAINS':
+        return this.text(s(0)).split('|').includes(this.text(s(1)));
+      case 'FIRSTNONBLANK':
+      case 'LASTNONBLANK': {
+        const col = this.colArg(args[0], name);
+        const vals = this.model.valuesOf(col, this.transition(ctx));
+        const ordered = name === 'FIRSTNONBLANK' ? vals : [...vals].reverse();
+        for (const v of ordered) {
+          const r = this.evalScalar(args[1], { ...ctx, rows: [...(ctx.rows ?? []), { kind: 'tuple', columns: [col], values: [v] }] });
+          if (r !== null) return { kind: 'tuples', columns: [col], tuples: [[v]] };
+        }
+        return { kind: 'tuples', columns: [col], tuples: [] };
+      }
+
+      // ---- statistics
+      case 'STDEV.S':
+        return this.stat(colNums(), 'stdevS');
+      case 'STDEV.P':
+        return this.stat(colNums(), 'stdevP');
+      case 'VAR.S':
+        return this.stat(colNums(), 'varS');
+      case 'VAR.P':
+        return this.stat(colNums(), 'varP');
+      case 'STDEVX.S':
+        return this.stat(iterNums(), 'stdevS');
+      case 'STDEVX.P':
+        return this.stat(iterNums(), 'stdevP');
+      case 'VARX.S':
+        return this.stat(iterNums(), 'varS');
+      case 'VARX.P':
+        return this.stat(iterNums(), 'varP');
+      case 'PERCENTILE.INC':
+      case 'PERCENTILE.EXC':
+        return this.percentile(colNums(), num(s(1)), name.endsWith('EXC'));
+      case 'PERCENTILEX.INC':
+      case 'PERCENTILEX.EXC':
+        return this.percentile(iterNums(), num(s(2)), name.endsWith('EXC'));
+      case 'GEOMEAN':
+      case 'GEOMEANX': {
+        const v = name === 'GEOMEAN' ? colNums() : iterNums();
+        if (!v.length) return null;
+        if (v.some((x) => x <= 0)) throw new DaxError(`${name} requires positive values`);
+        return Math.exp(v.reduce((a, b) => a + Math.log(b), 0) / v.length);
+      }
+      case 'AVERAGEA':
+      case 'MAXA':
+      case 'MINA': {
+        const v = this.columnValues(this.colArg(args[0], name), ctx).map((x) => (x === null ? null : typeof x === 'string' ? 0 : num(x))).filter((x): x is number => x !== null);
+        if (!v.length) return null;
+        return name === 'AVERAGEA' ? v.reduce((a, b) => a + b, 0) / v.length : name === 'MAXA' ? Math.max(...v) : Math.min(...v);
+      }
+
+      // ---- scope & security
+      case 'ISINSCOPE': {
+        const col = this.colArg(args[0], name);
+        return ctx.filters.some((f) => f.kind === 'columns' && f.origin === 'group' && f.columns.some((c) => c.table === col.table && c.column === col.column));
+      }
+      case 'ISCROSSFILTERED': {
+        const filters = this.transition(ctx);
+        const table = args[0]?.type === 'table' ? args[0].name : this.colArg(args[0], name).table;
+        return this.model.rowsOf(table, filters).length < this.model.table(table).rowCount;
+      }
+      case 'USERNAME':
+      case 'USERPRINCIPALNAME':
+        return this.model.currentUser;
+      case 'CUSTOMDATA':
+        return this.model.customData;
+
+      // ---- calculation groups
+      case 'SELECTEDMEASURE':
+        if (!ctx.selectedMeasure) throw new DaxError('SELECTEDMEASURE() can only be used in a calculation item');
+        return this.callMeasure(ctx.selectedMeasure, { filters: ctx.filters, rows: ctx.rows });
+      case 'SELECTEDMEASURENAME':
+        return ctx.selectedMeasure ?? null;
+      case 'ISSELECTEDMEASURE':
+        return args.some((a) => a.type === 'bracket' && a.name === ctx.selectedMeasure);
+
+      case 'USERELATIONSHIP':
+      case 'CROSSFILTER':
+        throw new DaxError(`${name} can only be used as a filter argument of CALCULATE / CALCULATETABLE`);
+
+      // ---- misc scalar
+      case 'COMBINEVALUES': {
+        const d = this.text(s(0));
+        return args.slice(1).map((_, i) => this.text(s(i + 1))).join(d);
+      }
+      case 'DATEVALUE': {
+        const v = s(0);
+        if (v instanceof Date) return v;
+        const t = this.text(v);
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+        const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(t);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      case 'SECOND': {
+        const v = s(0);
+        return v instanceof Date ? v.getSeconds() : null;
+      }
+      case 'UTCNOW':
+        return new Date();
+      case 'UTCTODAY': {
+        const d = new Date();
+        return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+      }
+      case 'NETWORKDAYS': {
+        const a = s(0);
+        const b = s(1);
+        if (!(a instanceof Date) || !(b instanceof Date)) return null;
+        const sign = a <= b ? 1 : -1;
+        let count = 0;
+        const [lo, hi] = a <= b ? [a, b] : [b, a];
+        for (let d = new Date(lo.getFullYear(), lo.getMonth(), lo.getDate()); d <= hi; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+        return count * sign;
+      }
+    }
+    return UNHANDLED;
   }
 
   private extreme(v: CellValue[], min: boolean): CellValue {

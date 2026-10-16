@@ -7,7 +7,7 @@ import { defineVisual } from './registry';
 import { emptyState } from './common';
 import type { RenderContext } from './types';
 
-export type SlicerStyle = 'list' | 'dropdown' | 'tiles' | 'between' | 'relative';
+export type SlicerStyle = 'list' | 'dropdown' | 'tiles' | 'between' | 'relative' | 'slider';
 
 export interface SlicerFormat {
   style?: SlicerStyle;
@@ -195,6 +195,24 @@ function renderBetween(ctx: RenderContext, target: string, domain: CellValue[], 
   container.append(h('div', { class: 'pbi-between' }, h('div', { class: 'pbi-between-inputs' }, a, h('span', { class: 'pbi-between-sep' }, '–'), b), h('div', { class: 'pbi-dual-range' }, h('div', { class: 'pbi-range-track' }, fill), r1, r2)));
 }
 
+/** Single-value slider (what-if parameters): emits an `eq` filter on the chosen value. */
+function renderSlider(ctx: RenderContext, target: string, domain: CellValue[], container: HTMLElement): void {
+  const sorted = domain.filter((v) => v !== null).sort(compareValues);
+  if (!sorted.length) return;
+  const field = ctx.data.groups[0];
+  const cur = ctx.host.currentFilter?.[0] as ColumnFilterSpec | undefined;
+  const curVal = cur?.op === 'eq' ? (cur.value ?? null) : cur?.op === 'in' && cur.values?.length === 1 ? cur.values[0] : null;
+  const at = curVal === null ? -1 : sorted.findIndex((v) => compareValues(v, curVal) === 0);
+  const input = h('input', { type: 'range', min: 0, max: sorted.length - 1, value: at < 0 ? Math.floor((sorted.length - 1) / 2) : at, class: 'pbi-slider', 'aria-label': field?.name ?? 'Value' }) as HTMLInputElement;
+  const out = h('output', { class: 'pbi-slider-value' }, at < 0 ? 'Default' : ctx.fmt(field, sorted[at]));
+  input.addEventListener('input', () => (out.textContent = ctx.fmt(field, sorted[Number(input.value)])));
+  input.addEventListener('change', () => ctx.host.setFilter([{ target, op: 'eq', value: sorted[Number(input.value)] }]));
+  const clear = h('button', { type: 'button', class: 'pbi-link' }, 'Reset');
+  clear.addEventListener('click', () => ctx.host.setFilter(null));
+  const ends = h('div', { class: 'pbi-slider-ends' }, h('span', {}, ctx.fmt(field, sorted[0])), h('span', {}, ctx.fmt(field, sorted[sorted.length - 1])));
+  container.append(h('div', { class: 'pbi-slider-wrap' }, h('div', { class: 'pbi-slider-head' }, out, at < 0 ? null : clear), input, ends));
+}
+
 function idx2(sorted: CellValue[], v: CellValue): number {
   let j = sorted.length - 1;
   while (j > 0 && compareValues(sorted[j], v) > 0) j--;
@@ -365,7 +383,7 @@ export const slicer = /* @__PURE__ */ defineVisual({
     return f ? { groupBy: [typeof f === 'string' ? f : f.field!], values: [], filters: [], limit: 1 } : null;
   },
   render(ctx) {
-    const all = ([] as unknown[]).concat(ctx.spec.fields?.field ?? []) as (string | { field: string })[];
+    const all = ctx.fields('field') as (string | { field: string })[];
     const f = all[0];
     if (!f) return emptyState(ctx, 'Add a field');
     const target = typeof f === 'string' ? f : f.field;
@@ -382,6 +400,7 @@ export const slicer = /* @__PURE__ */ defineVisual({
     if (style === 'relative') return renderRelative(ctx, target, fmt, container);
     const domain = ctx.host.domain(target);
     if (style === 'between') return renderBetween(ctx, target, domain, container);
+    if (style === 'slider') return renderSlider(ctx, target, domain, container);
     if (style === 'tiles') return renderTiles(ctx, target, domain, fmt, container);
     if (style === 'dropdown') return renderDropdown(ctx, target, domain, fmt, container);
     renderList(ctx, target, domain, fmt, container);

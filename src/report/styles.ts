@@ -162,6 +162,11 @@ export const CSS = /* css */ `
 .pbi-range::-moz-range-thumb{pointer-events:all;width:12px;height:12px;border-radius:50%;background:var(--pbi-accent);border:2px solid var(--pbi-surface);box-shadow:0 0 0 1px var(--pbi-accent);cursor:grab}
 .pbi-range:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px color-mix(in srgb,var(--pbi-accent) 45%,transparent)}
 .pbi-relative{display:flex;flex-direction:column;gap:6px}
+.pbi-slider-wrap{display:flex;flex-direction:column;gap:6px;padding:0 4px}
+.pbi-slider-head{display:flex;justify-content:space-between;align-items:baseline}
+.pbi-slider-value{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.pbi-slider{width:100%;accent-color:var(--pbi-accent)}
+.pbi-slider-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--pbi-fg-3)}
 .pbi-relative-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .pbi-relative-row>*{width:auto;flex:1}
 .pbi-rel-n{max-width:70px}

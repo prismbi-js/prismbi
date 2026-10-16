@@ -53,12 +53,21 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
    - Filters that span several related tables (tuple selections) are tested per row through related-value lookup.
    - Results are cached by `(table, context key)`.
 
+### Relationship variants
+
+- **Effective relationships:** `RelFilter` entries in the context (from `USERELATIONSHIP` / `CROSSFILTER`) are applied to the model's relationship list per evaluation. They are part of the context key, so caches stay correct.
+- **Reach:** filters apply to a table when all their columns are in its *reach*. That means the tables whose filters flow into it: one → many always, and many → one for bidirectional relationships.
+- **Bidirectional step:** a dimension is narrowed by the keys of fact rows visible under the *foreign* filters only (filters that apply to the fact but not already to the dimension). The dimension is "blocked" while computing that fact to prevent cycles.
+- **Many-to-many** relationships propagate like any other, but are excluded from `expanded()` / `pathTo()`, so `RELATED` and auto-exist anchors never cross them.
+- **Row-level security:** per-table row sets computed from role rules are appended to every `rowsOf` call, beneath the filter context, so `ALL()` can't remove them.
+
 ## Evaluation model
 
 - **Filter context** is an array of compiled filters. `CALCULATE` builds a new context in this order: row context becomes filters (context transition), then removals (`ALL`, `REMOVEFILTERS`, `ALLEXCEPT`, `ALLSELECTED`) apply, then new filters override existing filters on the same columns, then `KEEPFILTERS` filters intersect.
 - **Boolean filter arguments** such as `Products[Color] = "Red" || Products[Color] = "Blue"` are evaluated over the column's distinct values, like DAX's `FILTER(ALL(col), …)`, and become an `in` filter.
 - **Row context** is a stack of bindings: a physical row, or a tuple from `VALUES`/`ALL(col)`. Column references read from the innermost binding. Many-side rows can read one-side columns (lenient `RELATED`).
 - **Measures** run with context transition and are memoised by `(measure, context key)`. Any model change clears the cache.
+- **Calculation groups:** when a measure is called and exactly one item of a group is visible, the item expression is evaluated instead, with `selectedMeasure` set and that group's filter removed. Groups are applied in precedence order and nest naturally.
 - **Time intelligence** returns date tables tagged with their date table. Used inside `CALCULATE`, they clear the other filters on that table, so a `Date[Year] = 2025` grouping doesn't conflict with "same period last year". This is the behaviour of a Power BI table marked as a date table.
 
 ## Rendering model
