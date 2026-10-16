@@ -43,6 +43,14 @@ A `FieldSpec` is one of:
 | `scatter` (`bubble`) | `details`* · `legend` · `x`* · `y`* · `size` | Bubble area ∝ size. Cross-highlight, trend line |
 | `heatmap` | `rows`* · `columns`* · `values`* | Sequential single-hue ramp, gradient legend, cell labels when they fit |
 | `decompositionTree` (`decomp`) | `values`* · `explainBy`* (multiple) | Split a total level by level, click nodes to narrow down, automatic "High value / Low value" splits. Cross-filters the page |
+| `histogram` | `values`* (numeric column) · `weight` (optional measure) | Bins by Sturges' rule or `format.histogram.bins` / `binWidth` |
+| `boxPlot` | `category` · `values`* (numeric column) | Quartiles, 1.5 × IQR whiskers, outliers, mean marker |
+| `bullet` | `category` · `value`* · `target` · `maximum` | Value bar over qualitative bands with a target tick |
+| `radar` | `category`* (spokes, 3 or more) · `legend` · `values`* | One polygon per series on a shared radial scale |
+| `sankey` | `source`* · `target`* · `values`* | Multi-stage flows (a target that is also a source becomes a middle column) |
+| `ribbon` | `category`* · `legend`* · `values`* | Stacked by rank in each column, with ribbons showing rank changes |
+| `map` (`bubbleMap`) | `location`* · `legend` · `latitude`* · `longitude`* · `size` | Columns are averaged per location. Your own GeoJSON or tiles via `format.map` |
+| `filledMap` (`choropleth`) | `location`* · `values`* | Needs `format.map.geojson`. Matches `featureKey` (default `name`) case-insensitively |
 | `card` | `value`* · `delta` | Auto-sized callout value, signed delta with good/bad colour |
 | `multiRowCard` | `category` · `values`* | One card per group |
 | `kpi` | `trend` · `value`* · `target` | Headline is the last trend point. Shows % vs goal and a sparkline |
@@ -68,11 +76,13 @@ format: {
   shadow:     { show: false },
   padding:    12,
   header:     { show: true, focusMode: true, exportData: true, showAsTable: true, drill: true },
-  tooltip:    { show: true },
+  tooltip:    { show: true, page: 'tooltip-page-id' },  // report tooltip page
   legend:     { show: 'auto' | true | false, position: 'top'|'bottom'|'left'|'right', fontSize },
   dataLabels: { show: false, format, displayUnits: 'auto', decimals, fontSize, color, position: 'auto' },
-  categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto'|0|45|90 },
-  valueAxis:  { show: true, displayUnits: 'auto', decimals, min, max, gridlines: true, tickCount: 5 },
+  categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto'|0|45|90,
+                  type: 'auto'|'categorical'|'continuous',   // auto = continuous for date/number fields on line & area
+                  scale: 'linear'|'log' },                   // scatter x-axis
+  valueAxis:  { show: true, displayUnits: 'auto', decimals, min, max, gridlines: true, tickCount: 5, scale: 'linear'|'log' },
   colors:     { default, palette: [...], series: { 'Total Sales': '#...' }, categories: { 'Bikes': '#...' },
                 rules: [{ op: '<', value: 0, color: '#d03b3b' }],      // single-series charts, first match wins
                 gradient: { min: '#cde2fb', max: '#0d366b' } },        // single-series charts, by value
@@ -128,6 +138,20 @@ format: { waterfall: { showTotal: true, totalLabel: 'Total', increaseColor, decr
 
 // decomposition tree
 format: { decomposition: { maxNodes: 10, aiSplits: true, columnWidth: 190 } }
+
+// histogram
+format: { histogram: { bins: 20, binWidth: 50 } }
+
+// bullet
+format: { bullet: { bands: [0.6, 0.85, 1], sharedScale: true } }
+
+// maps (bubble and filled)
+format: { map: {
+  geojson: featureCollection,              // outlines (required for filledMap)
+  featureKey: 'name',                      // property matched against the location field
+  tiles: 'https://tiles.example.com/{z}/{x}/{y}.png', attribution: '© provider',   // optional raster basemap
+  maxRadius: 28, zoom: true, graticule: true,
+} }
 
 // slicer sync group (any style)
 format: { slicer: { syncGroup: 'year' } }

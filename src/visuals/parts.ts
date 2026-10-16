@@ -109,7 +109,7 @@ function renderPie(ctx: RenderContext, donut: boolean): void {
   }
 }
 
-export const pieChart = defineVisual({
+export const pieChart = /* @__PURE__ */ defineVisual({
   type: 'pie',
   displayName: 'Pie chart',
   category: 'chart',
@@ -122,7 +122,7 @@ export const pieChart = defineVisual({
   render: (c) => renderPie(c, false),
 });
 
-export const donutChart = defineVisual({ ...pieChart, type: 'donut', displayName: 'Donut chart', render: (c) => renderPie(c, true) });
+export const donutChart = /* @__PURE__ */ defineVisual({ ...pieChart, type: 'donut', displayName: 'Donut chart', render: (c) => renderPie(c, true) });
 
 // ------------------------------------------------------------- treemap
 
@@ -177,7 +177,7 @@ export function squarify(values: number[], rect: Rect): Rect[] {
   return out;
 }
 
-export const treemap = defineVisual({
+export const treemap = /* @__PURE__ */ defineVisual({
   type: 'treemap',
   displayName: 'Treemap',
   category: 'chart',
@@ -218,7 +218,7 @@ export const treemap = defineVisual({
 
 // ------------------------------------------------------------- funnel
 
-export const funnel = defineVisual({
+export const funnel = /* @__PURE__ */ defineVisual({
   type: 'funnel',
   displayName: 'Funnel',
   category: 'chart',

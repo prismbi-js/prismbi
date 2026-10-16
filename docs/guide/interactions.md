@@ -126,6 +126,28 @@ report.on('drillThrough', (e) => console.log(e.fromPageId, '→', e.toPageId, e.
 
 Pick a field to split the total by, click a node, and split that node by another field. Each step narrows the analysis, and the selected path cross-filters the rest of the page. **High value (auto)** and **Low value (auto)** pick the field whose biggest (or smallest) member stands out most.
 
+## Report tooltips
+
+Design a small page and mark it as a tooltip page. Any visual can then show it on hover, filtered to the hovered data point plus that visual's filters:
+
+```ts
+{ id: 'tip-cat', name: 'Category tooltip', tooltip: { width: 320, height: 210 }, layout: { columns: 2, rowHeight: 30 },
+  visuals: [ { type: 'card', fields: { value: 'Total Sales' }, layout: { x: 0, y: 0, w: 1, h: 2 } }, /* … */ ] }
+
+{ type: 'clusteredColumn', fields: { … }, format: { tooltip: { page: 'tip-cat' } } }
+```
+
+Tooltip pages never appear as tabs.
+
+## Edit interactions
+
+The **Edit interactions** toolbar button works like Power BI's. Click a visual, and every other visual shows **Filter / Highlight / None**, which sets how it reacts to selections in the visual you clicked. From code:
+
+```ts
+report.toggleEditInteractions(true);
+report.setInteraction('by-category', 'kpi-card', 'none');   // stored as spec.interactionsFrom
+```
+
 ## The filter pane
 
 Turn it on with `chrome: { filterPane: true }` (a toolbar toggle) or `'open'`. It lists filter cards for **this visual** (the last one clicked), **this page** and **all pages**. Each card has three modes:
@@ -150,6 +172,11 @@ type FilterSpec =
 ```
 
 Filters on a dimension column flow to related fact tables. Filters on a fact column don't flow back to dimensions (single-direction relationships).
+
+## Export
+
+- Per visual: header **⇩** → CSV, PNG or SVG. In code: `report.visual(id).exportCsv() / exportImage('png') / toSvg()`.
+- Per page: toolbar **Export PDF**, or `await report.exportPdf({ pages: 'current' | 'all' })`. Each report page becomes one PDF page. The PDF writer has no dependencies and only loads when used.
 
 ## Bookmarks
 

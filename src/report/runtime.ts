@@ -32,4 +32,5 @@ export interface ReportRuntime {
   slicerTuples(visualId: string, columns: string[]): CellValue[][];
   showContextMenu(visualId: string, identity: DataPointIdentity, evt: MouseEvent): void;
   menu(x: number, y: number, items: MenuItem[]): void;
+  showReportTooltip(pageIdOrName: string, identity: DataPointIdentity, sourceVisualId: string, evt: { clientX: number; clientY: number }): void;
 }

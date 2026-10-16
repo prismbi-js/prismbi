@@ -37,12 +37,12 @@ const catalog: [string, string, string, number, number][] = [
 export const products = catalog.map(([Name, Category, Subcategory, Price, Margin], i) => ({ ProductKey: i + 1, Name, Category, Subcategory, ListPrice: Price, StdMargin: Margin }));
 
 export const regions = [
-  { RegionKey: 1, Region: 'Northwest', Country: 'United States', Group: 'North America' },
-  { RegionKey: 2, Region: 'Southwest', Country: 'United States', Group: 'North America' },
-  { RegionKey: 3, Region: 'Canada', Country: 'Canada', Group: 'North America' },
-  { RegionKey: 4, Region: 'Germany', Country: 'Germany', Group: 'Europe' },
-  { RegionKey: 5, Region: 'United Kingdom', Country: 'United Kingdom', Group: 'Europe' },
-  { RegionKey: 6, Region: 'Australia', Country: 'Australia', Group: 'Pacific' },
+  { RegionKey: 1, Region: 'Northwest', Country: 'United States', Group: 'North America', Lat: 47.61, Lon: -122.33 },
+  { RegionKey: 2, Region: 'Southwest', Country: 'United States', Group: 'North America', Lat: 34.05, Lon: -118.24 },
+  { RegionKey: 3, Region: 'Canada', Country: 'Canada', Group: 'North America', Lat: 43.65, Lon: -79.38 },
+  { RegionKey: 4, Region: 'Germany', Country: 'Germany', Group: 'Europe', Lat: 50.11, Lon: 8.68 },
+  { RegionKey: 5, Region: 'United Kingdom', Country: 'United Kingdom', Group: 'Europe', Lat: 51.51, Lon: -0.13 },
+  { RegionKey: 6, Region: 'Australia', Country: 'Australia', Group: 'Pacific', Lat: -33.87, Lon: 151.21 },
 ];
 
 const channels = ['Online', 'Reseller', 'Store'];

@@ -14,7 +14,51 @@ export class Tooltip {
     parent.append(this.el);
   }
 
+  private parked: HTMLElement | null = null;
+
+  /** Show an arbitrary element (e.g. a report-tooltip page) inside the tooltip. */
+  showElement(node: HTMLElement, e: { clientX: number; clientY: number }): void {
+    if (this.el.firstElementChild !== node) {
+      this.park();
+      this.el.replaceChildren(node);
+      this.parked = node;
+    }
+    this.el.classList.add('is-page');
+    this.el.hidden = false;
+    this.move(e);
+  }
+
+  isShowingElement(node: HTMLElement): boolean {
+    return !this.el.hidden && this.el.firstElementChild === node;
+  }
+
+  /** Keep the tooltip next to the pointer and on-screen. */
+  move(e: { clientX: number; clientY: number }): void {
+    const pad = 14;
+    const w = this.el.offsetWidth;
+    const hh = this.el.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let x = e.clientX + pad;
+    let y = e.clientY + pad;
+    if (x + w > vw - 4) x = e.clientX - w - pad;
+    if (y + hh > vh - 4) y = e.clientY - hh - pad;
+    this.el.style.left = `${Math.max(4, x)}px`;
+    this.el.style.top = `${Math.max(4, y)}px`;
+  }
+
+  /** Detach a previously shown page element (it is re-attached on the next showElement). */
+  private park(): void {
+    if (this.parked) {
+      this.parked.hidden = true;
+      this.parked.remove();
+      this.parked = null;
+    }
+    this.el.classList.remove('is-page');
+  }
+
   show(e: { clientX: number; clientY: number }, items: TooltipItem[], title?: string): void {
+    this.park();
     const custom = this.renderer?.(items, title);
     if (custom !== undefined) {
       if (typeof custom === 'string') this.el.innerHTML = custom;
@@ -33,17 +77,7 @@ export class Tooltip {
         );
     }
     this.el.hidden = false;
-    const pad = 14;
-    const w = this.el.offsetWidth;
-    const hh = this.el.offsetHeight;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let x = e.clientX + pad;
-    let y = e.clientY + pad;
-    if (x + w > vw - 4) x = e.clientX - w - pad;
-    if (y + hh > vh - 4) y = e.clientY - hh - pad;
-    this.el.style.left = `${Math.max(4, x)}px`;
-    this.el.style.top = `${Math.max(4, y)}px`;
+    this.move(e);
   }
 
   hide(): void {

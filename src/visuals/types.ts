@@ -37,6 +37,8 @@ export interface VisualSpec {
   /** Persisted drill state. */
   drill?: { level: number; path: CellValue[]; /** Levels shown for all members ("go to next level"). */ skip?: number[]; /** "Expand all down": show levels path.length..level together. */ expanded?: boolean };
   hidden?: boolean;
+  /** Durable visual-local UI state (sort, expansion, decomposition splits). Saved with the report. */
+  state?: Record<string, unknown>;
   className?: string;
   /** Inline CSS for the visual container. */
   style?: string;
@@ -69,7 +71,8 @@ export interface VisualHostApi {
   /** `null` when nothing is selected in this visual. */
   isSelected(identity: DataPointIdentity): boolean | null;
   readonly selectionActive: boolean;
-  showTooltip(evt: MouseEvent | { clientX: number; clientY: number }, items: TooltipItem[], title?: string): void;
+  /** Show the tooltip. Pass the data point's identity so report-page tooltips (`format.tooltip.page`) can render. */
+  showTooltip(evt: MouseEvent | { clientX: number; clientY: number }, items: TooltipItem[], title?: string, identity?: DataPointIdentity): void;
   hideTooltip(): void;
   /** Slicers: set (or clear with `null`) the filter this visual contributes to the page. */
   setFilter(filters: FilterSpec[] | null): void;

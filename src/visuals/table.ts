@@ -106,7 +106,7 @@ function columnStats(rows: QueryRow[], vi: number): { min: number; max: number }
   return { min: Number.isFinite(min) ? min : 0, max: Number.isFinite(max) ? max : 0 };
 }
 
-export const table = defineVisual({
+export const table = /* @__PURE__ */ defineVisual({
   type: 'table',
   displayName: 'Table',
   category: 'table',
@@ -131,7 +131,7 @@ export const table = defineVisual({
     let gi = 0;
     let vi = 0;
     const cols = fields.map((f) => (isGroupField(f) ? { kind: 'group' as const, i: gi++, field: data.groups[gi - 1] } : { kind: 'value' as const, i: vi++, field: data.values[vi - 1] }));
-    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; shown?: number };
+    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; _shown?: number };
     let rows = data.rows.slice();
     if (state.sortCol !== undefined && cols[state.sortCol]) {
       const c = cols[state.sortCol];
@@ -145,7 +145,7 @@ export const table = defineVisual({
       });
     }
     const pageSize = tf.pageSize ?? 200;
-    const shown = Math.min(rows.length, state.shown ?? pageSize);
+    const shown = Math.min(rows.length, state._shown ?? pageSize);
     const stats = cols.map((c) => (c.kind === 'value' ? columnStats(data.rows, c.i) : { min: 0, max: 0 }));
     const groupFields = data.groups as QueryField[];
 
@@ -234,7 +234,7 @@ interface MatrixFormat {
   conditional?: Record<string, ConditionalFormat>;
 }
 
-export const matrix = defineVisual({
+export const matrix = /* @__PURE__ */ defineVisual({
   type: 'matrix',
   displayName: 'Matrix',
   category: 'table',

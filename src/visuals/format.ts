@@ -20,7 +20,11 @@ export interface VisualFormat {
   shadow: { show: boolean };
   padding: number;
   header: { show: boolean; focusMode: boolean; exportData: boolean; showAsTable: boolean; drill: boolean };
-  tooltip: { show: boolean };
+  tooltip: {
+    show: boolean;
+    /** Id or name of a tooltip page (`page.tooltip`) rendered on hover, filtered to the hovered data point. */
+    page?: string;
+  };
   legend: { show: boolean | 'auto'; position: 'top' | 'bottom' | 'left' | 'right'; fontSize?: number };
   dataLabels: {
     show: boolean;
@@ -31,7 +35,18 @@ export interface VisualFormat {
     color?: string;
     position: 'auto' | 'inside' | 'outside';
   };
-  categoryAxis: { show: boolean; title?: string | boolean; fontSize?: number; maxLabelWidth: number; labelAngle: 'auto' | 0 | 45 | 90; gridlines: boolean };
+  categoryAxis: {
+    show: boolean;
+    title?: string | boolean;
+    fontSize?: number;
+    maxLabelWidth: number;
+    labelAngle: 'auto' | 0 | 45 | 90;
+    gridlines: boolean;
+    /** `auto`: continuous for date/number fields on line, area and scatter charts. */
+    type: 'auto' | 'categorical' | 'continuous';
+    /** Scatter x-axis scale. */
+    scale?: 'linear' | 'log';
+  };
   valueAxis: {
     show: boolean;
     title?: string | boolean;
@@ -42,6 +57,8 @@ export interface VisualFormat {
     max?: number;
     gridlines: boolean;
     tickCount: number;
+    /** `log` applies to line and scatter charts (positive values only). */
+    scale?: 'linear' | 'log';
   };
   colors: {
     /** Fixed colour per series name (measure name or legend value). */
@@ -78,7 +95,7 @@ export const baseFormat: VisualFormat = {
   tooltip: { show: true },
   legend: { show: 'auto', position: 'top' },
   dataLabels: { show: false, displayUnits: 'auto', position: 'auto' },
-  categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto', gridlines: false },
+  categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto', gridlines: false, type: 'auto' },
   valueAxis: { show: true, displayUnits: 'auto', gridlines: true, tickCount: 5 },
   colors: {},
   analytics: { referenceLines: [], trendLine: false },

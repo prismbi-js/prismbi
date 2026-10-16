@@ -24,7 +24,7 @@ interface WaterfallFormat {
 }
 
 /** Waterfall: each category is a step up or down from the running total, ending in a total bar. */
-export const waterfall = defineVisual({
+export const waterfall = /* @__PURE__ */ defineVisual({
   type: 'waterfall',
   displayName: 'Waterfall chart',
   category: 'chart',

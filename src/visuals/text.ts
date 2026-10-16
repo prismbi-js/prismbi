@@ -34,7 +34,7 @@ export function miniMarkdown(src: string, resolve?: (name: string) => string): s
 }
 
 /** Rich text box. `{{Measure name}}` placeholders are evaluated live under the page filters. */
-export const textBox = defineVisual({
+export const textBox = /* @__PURE__ */ defineVisual({
   type: 'text',
   displayName: 'Text box',
   category: 'other',

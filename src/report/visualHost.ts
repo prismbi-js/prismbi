@@ -10,7 +10,7 @@ import type { VisualFormat } from '../visuals/format';
 import { getVisual } from '../visuals/registry';
 import type { DataPointIdentity, RenderContext, RoleBinding, VisualDefinition, VisualHostApi, VisualSpec } from '../visuals/types';
 import type { ReportRuntime } from './runtime';
-import { CSS, themeVars } from './styles';
+import { download, elementToSvg, svgToCanvas } from './snapshot';
 
 const asArray = (f: FieldSpec | FieldSpec[] | undefined): FieldSpec[] => (f === undefined ? [] : Array.isArray(f) ? f : [f]);
 const fieldRef = (f: FieldSpec) => (typeof f === 'string' ? f : (f.field ?? f.expression ?? ''));
@@ -54,7 +54,7 @@ export class VisualHost {
   private cleanup: (() => void) | void = undefined;
   private ro?: ResizeObserver;
   private showTable = false;
-  private localState: Record<string, unknown> = {};
+  private localState: Record<string, unknown>;
   private size = { w: 0, h: 0 };
   private destroyed = false;
 
@@ -64,6 +64,7 @@ export class VisualHost {
   ) {
     this.id = spec.id!;
     this.def = getVisual(spec.type);
+    this.localState = { ...(spec.state ?? {}) };
     this.el = h('section', { class: 'pbi-visual', 'data-visual-id': this.id, 'data-type': spec.type, 'aria-label': spec.title ?? this.def.displayName });
     this.header = h('div', { class: 'pbi-vh' });
     this.body = h('div', { class: 'pbi-vbody' });
@@ -431,51 +432,16 @@ export class VisualHost {
   toSvg(): string {
     const w = Math.max(1, Math.round(this.el.offsetWidth || this.size.w + 24 || 600));
     const hh = Math.max(1, Math.round(this.el.offsetHeight || this.size.h + 60 || 400));
-    const clone = this.el.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('.pbi-icons').forEach((n) => n.remove());
-    clone.classList.remove('is-focus', 'is-active');
-    clone.style.width = `${w}px`;
-    clone.style.height = `${hh}px`;
-    const vars = Object.entries(themeVars(this.rt.theme)).map(([k, v]) => `${k}:${v}`).join(';');
-    const body = new XMLSerializer().serializeToString(clone);
-    const css = CSS.replace(/<\/style/gi, '');
-    return (
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hh}" viewBox="0 0 ${w} ${hh}">` +
-      `<foreignObject x="0" y="0" width="${w}" height="${hh}">` +
-      `<div xmlns="http://www.w3.org/1999/xhtml" class="pbi-report pbi-export" data-mode="${this.rt.theme.mode}" style="${vars};height:${hh}px;background:transparent">` +
-      `<style>${css.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</style>${body}</div></foreignObject></svg>`
-    );
+    return elementToSvg(this.el, this.rt.theme, w, hh);
   }
 
   /** Download the visual as PNG (2× resolution) or SVG. */
   async exportImage(type: 'png' | 'svg' = 'png', filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.${type}`): Promise<void> {
     const svgText = this.toSvg();
-    let blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
-    if (type === 'png') {
-      const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Could not rasterise the visual'));
-        img.src = url;
-      });
-      const scale = 2;
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const c2d = canvas.getContext('2d')!;
-      c2d.fillStyle = this.rt.theme.surface;
-      c2d.fillRect(0, 0, canvas.width, canvas.height);
-      c2d.scale(scale, scale);
-      c2d.drawImage(img, 0, 0);
-      blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG export failed'))), 'image/png'));
-    }
-    const href = URL.createObjectURL(blob);
-    const a = h('a', { href, download: filename });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    if (type === 'svg') return download(new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' }), filename);
+    const canvas = await svgToCanvas(svgText, this.rt.theme.surface);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG export failed'))), 'image/png'));
+    download(blob, filename);
   }
 
   private afterDrill(): void {
@@ -505,7 +471,11 @@ export class VisualHost {
       get selectionActive() {
         return selected.length > 0;
       },
-      showTooltip: (e, items, title) => self.rt.tooltip.show(e, items, title),
+      showTooltip: (e, items, title, identity) => {
+        const page = self.format().tooltip.page;
+        if (page && identity && identity.columns.length) self.rt.showReportTooltip(page, identity, self.id, e);
+        else self.rt.tooltip.show(e, items, title);
+      },
       hideTooltip: () => self.rt.tooltip.hide(),
       setFilter: (f) => self.setFilter(f),
       get currentFilter() {
@@ -522,6 +492,7 @@ export class VisualHost {
       },
       setState(patch) {
         Object.assign(self.localState, patch);
+        self.persistState();
         self.rt.schedule(self.id);
       },
       get state() {
@@ -530,6 +501,18 @@ export class VisualHost {
       emit: (event, payload) => self.rt.emit(event, { visualId: self.id, keys: payload.keys, identity: payload.identity, event: payload.event }),
       rerender: () => self.rt.schedule(self.id),
     };
+  }
+
+  /** Copy durable visual state (keys not starting with "_") into the spec so it is saved with the report. */
+  private persistState(): void {
+    const durable = Object.fromEntries(Object.entries(this.localState).filter(([k, v]) => !k.startsWith('_') && v !== undefined));
+    this.spec.state = Object.keys(durable).length ? durable : undefined;
+  }
+
+  /** Forget visual-local state (sorting, expansion, decomposition splits…). */
+  resetState(): void {
+    this.localState = {};
+    this.spec.state = undefined;
   }
 
   invalidate(): void {

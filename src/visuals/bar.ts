@@ -279,9 +279,9 @@ function barVisual(type: string, displayName: string, horizontal: boolean, mode:
   });
 }
 
-export const clusteredColumn = barVisual('clusteredColumn', 'Clustered column chart', false, 'clustered');
-export const stackedColumn = barVisual('stackedColumn', 'Stacked column chart', false, 'stacked');
-export const percentStackedColumn = barVisual('percentStackedColumn', '100% stacked column chart', false, 'percent');
-export const clusteredBar = barVisual('clusteredBar', 'Clustered bar chart', true, 'clustered');
-export const stackedBar = barVisual('stackedBar', 'Stacked bar chart', true, 'stacked');
-export const percentStackedBar = barVisual('percentStackedBar', '100% stacked bar chart', true, 'percent');
+export const clusteredColumn = /* @__PURE__ */ barVisual('clusteredColumn', 'Clustered column chart', false, 'clustered');
+export const stackedColumn = /* @__PURE__ */ barVisual('stackedColumn', 'Stacked column chart', false, 'stacked');
+export const percentStackedColumn = /* @__PURE__ */ barVisual('percentStackedColumn', '100% stacked column chart', false, 'percent');
+export const clusteredBar = /* @__PURE__ */ barVisual('clusteredBar', 'Clustered bar chart', true, 'clustered');
+export const stackedBar = /* @__PURE__ */ barVisual('stackedBar', 'Stacked bar chart', true, 'stacked');
+export const percentStackedBar = /* @__PURE__ */ barVisual('percentStackedBar', '100% stacked bar chart', true, 'percent');

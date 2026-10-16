@@ -33,7 +33,7 @@ const ref = (f: FieldSpec) => (typeof f === 'string' ? f : (f.field ?? ''));
  * field; pick a node to keep narrowing down. "High value" / "Low value" chooses the split that
  * produces the largest / smallest member automatically.
  */
-export const decompositionTree = defineVisual({
+export const decompositionTree = /* @__PURE__ */ defineVisual({
   type: 'decompositionTree',
   displayName: 'Decomposition tree',
   category: 'chart',

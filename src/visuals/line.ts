@@ -1,5 +1,5 @@
 import { s, barPath, measureText } from '../render/svg';
-import { bandScale, linearScale, pointScale } from '../render/scales';
+import { bandScale, linearScale, logScale, pointScale, timeScale } from '../render/scales';
 import type { RenderContext } from './types';
 import { defineVisual } from './registry';
 import type { Series } from './common';
@@ -53,6 +53,26 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   if (!categories.length || (!lineSeries.length && !colSeries.length)) return emptyState(ctx);
   const t = ctx.theme;
   const f = ctx.format;
+  // continuous axis: a single date or number field (auto), unless forced categorical
+  const catType = pv.categoryFields.length === 1 ? pv.categoryFields[0].type : undefined;
+  const continuous = kind !== 'combo' && f.categoryAxis.type !== 'categorical' && (catType === 'date' || catType === 'number') && categories.every((c) => c.keys[0] !== null);
+  const keyNum = (i: number) => {
+    const k = categories[i].keys[0];
+    return k instanceof Date ? k.getTime() : Number(k);
+  };
+  if (continuous) {
+    // points must be drawn in x order
+    const order = categories.map((_, i) => i).sort((a, b) => keyNum(a) - keyNum(b));
+    if (order.some((v, i) => v !== i)) {
+      const re = <T,>(arr: T[]) => order.map((i) => arr[i]);
+      const cats = re(categories);
+      categories.splice(0, categories.length, ...cats);
+      for (const se of [...lineSeries, ...colSeries]) {
+        se.values = re(se.values);
+        if (se.highlights) se.highlights = re(se.highlights);
+      }
+    }
+  }
   const all = [...colSeries, ...lineSeries];
   const legend = renderLegend(
     ctx,
@@ -91,24 +111,70 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const endW = endLabels ? Math.max(...lineSeries.map((se) => measureText(labelFmt(lastValue(se)), fs, t.fontFamily, 600))) + 12 : 10;
 
   const top = 10;
-  let scale = linearScale(lo, hi, [height - 30, top], { includeZero, fixedMin: va.min, fixedMax: va.max, tickCount: Math.max(2, Math.min(va.tickCount, Math.floor(height / 40))) });
+  const useLog = va.scale === 'log' && kind === 'line';
+  const positives = all.flatMap((se) => se.values.filter((v): v is number => v !== null && v > 0));
+  const makeY = (range: [number, number], tickCount: number) =>
+    useLog && positives.length ? logScale(va.min ?? Math.min(...positives), va.max ?? Math.max(...positives), range) : linearScale(lo, hi, range, { includeZero, fixedMin: va.min, fixedMax: va.max, tickCount });
+  let scale = makeY([height - 30, top], Math.max(2, Math.min(va.tickCount, Math.floor(height / 40))));
   const fmtAxis = valueAxisFormatter(ctx, valueField, scale);
   const left = va.show ? Math.ceil(Math.max(...scale.ticks.map((x) => measureText(fmtAxis(x), fs, t.fontFamily)))) + 12 : 8;
   const right = endW;
   const useBand = kind === 'combo';
-  const xs = useBand ? bandScale(categories.length, [left, width - right], f.bars.categoryGap, 0.15) : pointScale(categories.length, [left, width - right], 6);
-  const xAt = (i: number) => (useBand ? xs(i) + xs.bandwidth / 2 : xs(i));
+  let xs = useBand ? bandScale(categories.length, [left, width - right], f.bars.categoryGap, 0.15) : pointScale(categories.length, [left, width - right], 6);
+  let xAt = (i: number) => (useBand ? xs(i) + xs.bandwidth / 2 : xs(i));
+  // continuous x: time or linear scale; points sit at their real positions
+  let contTicks: { at: number; label: string }[] = [];
+  if (continuous) {
+    const nums = categories.map((_, i) => keyNum(i));
+    const range: [number, number] = [left + 6, width - right - 6];
+    const approx = Math.max(2, Math.floor((width - left - right) / 90));
+    let pos: (v: number) => number;
+    if (catType === 'date') {
+      const ts = timeScale(nums[0], nums[nums.length - 1], range, approx);
+      pos = ts;
+      contTicks = ts.ticks.map((tk, i) => ({ at: ts(tk), label: ts.tickFormat(tk, i) }));
+    } else {
+      const ls = linearScale(nums[0], nums[nums.length - 1], range, { includeZero: false, fixedMin: nums[0], fixedMax: nums[nums.length - 1], tickCount: approx });
+      pos = ls;
+      const field = pv.categoryFields[0];
+      contTicks = ls.ticks.map((tk) => ({ at: ls(tk), label: ctx.fmt(field, tk) }));
+    }
+    const px = nums.map(pos);
+    xAt = (i: number) => px[i];
+    const nearest = (x: number) => {
+      let lo2 = 0;
+      let hi2 = px.length - 1;
+      while (hi2 - lo2 > 1) {
+        const mid = (lo2 + hi2) >> 1;
+        if (px[mid] < x) lo2 = mid;
+        else hi2 = mid;
+      }
+      return Math.abs(px[lo2] - x) <= Math.abs(px[hi2] - x) ? lo2 : hi2;
+    };
+    const cont = ((i: number) => px[i]) as typeof xs;
+    cont.bandwidth = 0;
+    cont.step = px.length > 1 ? (px[px.length - 1] - px[0]) / (px.length - 1) : 0;
+    cont.count = px.length;
+    cont.indexAt = nearest;
+    xs = cont;
+  }
   const labels = categories.map((c) => c.label);
-  const catLayout = categoryLabelLayout(ctx, labels, Math.max(xs.step, 1));
+  const catLayout = continuous ? { angle: 0 as const, height: f.categoryAxis.show ? fs + 10 : 4, every: 1, maxWidth: 0 } : categoryLabelLayout(ctx, labels, Math.max(xs.step, 1));
   const bottom = height - catLayout.height - 2;
-  scale = linearScale(lo, hi, [bottom, top], { includeZero, fixedMin: va.min, fixedMax: va.max, tickCount: Math.max(2, Math.min(va.tickCount, Math.floor((bottom - top) / 36))) });
+  scale = makeY([bottom, top], Math.max(2, Math.min(va.tickCount, Math.floor((bottom - top) / 36))));
 
   const svg = s('svg', { width, height, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Line chart' });
   const g = s('g');
   svg.append(g);
   plot.append(svg);
   drawValueAxisY(ctx, g, scale, left, width - right, valueAxisFormatter(ctx, valueField, scale));
-  drawCategoryLabels(ctx, g, labels, xAt, bottom, catLayout);
+  if (continuous) {
+    if (f.categoryAxis.show)
+      for (const tk of contTicks) {
+        g.append(s('line', { x1: tk.at, x2: tk.at, y1: bottom, y2: bottom + 4, stroke: t.axis, 'stroke-width': 1 }));
+        g.append(s('text', { x: tk.at, y: bottom + fs + 6, 'text-anchor': 'middle', class: 'pbi-tick pbi-cat', fill: t.foregroundSecondary }, tk.label));
+      }
+  } else drawCategoryLabels(ctx, g, labels, xAt, bottom, catLayout);
   const marks = s('g', { class: 'pbi-marks' });
   g.append(marks);
 
@@ -215,7 +281,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       const yv = stacked ? (cum[i] += v) : v;
       dots.append(s('circle', { cx: x, cy: scale(yv), r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2 }));
     }
-    if (f.tooltip.show) ctx.host.showTooltip(e, tooltipItems(ctx, categories[i], all, i), categories[i].label);
+    if (f.tooltip.show) ctx.host.showTooltip(e, tooltipItems(ctx, categories[i], all, i), categories[i].label, categories[i].identity);
   });
   hit.addEventListener('mouseleave', () => {
     cross.setAttribute('visibility', 'hidden');
@@ -266,10 +332,10 @@ const ROLES = [
   { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const },
 ];
 
-export const lineChart = defineVisual({ type: 'line', displayName: 'Line chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'line') });
-export const areaChart = defineVisual({ type: 'area', displayName: 'Area chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'area') });
-export const stackedAreaChart = defineVisual({ type: 'stackedArea', displayName: 'Stacked area chart', category: 'chart', roles: ROLES, defaultSort: 'key', render: (c) => renderLine(c, 'stackedArea') });
-export const comboChart = defineVisual({
+export const lineChart = /* @__PURE__ */ defineVisual({ type: 'line', displayName: 'Line chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'line') });
+export const areaChart = /* @__PURE__ */ defineVisual({ type: 'area', displayName: 'Area chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'area') });
+export const stackedAreaChart = /* @__PURE__ */ defineVisual({ type: 'stackedArea', displayName: 'Stacked area chart', category: 'chart', roles: ROLES, defaultSort: 'key', render: (c) => renderLine(c, 'stackedArea') });
+export const comboChart = /* @__PURE__ */ defineVisual({
   type: 'lineClusteredColumn',
   displayName: 'Line and clustered column chart',
   category: 'chart',

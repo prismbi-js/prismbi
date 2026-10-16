@@ -20,6 +20,7 @@ describe('formatValue', () => {
     expect(formatValue(1_500_000, undefined, { displayUnits: 'auto' })).toBe('1.5M');
     expect(formatValue(12_300, undefined, { displayUnits: 'thousands' })).toBe('12.3K');
     expect(formatValue(980, undefined, { displayUnits: 'auto' })).toBe('980');
+    expect(formatValue(0, '$#,0', { displayUnits: 'millions' })).toBe('$0');
   });
 
   it('formats dates', () => {

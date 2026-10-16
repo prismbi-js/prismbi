@@ -7,7 +7,7 @@ import { emptyState, identityOf, interactive, markOpacity } from './common';
 import { valueColor } from './analytics';
 
 /** Heatmap: rows × columns grid coloured by a measure on a single-hue sequential ramp. */
-export const heatmap = defineVisual({
+export const heatmap = /* @__PURE__ */ defineVisual({
   type: 'heatmap',
   displayName: 'Heatmap',
   category: 'chart',

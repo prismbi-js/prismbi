@@ -45,6 +45,8 @@ export interface PageDefinition {
    * fields offers "Drill through: <page>". Typically combined with `hidden: true`.
    */
   drillthrough?: { fields: string[]; /** Carry the source visual's filters along (default true). */ keepAllFilters?: boolean };
+  /** Make this a report-tooltip page: rendered inside the tooltip when a visual sets `format.tooltip.page`. Never shown as a tab. */
+  tooltip?: { width?: number; height?: number };
 }
 
 export interface Bookmark {
@@ -338,6 +340,7 @@ export class Report implements ReportRuntime {
     this.active = visualId;
     for (const host of this.page.hosts.values()) host.el.classList.toggle('is-active', host.id === visualId);
     this.renderPane();
+    this.renderInteractionOverlays();
   }
 
   toggleFocus(visualId: string): void {
@@ -416,6 +419,108 @@ export class Report implements ReportRuntime {
     p.drillState = null;
     for (const host of p.hosts.values()) host.invalidate();
     this.showPage(Math.min(from, this.pages.length - 1));
+  }
+
+  // ---------------------------------------------------------------- report tooltips
+
+  private tooltipKey = '';
+
+  /** Render a tooltip page inside the tooltip, filtered to the hovered data point (+ the source visual's filters). */
+  showReportTooltip(pageIdOrName: string, identity: DataPointIdentity, sourceVisualId: string, evt: { clientX: number; clientY: number }): void {
+    const ti = this.pageIndex(pageIdOrName);
+    if (ti < 0) return;
+    const page = this.pages[ti];
+    const key = JSON.stringify([page.def.id, identity.columns, identity.values.map(valueKey)]);
+    const size = page.def.tooltip ?? {};
+    const width = size.width ?? 320;
+    const height = size.height ?? 220;
+    if (key === this.tooltipKey && page.el && this.tooltip.isShowingElement(page.el)) return this.tooltip.move(evt);
+    this.tooltipKey = key;
+    const pointFilters: FilterSpec[] = identity.columns.map((c, i) => ({ target: c, op: 'eq', value: identity.values[i] }));
+    const carried = this.filtersFor(sourceVisualId).filter((f) => !this.reportFilters.includes(f) && !(f.op !== 'tuples' && f.op !== 'topN' && pointFilters.some((d) => d.op === 'eq' && sameRef(d.target, f.target))));
+    page.drillState = { filters: [...carried, ...pointFilters], from: this.current };
+    if (!page.el) this.mountPage(page, this.root);
+    this.applyPageLayout(page);
+    const el = page.el!;
+    el.hidden = false;
+    el.classList.add('pbi-tooltip-page');
+    el.style.width = `${width}px`;
+    el.style.height = `${height}px`;
+    this.tooltip.showElement(el, evt);
+    for (const host of page.hosts.values()) {
+      host.invalidate();
+      host.render();
+    }
+    this.tooltip.move(evt);
+  }
+
+  // ---------------------------------------------------------------- edit interactions
+
+  private editingInteractions = false;
+
+  /** Toggle "edit interactions": select a visual, then choose how every other visual reacts to it. */
+  toggleEditInteractions(on = !this.editingInteractions): void {
+    this.editingInteractions = on;
+    this.renderToolbar();
+    this.renderInteractionOverlays();
+  }
+
+  /** Set how `targetId` reacts to selections in `sourceId`. */
+  setInteraction(sourceId: string, targetId: string, mode: 'filter' | 'highlight' | 'none'): void {
+    const target = this.findVisual(targetId);
+    if (!target) throw new Error(`Visual "${targetId}" not found`);
+    target.spec.interactionsFrom = { ...(target.spec.interactionsFrom ?? {}), [sourceId]: mode };
+    target.page.hosts.get(targetId)?.invalidate();
+    this.schedule(targetId);
+    this.renderInteractionOverlays();
+  }
+
+  private renderInteractionOverlays(): void {
+    for (const p of this.pages) for (const host of p.hosts.values()) host.el.querySelector(':scope > .pbi-ei')?.remove();
+    if (!this.editingInteractions || !this.active) return;
+    const source = this.page.def.visuals.find((v) => v.id === this.active);
+    if (!source || getVisual(source.type).static) return;
+    for (const host of this.page.hosts.values()) {
+      if (host.id === this.active) continue;
+      const def = host.definition;
+      if (def.static) continue;
+      const current = this.interactionMode(host.spec, this.active);
+      const bar = h('div', { class: 'pbi-ei', role: 'group', 'aria-label': `How this visual reacts to ${source.title ?? source.type}` });
+      const modes: ('filter' | 'highlight' | 'none')[] = def.supportsHighlight ? ['filter', 'highlight', 'none'] : ['filter', 'none'];
+      for (const m of modes) {
+        const b = h('button', { type: 'button', 'aria-pressed': String(current === m), title: m[0].toUpperCase() + m.slice(1) }, m === 'filter' ? 'Filter' : m === 'highlight' ? 'Highlight' : 'None');
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.setInteraction(this.active!, host.id, m);
+        });
+        bar.append(b);
+      }
+      host.el.append(bar);
+    }
+  }
+
+  // ---------------------------------------------------------------- PDF export
+
+  /** Export the current page (or every visible page) as a PDF, one page per report page. */
+  async exportPdf(opts: { pages?: 'current' | 'all'; filename?: string } = {}): Promise<void> {
+    const { elementToSvg, svgToCanvas, download } = await import('./snapshot');
+    const { buildPdf, dataUrlToBytes } = await import('./pdf');
+    const start = this.current;
+    const targets = opts.pages === 'all' ? this.pages.map((_, i) => i).filter((i) => !this.pages[i].def.hidden && !this.pages[i].def.tooltip) : [start];
+    const out = [];
+    for (const i of targets) {
+      if (i !== this.current) this.showPage(i, false);
+      this.flush();
+      const el = this.page.el!;
+      const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1200);
+      const hh = Math.max(1, el.scrollHeight || el.offsetHeight || 800);
+      const svg = elementToSvg(el, this._theme, w, hh);
+      const canvas = await svgToCanvas(svg, this._theme.background, 2);
+      out.push({ jpeg: dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.92)), pixelWidth: canvas.width, pixelHeight: canvas.height, width: w, height: hh });
+    }
+    if (this.current !== start) this.showPage(start, false);
+    const pdf = buildPdf(out, this.name);
+    download(new Blob([pdf], { type: 'application/pdf' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pdf`);
   }
 
   domainIndex(table: string, column: string, value: CellValue): number {
@@ -511,18 +616,21 @@ export class Report implements ReportRuntime {
     this.active = null;
     this.current = i;
     const p = this.page;
-    if (!p.el) {
-      p.el = h('div', { class: 'pbi-page', role: 'tabpanel', 'aria-label': p.def.name });
-      this.pageScroll.append(p.el);
-      for (const spec of p.def.visuals) this.mountVisual(p, spec);
-    }
+    if (!p.el) this.mountPage(p, this.pageScroll);
+    else if (p.el.parentElement !== this.pageScroll) this.pageScroll.append(p.el);
     this.applyPageLayout(p);
-    p.el.hidden = false;
+    p.el!.hidden = false;
     this.renderTabs();
     this.renderToolbar();
     this.renderPane();
     this.schedule();
     if (emit) this.emit('pageChanged', { pageId: p.def.id!, name: p.def.name });
+  }
+
+  private mountPage(p: PageState, parent: HTMLElement): void {
+    p.el = h('div', { class: 'pbi-page', role: 'tabpanel', 'aria-label': p.def.name });
+    parent.append(p.el);
+    for (const spec of p.def.visuals) this.mountVisual(p, spec);
   }
 
   private applyPageLayout(p: PageState): void {
@@ -659,7 +767,9 @@ export class Report implements ReportRuntime {
     p.selection = null;
     for (const v of p.def.visuals) {
       v.drill = undefined;
-      p.hosts.get(v.id!)?.invalidate();
+      const host = p.hosts.get(v.id!);
+      host?.resetState();
+      host?.invalidate();
     }
     this.schedule();
     this.renderPane();
@@ -725,17 +835,19 @@ export class Report implements ReportRuntime {
       this.toolbar.append(b);
     };
     btn('Reset', () => this.reset());
+    btn('Edit interactions', () => this.toggleEditInteractions(), this.editingInteractions);
+    btn('Export PDF', () => void this.exportPdf());
     if (this.chrome.filterPane) btn('Filters', () => this.toggleFilterPane(), this.paneOpen);
   }
 
   private renderTabs(): void {
-    const visible = this.pages.filter((p) => !p.def.hidden);
+    const visible = this.pages.filter((p) => !p.def.hidden && !p.def.tooltip);
     const show = this.chrome.pageTabs === true || (this.chrome.pageTabs === 'auto' && visible.length > 1);
     this.tabs.hidden = !show;
     if (!show) return;
     this.tabs.replaceChildren();
     this.pages.forEach((p, i) => {
-      if (p.def.hidden) return;
+      if (p.def.hidden || p.def.tooltip) return;
       const b = h('button', { type: 'button', class: 'pbi-tab', role: 'tab', 'aria-selected': String(i === this.current) }, p.def.name);
       b.addEventListener('click', (e) => {
         e.stopPropagation();

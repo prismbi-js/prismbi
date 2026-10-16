@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.2.0 (unreleased): Phase 2, part 1
+## 0.2.0 (unreleased): Phase 2
+
+### Part 2
+- **Continuous axes:** time and number fields on line and area charts are placed at their real positions, with calendar-aligned ticks (`categoryAxis.type`). **Log scales** on line and scatter.
+- **Report tooltips** (`page.tooltip` + `format.tooltip.page`).
+- **Edit interactions** mode and `report.setInteraction()`.
+- **PDF export** (`report.exportPdf()`, toolbar button) with a lazily loaded, dependency-free writer.
+- **Persisted visual state** (`spec.state`): table sort, matrix expansion and decomposition splits are saved with the report.
+- **New visuals:** histogram, box plot, bullet, radar, sankey, ribbon, bubble map, filled map.
+- **Lean builds:** `prismbi/core` and `prismbi/visuals` entry points with pure annotations, so unused visuals are tree-shaken. The registry is shared across entries.
+- **Fixes:** scatter bubbles no longer spill over the axes, and the legend follows colour order. Zero shows as "$0" rather than "$0M". The date-range slider thumbs sit on the track and the selected span is highlighted. Map SVGs clip to their box. Ribbon slivers never vanish.
+- The repo now enforces LF line endings (`.gitattributes`).
+
+### Part 1
 
 - **Narrowing down:** a right-click menu with Include, Exclude and Drill through. Drill-through pages (`page.drillthrough`) with carried filters, a Back button and `report.drillThrough()` / `back()`. Slicer sync groups. A hierarchy (tree) slicer. "Expand all down one level".
 - **Decomposition tree** with manual and automatic (High value / Low value) splits that cross-filter the page.

@@ -16,7 +16,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the layer diagram and sourc
 
 ## Ground rules
 
-- **No runtime dependencies.** The size budget is 65 KB min+gzip for the main entry (≈62 KB today). Check it with `npm run build`, then minify and gzip `dist/index.js`.
+- **No runtime dependencies.** Size budgets (min+gzip): `prismbi/core` 45 KB (≈41 KB today) and the full `prismbi` entry 75 KB (≈71 KB). Mark new visual definitions `/* @__PURE__ */` so they tree-shake. Check it with `npm run build`, then minify and gzip `dist/index.js`.
 - **Semantics match Power BI.** When adding DAX or filter behaviour, add a test that reproduces Power BI's result on a small model (see `tests/fixtures.ts`). Document any deliberate difference in `docs/guide/expressions.md`.
 - **Visuals follow the shared mark specs.** Bars are at most 24 px thick with 4 px rounded data ends, there are 2 px surface gaps between touching marks, lines are 2 px, markers are at least 8 px, and the grid is recessive. Text uses theme ink tokens, never series colours. There's a legend whenever there are two or more series, and colour always follows the entity.
 - **Accessibility:** marks are focusable, labels are not clipped, and every chart has a table view.

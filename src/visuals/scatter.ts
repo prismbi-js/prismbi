@@ -1,11 +1,11 @@
 import { s, measureText } from '../render/svg';
-import { linearScale } from '../render/scales';
+import { linearScale, logScale } from '../render/scales';
 import { defineVisual } from './registry';
 import { drawValueAxisY, emptyState, identityOf, interactive, markOpacity, renderLegend, valueAxisFormatter, withLegend } from './common';
 import type { DataPointIdentity } from './types';
 import { drawReferenceLines, linearFit } from './analytics';
 
-export const scatter = defineVisual({
+export const scatter = /* @__PURE__ */ defineVisual({
   type: 'scatter',
   displayName: 'Scatter chart',
   category: 'chart',
@@ -40,7 +40,10 @@ export const scatter = defineVisual({
         const v = r.keys[l.indices[0]];
         if (!legendItems.has(v)) legendItems.set(v, { name: ctx.fmt(lField, v), color: ctx.colorFor(lField, v), identity: identityOf([lField], [v]) });
       }
-    const legend = renderLegend(ctx, [...legendItems.values()].map((x) => ({ ...x, shape: 'dot' as const })));
+    // legend follows the colour (domain) order, not the order rows happen to arrive in
+    const domainPos = (v: unknown) => (lField?.column ? ctx.model.table(lField.column.table).distinct(lField.column.column).findIndex((d) => d === v || (d instanceof Date && v instanceof Date && d.getTime() === v.getTime())) : 0);
+    const legendSorted = [...legendItems.entries()].sort((a, b) => domainPos(a[0]) - domainPos(b[0])).map((e) => e[1]);
+    const legend = renderLegend(ctx, legendSorted.map((x) => ({ ...x, shape: 'dot' as const })));
     const { plot, width, height } = withLegend(ctx, legend);
 
     const xs = rows.map((r) => r.values[xi] as number);
@@ -51,8 +54,14 @@ export const scatter = defineVisual({
     const fmtY = valueAxisFormatter(ctx, yField, yScale0);
     const left = Math.ceil(Math.max(...yScale0.ticks.map((v) => measureText(fmtY(v), fs, t.fontFamily)))) + 12;
     const bottom = height - fs - 22;
-    const x = linearScale(Math.min(...xs), Math.max(...xs), [left + 8, width - 12], { includeZero: false, tickCount: Math.max(2, Math.floor(width / 90)) });
-    const y = linearScale(Math.min(...ys), Math.max(...ys), [bottom - 6, 10], { includeZero: false, tickCount: Math.max(2, Math.floor(height / 45)) });
+    const logX = ctx.format.categoryAxis.scale === 'log' && xs.every((v) => v > 0);
+    const logY = ctx.format.valueAxis.scale === 'log' && ys.every((v) => v > 0);
+    // inset the plot by the largest bubble so marks never spill over the axes
+    const maxR = sField ? Math.min(28, width / 18, height / 10) + 4 : 7;
+    const xr: [number, number] = [left + maxR, width - maxR];
+    const yr: [number, number] = [bottom - maxR, Math.max(10, maxR)];
+    const x = logX ? logScale(Math.min(...xs), Math.max(...xs), xr) : linearScale(Math.min(...xs), Math.max(...xs), xr, { includeZero: false, tickCount: Math.max(2, Math.floor(width / 90)) });
+    const y = logY ? logScale(Math.min(...ys), Math.max(...ys), yr) : linearScale(Math.min(...ys), Math.max(...ys), yr, { includeZero: false, tickCount: Math.max(2, Math.floor(height / 45)) });
     const svg = s('svg', { width, height, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Scatter chart' });
     plot.append(svg);
     const g = s('g');
@@ -69,19 +78,25 @@ export const scatter = defineVisual({
       const tl = ctx.format.analytics.trendLine;
       g.append(s('line', { x1: x(x0), x2: x(x1), y1: y(fit.intercept + fit.slope * x0), y2: y(fit.intercept + fit.slope * x1), stroke: (typeof tl === 'object' && tl.color) || t.foregroundSecondary, 'stroke-width': 1.5, 'stroke-dasharray': '6 4', class: 'pbi-trend', 'pointer-events': 'none' }));
     }
-    const marks = s('g');
+    const clipId = `pbi-clip-${Math.random().toString(36).slice(2, 9)}`;
+    const defs = s('defs');
+    const clip = s('clipPath', { id: clipId });
+    clip.append(s('rect', { x: left, y: 0, width: Math.max(0, width - left), height: Math.max(0, bottom) }));
+    defs.append(clip);
+    svg.append(defs);
+    const marks = s('g', { 'clip-path': `url(#${clipId})` });
     g.append(marks);
     // draw bigger bubbles first so small ones stay clickable
     const order = rows.map((_, i) => i).sort((a, b) => (sizes[b] ?? 0) - (sizes[a] ?? 0));
     for (const i of order) {
       const r = rows[i];
       const color = lField ? ctx.colorFor(lField, r.keys[l.indices[0]]) : ctx.format.colors.default ?? t.dataColors[0];
-      const radius = sField ? 4 + Math.sqrt(sizes[i] / maxSize) * Math.min(28, width / 18) : 5;
+      const radius = sField ? 4 + Math.sqrt(sizes[i] / maxSize) * (maxR - 8) : 5;
       const keys = d.indices.map((k) => r.keys[k]);
       const identity = identityOf(dFields, keys);
       // highlighted points keep full strength; the rest fade (cross-highlight from other visuals)
       const dimmed = r.highlights ? r.highlights[yi] === null || r.highlights[xi] === null : false;
-      const c = s('circle', { cx: x(xs[i]), cy: y(ys[i]), r: radius, fill: color, 'fill-opacity': sField ? 0.7 : 1, stroke: t.surface, 'stroke-width': 2, opacity: dimmed ? 0.25 : markOpacity(ctx, identity) });
+      const c = s('circle', { cx: x(xs[i]), cy: y(ys[i]), r: radius, fill: color, 'fill-opacity': sField ? 0.7 : 1, stroke: t.surface, 'stroke-width': sField ? 1 : 2, opacity: dimmed ? 0.25 : markOpacity(ctx, identity) });
       interactive(
         ctx,
         c,

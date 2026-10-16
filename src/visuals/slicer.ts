@@ -46,13 +46,13 @@ function emitSelection(ctx: RenderContext, target: string, values: CellValue[] |
 function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt: SlicerFormat, container: HTMLElement, compact = false): void {
   const selected = currentValues(ctx);
   const selKeys = new Set(selected?.map(valueKey));
-  const state = ctx.host.state as { search?: string };
+  const state = ctx.host.state as { _search?: string };
   const id = `pbi-sl-${++uidSeq}`;
   const wrap = h('div', { class: `pbi-slicer-list${compact ? ' is-compact' : ''}`, role: 'listbox', 'aria-multiselectable': String(!fmt.single), id });
   if (fmt.search !== false && domain.length > 7) {
-    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: state.search ?? '' }) as HTMLInputElement;
+    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: state._search ?? '' }) as HTMLInputElement;
     input.addEventListener('input', () => {
-      (ctx.host.state as { search?: string }).search = input.value;
+      (ctx.host.state as { _search?: string })._search = input.value;
       const q = input.value.toLowerCase();
       for (const row of wrap.querySelectorAll<HTMLElement>('[data-label]')) row.hidden = !!q && !row.dataset.label!.toLowerCase().includes(q);
     });
@@ -69,7 +69,7 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
     const checked = selected !== null && selKeys.has(valueKey(v));
     const input = h('input', { type: fmt.single ? 'radio' : 'checkbox', name: id, checked });
     const row = h('label', { class: `pbi-slicer-item${checked ? ' is-checked' : ''}`, 'data-label': text, role: 'option', 'aria-selected': String(checked) }, input, h('span', {}, text));
-    if (state.search && !text.toLowerCase().includes(state.search.toLowerCase())) row.hidden = true;
+    if (state._search && !text.toLowerCase().includes(state._search.toLowerCase())) row.hidden = true;
     input.addEventListener('change', (e) => {
       const multi = !fmt.single;
       if (!multi) return emitSelection(ctx, target, checked ? null : [v]);
@@ -113,22 +113,22 @@ function renderTiles(ctx: RenderContext, target: string, domain: CellValue[], fm
 function renderDropdown(ctx: RenderContext, target: string, domain: CellValue[], fmt: SlicerFormat, container: HTMLElement): void {
   const selected = currentValues(ctx);
   const text = selected === null ? fmt.placeholder ?? 'All' : selected.length === 1 ? label(ctx, selected[0]) : `${selected.length} selected`;
-  const state = ctx.host.state as { open?: boolean };
-  const btn = h('button', { type: 'button', class: 'pbi-dropdown-btn', 'aria-haspopup': 'listbox', 'aria-expanded': String(!!state.open) }, h('span', {}, text), h('i', { class: 'pbi-caret' }, '▾'));
+  const state = ctx.host.state as { _open?: boolean };
+  const btn = h('button', { type: 'button', class: 'pbi-dropdown-btn', 'aria-haspopup': 'listbox', 'aria-expanded': String(!!state._open) }, h('span', {}, text), h('i', { class: 'pbi-caret' }, '▾'));
   const wrap = h('div', { class: 'pbi-dropdown' }, btn);
-  if (state.open) {
+  if (state._open) {
     const panel = h('div', { class: 'pbi-dropdown-panel' });
     renderList(ctx, target, domain, fmt, panel, true);
     wrap.append(panel);
     const close = (e: MouseEvent) => {
       if (!wrap.contains(e.target as Node)) {
         document.removeEventListener('mousedown', close);
-        ctx.host.setState({ open: false });
+        ctx.host.setState({ _open: false });
       }
     };
     setTimeout(() => document.addEventListener('mousedown', close));
   }
-  btn.addEventListener('click', () => ctx.host.setState({ open: !state.open }));
+  btn.addEventListener('click', () => ctx.host.setState({ _open: !state._open }));
   container.append(wrap);
 }
 
@@ -170,19 +170,29 @@ function renderBetween(ctx: RenderContext, target: string, domain: CellValue[], 
   const idx = (v: CellValue) => Math.max(0, sorted.findIndex((x) => compareValues(x, v) >= 0));
   const r1 = h('input', { type: 'range', min: 0, max: n, value: idx(lo), class: 'pbi-range', 'aria-label': 'Minimum' }) as HTMLInputElement;
   const r2 = h('input', { type: 'range', min: 0, max: n, value: idx2(sorted, hi), class: 'pbi-range', 'aria-label': 'Maximum' }) as HTMLInputElement;
+  // one visible track with the selected span highlighted between the thumbs
+  const fill = h('i', { class: 'pbi-range-fill' });
+  const paintFill = () => {
+    const i = Math.min(Number(r1.value), Number(r2.value));
+    const j = Math.max(Number(r1.value), Number(r2.value));
+    fill.style.left = `${n ? (i / n) * 100 : 0}%`;
+    fill.style.width = `${n ? ((j - i) / n) * 100 : 100}%`;
+  };
   const sync = () => {
     let i = Number(r1.value);
     let j = Number(r2.value);
     if (i > j) [i, j] = [j, i];
     a.value = toInputValue(sorted[i], isDate);
     b.value = toInputValue(sorted[j], isDate);
+    paintFill();
   };
+  paintFill();
   r1.addEventListener('input', sync);
   r2.addEventListener('input', sync);
   const commit = () => apply(parse(a.value), parse(b.value));
   r1.addEventListener('change', commit);
   r2.addEventListener('change', commit);
-  container.append(h('div', { class: 'pbi-between' }, h('div', { class: 'pbi-between-inputs' }, a, h('span', { class: 'pbi-between-sep' }, '–'), b), h('div', { class: 'pbi-dual-range' }, r1, r2)));
+  container.append(h('div', { class: 'pbi-between' }, h('div', { class: 'pbi-between-inputs' }, a, h('span', { class: 'pbi-between-sep' }, '–'), b), h('div', { class: 'pbi-dual-range' }, h('div', { class: 'pbi-range-track' }, fill), r1, r2)));
 }
 
 function idx2(sorted: CellValue[], v: CellValue): number {
@@ -228,8 +238,8 @@ export function relativeRange(anchor: 'last' | 'next' | 'this', n: number, unit:
 }
 
 function renderRelative(ctx: RenderContext, target: string, fmt: SlicerFormat, container: HTMLElement): void {
-  const st = ctx.host.state as { rel?: { anchor: 'last' | 'next' | 'this'; n: number; unit: 'days' | 'weeks' | 'months' | 'years'; on: boolean } };
-  const rel = st.rel ?? { anchor: fmt.relative?.anchor ?? 'last', n: fmt.relative?.n ?? 30, unit: fmt.relative?.unit ?? 'days', on: !!ctx.host.currentFilter };
+  const st = ctx.host.state as { _rel?: { anchor: 'last' | 'next' | 'this'; n: number; unit: 'days' | 'weeks' | 'months' | 'years'; on: boolean } };
+  const rel = st._rel ?? { anchor: fmt.relative?.anchor ?? 'last', n: fmt.relative?.n ?? 30, unit: fmt.relative?.unit ?? 'days', on: !!ctx.host.currentFilter };
   const anchor = h('select', { class: 'pbi-select', 'aria-label': 'Period' }) as HTMLSelectElement;
   for (const o of ['last', 'next', 'this']) anchor.append(h('option', { value: o, selected: rel.anchor === o }, o[0].toUpperCase() + o.slice(1)));
   const n = h('input', { type: 'number', min: 1, value: rel.n, class: 'pbi-range-input pbi-rel-n', 'aria-label': 'Count', disabled: rel.anchor === 'this' }) as HTMLInputElement;
@@ -237,7 +247,7 @@ function renderRelative(ctx: RenderContext, target: string, fmt: SlicerFormat, c
   for (const o of ['days', 'weeks', 'months', 'years']) unit.append(h('option', { value: o, selected: rel.unit === o }, o[0].toUpperCase() + o.slice(1)));
   const apply = (on = true) => {
     const next = { anchor: anchor.value as 'last', n: Math.max(1, Number(n.value) || 1), unit: unit.value as 'days', on };
-    (ctx.host.state as Record<string, unknown>).rel = next;
+    (ctx.host.state as Record<string, unknown>)._rel = next;
     if (!on) return ctx.host.setFilter(null);
     const [min, max] = relativeRange(next.anchor, next.n, next.unit, fmt.relative?.includeToday ?? true);
     ctx.host.setFilter([{ target, op: 'between', min, max }]);
@@ -290,9 +300,9 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
   }
   const cur = ctx.host.currentFilter?.[0];
   const selected = new Set<string>(cur && cur.op === 'tuples' ? cur.tuples.map(keyOf) : []);
-  const st = ctx.host.state as { expanded?: string[]; search?: string };
+  const st = ctx.host.state as { expanded?: string[]; _search?: string };
   const expanded = new Set(st.expanded ?? []);
-  const q = (st.search ?? '').toLowerCase();
+  const q = (st._search ?? '').toLowerCase();
 
   const emit = (next: Set<string>) => {
     if (!next.size) return ctx.host.setFilter(null);
@@ -307,9 +317,9 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
   };
 
   if (fmt.search !== false) {
-    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: st.search ?? '' }) as HTMLInputElement;
-    input.addEventListener('change', () => ctx.host.setState({ search: input.value }));
-    input.addEventListener('keydown', (e) => e.key === 'Enter' && ctx.host.setState({ search: input.value }));
+    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: st._search ?? '' }) as HTMLInputElement;
+    input.addEventListener('change', () => ctx.host.setState({ _search: input.value }));
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && ctx.host.setState({ _search: input.value }));
     container.append(input);
   }
   const list = h('div', { class: 'pbi-slicer-list pbi-tree', role: 'tree', 'aria-multiselectable': String(!fmt.single) });
@@ -342,7 +352,7 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
   container.append(list);
 }
 
-export const slicer = defineVisual({
+export const slicer = /* @__PURE__ */ defineVisual({
   type: 'slicer',
   displayName: 'Slicer',
   category: 'slicer',

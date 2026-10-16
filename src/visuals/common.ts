@@ -295,13 +295,13 @@ export function interactive(ctx: RenderContext, el: Element, identity: DataPoint
   if (ctx.format.tooltip.show) {
     el.addEventListener('mousemove', (e) => {
       const t = tooltip();
-      ctx.host.showTooltip(e as MouseEvent, t.items, t.title);
+      ctx.host.showTooltip(e as MouseEvent, t.items, t.title, identity);
     });
     el.addEventListener('mouseleave', () => ctx.host.hideTooltip());
     el.addEventListener('focus', () => {
       const r = el.getBoundingClientRect();
       const t = tooltip();
-      ctx.host.showTooltip({ clientX: r.right, clientY: r.top }, t.items, t.title);
+      ctx.host.showTooltip({ clientX: r.right, clientY: r.top }, t.items, t.title, identity);
     });
     el.addEventListener('blur', () => ctx.host.hideTooltip());
   }

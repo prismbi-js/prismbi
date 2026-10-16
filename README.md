@@ -2,7 +2,7 @@
 
 **Power BI-style data modeling and interactive reports for the web, written in TypeScript.**
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 26 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It ships as one zero-dependency library of about 62 KB min+gzip. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It has zero dependencies: about 41 KB min+gzip for the core, about 55 KB for a typical dashboard, and about 71 KB with every visual. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install prismbi
@@ -42,11 +42,19 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 |---|---|
 | **Real BI semantics** | Filter context, row context, context transition, `CALCULATE` with `ALL`, `ALLEXCEPT`, `ALLSELECTED` and `KEEPFILTERS`, time intelligence, auto-exist grouping, and true (non-additive) totals |
 | **Slice and narrow down** | Slicers (list, dropdown, tiles, range, relative date, hierarchy tree, synced across pages), cross-filter and cross-highlight, Ctrl+click multi-select, right-click Include / Exclude, drill down / up / expand all, drill-through pages with Back, a decomposition tree, report, page and visual filters, a filter pane with Basic, Advanced and Top N, bookmarks |
-| **26 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, waterfall, pie, donut, treemap, funnel, scatter and bubble, heatmap, decomposition tree, card, multi-row card, KPI, gauge, table, matrix, slicer, text, and small multiples for cartesian charts |
+| **34 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps, decomposition tree, card, multi-row card, KPI, gauge, table, matrix, slicer, text, and small multiples for cartesian charts |
 | **Light and fast** | Zero dependencies, columnar engine with hash indexes and caches, `requestAnimationFrame`-batched rendering. Typical queries on 30k rows: under 40 ms cold, under 1 ms warm |
-| **Analytics** | Reference lines (constant, average, median, min, max, percentile), trend lines, rule- and gradient-based colours, real totals |
-| **Customizable** | Theme tokens and CSS variables, Power BI theme JSON import, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, PNG/SVG/CSV export |
+| **Analytics** | Continuous time and number axes, log scales, reference lines (constant, average, median, min, max, percentile), trend lines, rule- and gradient-based colours, report-page tooltips, real totals |
+| **Customizable** | Theme tokens and CSS variables, Power BI theme JSON import, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, PNG/SVG/CSV/PDF export, edit-interactions mode |
 | **Accessible** | Keyboard-reachable marks, ARIA roles, legends whenever there are two or more series, show-as-table on every chart, reduced motion, light and dark palettes validated for colour-vision deficiency |
+
+## Lean builds
+
+```ts
+import { Report, DataModel, registerVisual } from 'prismbi/core';
+import { clusteredColumn, lineChart, card, slicer, table } from 'prismbi/visuals';
+[clusteredColumn, lineChart, card, slicer, table].forEach((v) => registerVisual(v));
+```
 
 ## React
 

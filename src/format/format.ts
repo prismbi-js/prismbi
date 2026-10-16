@@ -104,7 +104,7 @@ function formatNumber(n: number, fmt: string | undefined, o: FormatOptions): str
   let unitSuffix = '';
   let units = o.displayUnits ?? 'none';
   if (units === 'auto') units = autoUnits(o.autoReference ?? value);
-  if (units !== 'none' && !pattern.percent) {
+  if (units !== 'none' && !pattern.percent && value !== 0) {
     const [div, sym] = UNIT_DIV[units as keyof typeof UNIT_DIV];
     value /= div;
     unitSuffix = sym;

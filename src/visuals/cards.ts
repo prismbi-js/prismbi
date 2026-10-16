@@ -16,7 +16,7 @@ function deltaEl(ctx: RenderContext, delta: CellValue, field: Parameters<RenderC
   return h('div', { class: 'pbi-card-delta' }, h('b', { class: cls }, `${arrow} ${ctx.fmt(field, Math.abs(delta) * (up ? 1 : 1))}`), label ? ` ${label}` : '');
 }
 
-export const card = defineVisual({
+export const card = /* @__PURE__ */ defineVisual({
   type: 'card',
   displayName: 'Card',
   category: 'card',
@@ -48,7 +48,7 @@ export const card = defineVisual({
   },
 });
 
-export const multiRowCard = defineVisual({
+export const multiRowCard = /* @__PURE__ */ defineVisual({
   type: 'multiRowCard',
   displayName: 'Multi-row card',
   category: 'card',
@@ -74,7 +74,7 @@ export const multiRowCard = defineVisual({
 });
 
 /** KPI: indicator value, goal and a trend sparkline. */
-export const kpi = defineVisual({
+export const kpi = /* @__PURE__ */ defineVisual({
   type: 'kpi',
   displayName: 'KPI',
   category: 'card',
@@ -140,7 +140,7 @@ export const kpi = defineVisual({
 });
 
 /** Radial gauge with min / max / target. */
-export const gauge = defineVisual({
+export const gauge = /* @__PURE__ */ defineVisual({
   type: 'gauge',
   displayName: 'Gauge',
   category: 'card',

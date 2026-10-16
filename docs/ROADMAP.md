@@ -7,7 +7,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | Phase | Theme | Release | Status |
 |---|---|---|---|
 | 1 | Core engine and essential visuals | `0.1` | ✅ Implemented (this repo) |
-| 2 | Pro visuals and deeper interactivity | `0.2` | 🟡 In progress (narrowing-down & analytics shipped) |
+| 2 | Pro visuals and deeper interactivity | `0.2` | ✅ Implemented |
 | 3 | Advanced modeling and DAX coverage | `0.3` | Planned |
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | Planned |
 | 5 | Scale, performance and data connectors | `0.5` | Planned |
@@ -15,7 +15,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. Today the whole engine plus 26 visuals is **≈62 KB min+gzip** (budget 65 KB). Per-visual imports for even leaner builds are planned in Phase 5.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX, query engine, report runtime) is **≈41 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈55 KB**, and everything (all 34 visuals) is **≈71 KB**.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -83,33 +83,41 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ---
 
-## Phase 2: Pro visuals and deeper interactivity 🟡
+## Phase 2: Pro visuals and deeper interactivity ✅
 
 **Goal:** match Power BI's full core visual set and interaction model.
 
-### Shipped (branch `phase-2`)
-- [x] **Right-click menu** on any data point, table or matrix row: **Include**, **Exclude** (become visual filters), **Drill through**, Clear selection, Clear visual filters. Keyboard navigable.
-- [x] **Drill-through pages**: `page.drillthrough.fields`, carry-over of the source visual's filters (`keepAllFilters`), a **← Back** button, a "Drill through" section in the filter pane, `report.drillThrough()` / `report.back()`, and a `drillThrough` event
-- [x] **Slicer sync groups** (`format.slicer.syncGroup`): one selection shared by slicers on any page
-- [x] **Hierarchy slicer**: several fields give a tree with tri-state checkboxes, search and expand/collapse, and emit an exact path (tuples) filter
-- [x] **Expand all down one level** for drill hierarchies (combined labels, e.g. "Bikes · Road Bikes")
-- [x] **Cross-highlighting on line, area and scatter** (the full series fades and the selected part draws solid)
-- [x] **Analytics**: reference lines (constant, average, median, min, max, percentile, with labels and `{value}` templating) and trend lines (least squares) on column, bar, line, area and scatter
-- [x] **Value-based colours**: `colors.rules` (first match wins) and `colors.gradient` (min → mid → max) on single-series charts
-- [x] **New visuals**: waterfall (running total and connectors), heatmap (sequential ramp with a gradient legend), **decomposition tree** (split by any field, click to narrow down, plus automatic "High value / Low value" splits that cross-filter the page), **small multiples** for column, bar, line and area charts (shared axis, one legend)
-- [x] **Export image**: PNG (2×) and SVG per visual from the header export menu, `visual(id).toSvg()` / `exportImage()`
-- [x] 14 new integration tests (82 in total)
+### Narrowing down
+- [x] **Right-click menu** on any data point, table or matrix row: **Include**, **Exclude** (become visual filters), **Drill through**, Clear selection, Clear visual filters
+- [x] **Drill-through pages** (`page.drillthrough`) with carried filters (`keepAllFilters`), a **← Back** button, a pane section, `report.drillThrough()` / `back()`
+- [x] **Slicer sync groups**, a **hierarchy (tree) slicer**, **Expand all down one level**
+- [x] **Decomposition tree** with manual and automatic (High value / Low value) splits that cross-filter the page
+- [x] **Edit interactions** mode: pick Filter, Highlight or None per visual pair (toolbar or `setInteraction()`)
+- [x] **Report tooltips**: a tooltip page (`page.tooltip`) rendered inside the tooltip, filtered to the hovered point (`format.tooltip.page`)
 
-### Remaining
-- Visuals: ribbon, key influencers (statistical), a bullet chart, a calendar heatmap, a sankey, a box plot, a histogram, a radar chart, a choropleth or bubble map (pluggable tile and geo source), and an image or shape visual
-- Continuous axes (numeric or time, log scale), a forecast band, error bars, a zoom slider
-- Conditional formatting on titles and backgrounds (field-value driven)
-- Report tooltips: a tooltip page rendered inside the tooltip
-- "Edit interactions" UI (`interactionsFrom` already exists as an API)
-- PDF export per page
-- Animation of transitions between data states (not just entry)
-- Persist the decomposition tree's splits in the report JSON (they live in visual state today)
-- Mobile layout per page
+### Axes & analytics
+- [x] **Continuous time and number axes** on line and area charts (calendar-aligned ticks), with a categorical override
+- [x] **Log scales** on line and scatter (`valueAxis.scale`, `categoryAxis.scale`)
+- [x] Reference lines (constant, average, median, min, max, percentile), trend lines, rule- and gradient-based colours
+- [x] Cross-highlighting on line, area and scatter
+
+### Visuals (11 new, 34 in total)
+- [x] Waterfall, heatmap, decomposition tree, **small multiples** for column, bar, line and area charts
+- [x] Histogram, box plot, bullet, radar, sankey (multi-stage), ribbon
+- [x] **Bubble map** and **filled map** (Web Mercator, your own GeoJSON or XYZ tiles, wheel zoom and drag pan, and a lat/long grid fallback)
+
+### Output & persistence
+- [x] Export each visual as **PNG or SVG**. Export pages as a **PDF** with a built-in, dependency-free writer that is loaded lazily
+- [x] **Persisted visual state** (`spec.state`): table sorting, matrix expansion and decomposition splits are saved in the report JSON
+- [x] **Lean entry points**: `prismbi/core` plus `prismbi/visuals` for tree-shaken builds, and one registry shared across entries
+- [x] 101 tests in total
+
+### Moved to later phases
+- Key influencers (statistical model): Phase 6, alongside AI insights
+- Calendar heatmap, forecast band, error bars, zoom slider: Phase 5 polish
+- Animated transitions between data states: Phase 4 (studio)
+- Per-page mobile layouts: Phase 4 (studio)
+- Screenshot (visual regression) tests: once the live-browser review is done
 
 **Acceptance:** visual regression tests (Playwright screenshots) on every visual in both themes. Keyboard-only walkthrough of every interaction. Lighthouse accessibility score ≥95 on the demo.
 

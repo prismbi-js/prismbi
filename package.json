@@ -2,11 +2,27 @@
   "name": "prismbi",
   "version": "0.1.0",
   "description": "PrismBI - a Power BI-style, TypeScript-first data modeling & interactive report engine for the web. Columnar data model, DAX-like formulas, cross-filtering visuals, themes, and React bindings.",
-  "keywords": ["bi", "business-intelligence", "dashboard", "power-bi", "dax", "charts", "data-visualization", "report", "analytics", "react", "typescript"],
+  "keywords": [
+    "bi",
+    "business-intelligence",
+    "dashboard",
+    "power-bi",
+    "dax",
+    "charts",
+    "data-visualization",
+    "report",
+    "analytics",
+    "react",
+    "typescript"
+  ],
   "license": "MIT",
   "author": "Santhoshkumar Hariharan",
   "type": "module",
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "./dist/index.js",
+    "./dist/index.cjs",
+    "*.css"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +32,16 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
+    },
+    "./visuals": {
+      "types": "./dist/visuals.d.ts",
+      "import": "./dist/visuals.js",
+      "require": "./dist/visuals.cjs"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",
@@ -23,7 +49,11 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "vite --config examples/vite.config.ts",
@@ -37,8 +67,12 @@
     "react-dom": ">=17"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.3.31",

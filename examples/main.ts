@@ -62,7 +62,7 @@ const report = new Report(document.getElementById('app')!, {
           title: 'Sales by category',
           layout: { x: 0, y: 5, w: 5, h: 7 },
           fields: { category: ['Product[Category]', 'Product[Subcategory]', 'Product[Name]'], values: 'Total Sales' },
-          format: { title: { subtitle: 'Double-click to drill down · right-click to drill through' }, dataLabels: { show: true } },
+          format: { title: { subtitle: 'Hover for a report tooltip · double-click to drill · right-click to drill through' }, dataLabels: { show: true }, tooltip: { page: 'tip-cat' } },
         },
         {
           id: 'trend',
@@ -135,6 +135,33 @@ const report = new Report(document.getElementById('app')!, {
         { id: 'i-wf', type: 'waterfall', title: 'Change vs last year by category', layout: { x: 0, y: 9, w: 5, h: 7 }, fields: { category: 'Product[Category]', values: 'Sales Change' } },
         { id: 'i-heat', type: 'heatmap', title: 'Sales by region and month', layout: { x: 5, y: 9, w: 7, h: 7 }, fields: { rows: 'Region[Region]', columns: 'Date[MonthShort]', values: 'Total Sales' }, format: { dataLabels: { show: false } } },
         { id: 'i-sm', type: 'line', title: 'Monthly sales by region group', layout: { x: 0, y: 16, w: 12, h: 6 }, fields: { category: 'Date[MonthShort]', values: 'Total Sales', smallMultiples: 'Region[Group]' } },
+      ],
+    },
+    {
+      id: 'gallery',
+      name: 'Gallery',
+      layout: { columns: 12, rowHeight: 40 },
+      visuals: [
+        { id: 'g-year', type: 'slicer', title: 'Year (synced)', layout: { x: 0, y: 0, w: 4, h: 2 }, fields: { field: 'Date[Year]' }, format: { slicer: { style: 'tiles', single: true, syncGroup: 'year' } } },
+        { id: 'g-daily', type: 'line', title: 'Daily sales (continuous time axis)', layout: { x: 0, y: 2, w: 8, h: 6 }, fields: { category: 'Date[Date]', values: 'Total Sales' }, format: { lines: { markers: false }, analytics: { trendLine: true } } },
+        { id: 'g-map', type: 'map', title: 'Sales by region', layout: { x: 8, y: 0, w: 4, h: 8 }, fields: { location: 'Region[Region]', legend: 'Region[Group]', latitude: 'Region[Lat]', longitude: 'Region[Lon]', size: 'Total Sales' }, format: { title: { subtitle: 'Bring your own GeoJSON or tiles via format.map' } } },
+        { id: 'g-hist', type: 'histogram', title: 'Order line value distribution', layout: { x: 0, y: 8, w: 4, h: 6 }, fields: { values: 'Sales[SalesAmount]' }, format: { histogram: { bins: 24 } } },
+        { id: 'g-box', type: 'boxPlot', title: 'Order value by category', layout: { x: 4, y: 8, w: 4, h: 6 }, fields: { category: 'Product[Category]', values: 'Sales[SalesAmount]' } },
+        { id: 'g-bullet', type: 'bullet', title: 'Sales vs target', layout: { x: 8, y: 8, w: 4, h: 6 }, fields: { category: 'Region[Group]', value: 'Total Sales', target: 'Sales Target' } },
+        { id: 'g-sankey', type: 'sankey', title: 'Channel to category flow', layout: { x: 0, y: 14, w: 6, h: 7 }, fields: { source: 'Sales[Channel]', target: 'Product[Category]', values: 'Total Sales' } },
+        { id: 'g-radar', type: 'radar', title: 'Category profile by channel', layout: { x: 6, y: 14, w: 6, h: 7 }, fields: { category: 'Sales[Channel]', legend: 'Product[Category]', values: 'Total Sales' } },
+        { id: 'g-ribbon', type: 'ribbon', title: 'Category rank by quarter', layout: { x: 0, y: 21, w: 12, h: 7 }, fields: { category: 'Date[YearQuarter]', legend: 'Product[Category]', values: 'Total Sales' } },
+      ],
+    },
+    {
+      id: 'tip-cat',
+      name: 'Category tooltip',
+      tooltip: { width: 320, height: 210 },
+      layout: { columns: 2, rowHeight: 30, gap: 6 },
+      visuals: [
+        { id: 'tc-sales', type: 'card', title: 'Sales', layout: { x: 0, y: 0, w: 1, h: 2 }, fields: { value: 'Total Sales', delta: 'YoY %' } },
+        { id: 'tc-margin', type: 'card', title: 'Margin', layout: { x: 1, y: 0, w: 1, h: 2 }, fields: { value: 'Margin %' } },
+        { id: 'tc-trend', type: 'area', layout: { x: 0, y: 2, w: 2, h: 4 }, fields: { category: 'Date[MonthShort]', values: 'Total Sales' }, format: { title: { show: false }, header: { show: false }, lines: { endLabels: false }, valueAxis: { show: false } } },
       ],
     },
     {
