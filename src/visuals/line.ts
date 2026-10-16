@@ -110,7 +110,8 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const valueField = all[0]?.field;
   const endLabels = f.lines.endLabels && lineSeries.length <= 4 && kind !== 'combo';
   const labelFmt = labelFormatter(ctx, valueField);
-  const endW = endLabels ? Math.max(...lineSeries.map((se) => measureText(labelFmt(lastValue(se)), fs, t.fontFamily, 600))) + 12 : 10;
+  const fmtOf = (se: Series) => (se.field && se.field !== valueField ? labelFormatter(ctx, se.field) : labelFmt);
+  const endW = endLabels ? Math.max(...lineSeries.map((se) => measureText(fmtOf(se)(lastValue(se)), fs, t.fontFamily, 600))) + 12 : 10;
 
   const top = 10;
   const useLog = va.scale === 'log' && kind === 'line';
@@ -256,11 +257,24 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       if (placed.some((p) => Math.abs(p - y) < fs + 1)) return; // collisions → legend/tooltip carry it
       placed.push(y);
       y = Math.max(fs, Math.min(bottom, y));
-      marks.append(s('text', { x: xAt(li) + 8, y, class: 'pbi-label pbi-end-label', fill: t.foreground, 'font-weight': 600 }, labelFmt(se.values[li])));
+      marks.append(s('text', { x: xAt(li) + 8, y, class: 'pbi-label pbi-end-label', fill: t.foreground, 'font-weight': 600 }, fmtOf(se)(se.values[li])));
     });
   }
   if (f.dataLabels.show && !endLabels)
-    lineSeries.forEach((se) => se.values.forEach((v, i) => v !== null && marks.append(s('text', { x: xAt(i), y: scale(v) - 8, 'text-anchor': 'middle', class: 'pbi-label', fill: t.foregroundSecondary }, labelFmt(v)))));
+    lineSeries.forEach((se) => {
+      const fmt = fmtOf(se);
+      const placed: [number, number, number][] = [];
+      se.values.forEach((v, i) => {
+        if (v === null) return;
+        const text = fmt(v);
+        const w = measureText(text, fs, t.fontFamily);
+        const x = xAt(i);
+        const y = scale(v) - 8;
+        if (placed.some(([a, b, py]) => x - w / 2 < b && x + w / 2 > a && Math.abs(py - y) < fs)) return;
+        placed.push([x - w / 2 - 2, x + w / 2 + 2, y]);
+        marks.append(s('text', { x, y, 'text-anchor': 'middle', class: 'pbi-label', fill: t.foregroundSecondary }, text));
+      });
+    });
 
   // crosshair + hit layer
   const cross = s('line', { y1: top, y2: bottom, stroke: t.axis, 'stroke-width': 1, visibility: 'hidden', 'pointer-events': 'none' });

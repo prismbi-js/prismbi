@@ -1,4 +1,4 @@
-import { s, barPath, measureText } from '../render/svg';
+import { h, s, barPath, measureText } from '../render/svg';
 import { bandScale, linearScale } from '../render/scales';
 import { textOn } from '../render/color';
 import type { RenderContext, VisualDefinition } from './types';
@@ -42,6 +42,12 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
   const f = ctx.format;
   const legend = renderLegend(ctx, series.map((se) => ({ name: se.name, color: se.color, identity: se.identity })));
   const { plot, width, height } = withLegend(ctx, legend);
+  // several measures of very different size on one axis: point the author at small multiples
+  if (mode === 'clustered' && !pv.legendField && series.length > 1 && f.valueAxis.scaleWarning !== false) {
+    const maxes = series.map((se) => Math.max(0, ...se.values.map((v) => Math.abs(v ?? 0)))).filter((m) => m > 0);
+    if (maxes.length > 1 && Math.max(...maxes) / Math.min(...maxes) > 100)
+      plot.append(h('div', { class: 'pbi-scale-note', title: 'These measures differ by more than 100×, so the smaller ones are hard to read on one axis. Consider separate visuals or small multiples.' }, 'ⓘ Mixed scales'));
+  }
 
   // ---- value domain
   const totals = categories.map((_, ci) => series.reduce((a, se) => a + Math.abs(se.values[ci] ?? 0), 0));
@@ -70,6 +76,21 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
   const va = f.valueAxis;
   const valueField = mode === 'percent' ? { name: '%', ref: '%', kind: 'value' as const, format: '0%' } : pv.valueFields[0];
   const labelFmt = labelFormatter(ctx, valueField);
+  // each series labels with its own format (Orders is not "$")
+  const fmtCache = new Map<unknown, (v: number | null) => string>();
+  const fmtOf = (se: (typeof series)[number]) => {
+    if (mode === 'percent') return labelFmt;
+    let fn = fmtCache.get(se);
+    if (!fn) fmtCache.set(se, (fn = labelFormatter(ctx, se.field ?? valueField)));
+    return fn;
+  };
+  // label collision avoidance: a label is drawn only where it doesn't overlap one already placed
+  const placed: [number, number, number, number][] = [];
+  const tryPlace = (x0: number, x1: number, y0: number, y1: number) => {
+    if (placed.some((p) => x0 < p[1] && x1 > p[0] && y0 < p[3] && y1 > p[2])) return false;
+    placed.push([x0, x1, y0, y1]);
+    return true;
+  };
   const fs = t.labelFontSize;
   const showLabels = f.dataLabels.show;
   const useValueColors = series.length === 1 && !pv.legendField && hasValueColors(ctx);
@@ -127,9 +148,12 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
             marks.append(hp);
           }
           if (showLabels) {
-            const text = labelFmt(se.highlights && hl !== null && hl !== undefined ? hl : v);
-            if (measureText(text, fs, t.fontFamily) <= Math.max(thick + gap * 2 + 24, band.step - 2) / Math.max(1, n > 2 ? n / 2 : 1))
-              marks.append(s('text', { x: x + thick / 2, y: v >= 0 ? y1 - 5 : y1 + fs + 3, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary, opacity: op }, text));
+            const text = fmtOf(se)(se.highlights && hl !== null && hl !== undefined ? hl : v);
+            const tw = measureText(text, fs, t.fontFamily);
+            const ty = v >= 0 ? y1 - 5 : y1 + fs + 3;
+            const cx = x + thick / 2;
+            if (tryPlace(cx - tw / 2 - 2, cx + tw / 2 + 2, ty - fs, ty + 2))
+              marks.append(s('text', { x: cx, y: ty, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary, opacity: op }, text));
           }
         });
       } else {
@@ -171,7 +195,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
             marks.append(s('path', { d: `M${x},${Math.min(ya, yh)}h${thick}v${Math.abs(yh - ya)}h${-thick}Z`, fill: colorOf(se, v), 'pointer-events': 'none' }));
           }
           if (showLabels) {
-            const text = labelFmt(mode === 'percent' ? v : se.values[ci]);
+            const text = fmtOf(se)(mode === 'percent' ? v : se.values[ci]);
             if (hgt >= fs + 4 && measureText(text, fs, t.fontFamily) + 6 <= thick)
               marks.append(s('text', { x: x + thick / 2, y: yTop + hgt / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(se.color, t.foreground), opacity: op }, text));
           }
@@ -223,8 +247,14 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           const xh = scale(hl);
           marks.append(s('path', { d: barPath(Math.min(xa, xh), y, Math.abs(xh - xa), thick, f.bars.radius, hl >= 0 ? 'right' : 'left'), fill: colorOf(se, v), 'pointer-events': 'none' }));
         }
-        if (showLabels)
-          marks.append(s('text', { x: v >= 0 ? xb + 5 : xb - 5, y: y + thick / 2 + fs / 3, 'text-anchor': v >= 0 ? 'start' : 'end', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary, opacity: op }, labelFmt(v)));
+        if (showLabels) {
+          const text = fmtOf(se)(v);
+          const tw = measureText(text, fs, t.fontFamily);
+          const tx = v >= 0 ? xb + 5 : xb - 5;
+          const cy = y + thick / 2;
+          if (tryPlace(v >= 0 ? tx : tx - tw, v >= 0 ? tx + tw : tx, cy - fs / 2, cy + fs / 2))
+            marks.append(s('text', { x: tx, y: cy + fs / 3, 'text-anchor': v >= 0 ? 'start' : 'end', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary, opacity: op }, text));
+        }
       });
     } else {
       const thick = Math.min(f.bars.maxThickness * 1.6, band.bandwidth);
@@ -257,7 +287,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         animateIn(ctx, path, 'left');
         marks.append(path);
         if (showLabels) {
-          const text = labelFmt(mode === 'percent' ? v : se.values[ci]);
+          const text = fmtOf(se)(mode === 'percent' ? v : se.values[ci]);
           if (thick >= fs + 2 && measureText(text, fs, t.fontFamily) + 8 <= w)
             marks.append(s('text', { x: x + w / 2, y: y + thick / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(se.color, t.foreground), opacity: op }, text));
         }

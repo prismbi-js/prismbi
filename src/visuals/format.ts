@@ -59,6 +59,8 @@ export interface VisualFormat {
     tickCount: number;
     /** `log` applies to line and scatter charts (positive values only). */
     scale?: 'linear' | 'log';
+    /** Show a hint when clustered measures differ by more than 100× (default true). */
+    scaleWarning?: boolean;
   };
   colors: {
     /** Fixed colour per series name (measure name or legend value). */

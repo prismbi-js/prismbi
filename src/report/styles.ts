@@ -60,6 +60,7 @@ export const CSS = /* css */ `
 .pbi-chart-legend-top{flex-direction:column}.pbi-chart-legend-bottom{flex-direction:column}
 .pbi-chart-legend-left,.pbi-chart-legend-right{flex-direction:row}
 .pbi-plot{flex:1;min-width:0;min-height:0;position:relative}
+.pbi-scale-note{position:absolute;top:0;right:4px;z-index:2;font-size:11px;color:var(--pbi-fg-3);cursor:help;background:var(--pbi-surface);padding:0 4px;border-radius:4px}
 .pbi-svg{display:block;overflow:visible;user-select:none}
 .pbi-map{overflow:hidden;cursor:grab}
 .pbi-svg text{font-family:var(--pbi-font);font-size:var(--pbi-label-size)}

@@ -28,3 +28,19 @@ it('evaluateTable reports measure and column formats', () => {
   const t = makeModel().evaluateTable('SUMMARIZECOLUMNS(Products[Category], "Sales", [Total Sales], "Margin", [Margin %])');
   expect(t.formats).toEqual([undefined, '$#,0', '0.0%']);
 });
+
+it('clustered labels use each series format, never overlap, and flag mixed scales', () => {
+  const el = document.createElement('div');
+  document.body.append(el);
+  const r = createVisual(el, { model: makeModel(), type: 'clusteredColumn', fields: { category: 'Products[Category]', values: ['Total Sales', 'Orders'] }, format: { dataLabels: { show: true } } });
+  r.flush();
+  const labels = [...el.querySelectorAll('text.pbi-label')].map((t) => t.textContent!);
+  expect(labels.some((l) => l.startsWith('$'))).toBe(true); // sales
+  expect(labels.filter((l) => /^\d+$/.test(l)).length).toBeGreaterThan(0); // orders: plain counts, no "$"
+  // no two labels share the same spot
+  const boxes = [...el.querySelectorAll('text.pbi-label')].map((t) => `${t.getAttribute('x')}|${t.getAttribute('y')}`);
+  expect(new Set(boxes).size).toBe(boxes.length);
+  expect(el.querySelector('.pbi-scale-note')?.textContent).toContain('Mixed scales');
+  r.destroy();
+  el.remove();
+});
