@@ -96,4 +96,4 @@ new Report(el, { model, ...definition });
 ## Next
 
 - [Data modeling](data-model.md) · [Expressions](expressions.md) · [Visuals](visuals.md) · [Interactions](interactions.md) · [Theming](theming.md) · [React](react.md) · [Custom visuals](custom-visuals.md)
-- Run the demo: `npm run dev` and open http://localhost:5173. It has about 31k rows, three pages and 24 visuals.
+- Run the demo: `npm run dev` and open http://localhost:5173. It has about 31k rows, 8 pages (including tooltip and drill-through pages), and 61 visual instances.
