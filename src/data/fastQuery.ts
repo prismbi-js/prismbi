@@ -4,12 +4,15 @@ import { valueKey } from './types';
 import type { Filter } from './filters';
 import type { DataModel } from './model';
 import type { QueryRow } from './query';
+import { compileRowExpr, type RowFn, type RowPlan } from '../dax/rowCompile';
 
 /** A leaf aggregation computed in one pass over the fact table. */
 interface Agg {
-  kind: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'distinct' | 'rows';
+  kind: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'distinct' | 'rows' | 'sumx' | 'avgx';
   column?: string;
   isDate?: boolean;
+  /** SUMX / AVERAGEX row expression. */
+  row?: RowPlan;
 }
 
 type Tree =
@@ -65,6 +68,17 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>): Tree
         const b = a && compile(model, e.args[1], plan, seen);
         const alt = e.args[2] ? compile(model, e.args[2], plan, seen) : undefined;
         return a && b && alt !== null ? { t: 'div', a, b, alt } : null;
+      }
+      if ((e.name === 'SUMX' || e.name === 'AVERAGEX') && e.args.length === 2 && e.args[0].type === 'table') {
+        const table = e.args[0].name;
+        if (!model.hasTable(table)) return null;
+        // a grouped query has no outer row context, so bare references to related tables follow relationships
+        const row = compileRowExpr(model, table, e.args[1], true);
+        if (!row) return null;
+        if (plan.table === null) plan.table = table;
+        if (plan.table !== table) return null;
+        plan.aggs.push({ kind: e.name === 'SUMX' ? 'sumx' : 'avgx', row });
+        return { t: 'agg', i: plan.aggs.length - 1 };
       }
       if (e.name === 'COUNTROWS' && e.args.length === 1 && e.args[0].type === 'table') {
         if (!model.hasTable(e.args[0].name)) return null;
@@ -153,8 +167,10 @@ class Acc {
         case 'rows':
           return this.rows || null;
         case 'sum':
+        case 'sumx':
           return this.cnt[i] ? this.sum[i] : null;
         case 'avg':
+        case 'avgx':
           return this.cnt[i] ? this.sum[i] / this.cnt[i] : null;
         case 'min':
           return this.cnt[i] ? (a.isDate ? new Date(this.min[i]) : this.min[i]) : null;
@@ -242,6 +258,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   const cols = plan.aggs.map((a) => (a.column ? (a.kind === 'count' ? ft.column(a.column).values : null) : null));
   const nums = plan.aggs.map((a) => (a.column && a.kind !== 'count' && a.kind !== 'distinct' ? ft.numeric(a.column) : null));
   const codes = plan.aggs.map((a) => (a.column && a.kind === 'distinct' ? ft.codes(a.column).codes : null));
+  const rowFns: (RowFn | null)[] = plan.aggs.map((a) => (a.row ? a.row.bind() : null));
 
   const feed = (acc: Acc, r: number) => {
     acc.rows++;
@@ -252,7 +269,13 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
         const v = cols[i]![r];
         if (v !== null && v !== '') acc.cnt[i]++;
       } else if (a.kind === 'distinct') acc.distinct[i]!.add(codes[i]![r]);
-      else {
+      else if (a.kind === 'sumx' || a.kind === 'avgx') {
+        // unlike stored columns, NaN here is a computed value (0/0), not BLANK
+        const v = rowFns[i]!(r);
+        if (v === null) continue;
+        acc.cnt[i]++;
+        acc.sum[i] += v;
+      } else {
         const v = nums[i]![r];
         if (v !== v) continue;
         acc.cnt[i]++;

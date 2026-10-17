@@ -4,7 +4,7 @@ import { columnRefToString, isColumnRefString, parseColumnRef, valueKey } from '
 import { DataTable } from './table';
 import { generateDateTable } from './dates';
 import type { DateTableOptions } from './dates';
-import type { Filter, FilterContext, FilterSpec, RelFilter, RowsFilter } from './filters';
+import type { ColumnsFilter, Filter, FilterContext, FilterSpec, RelFilter, RowsFilter } from './filters';
 import { compileFilter, contextKey } from './filters';
 import type { Expr } from '../dax/ast';
 import { parseDax } from '../dax/parser';
@@ -122,6 +122,8 @@ export class DataModel {
   private effectiveCache = new Map<string, Effective>();
   private rowsCache = new Map<string, number[]>();
   private allRowsCache = new Map<string, number[]>();
+  private pathCache = new Map<string, Relationship[] | null>();
+  private relatedCache = new Map<string, Int32Array | null>();
   private listeners = new Set<Listener>();
   private calcTables = new Map<string, string>();
   /** Power Query-style steps per table, with the untransformed source rows they replay over. */
@@ -494,8 +496,7 @@ export class DataModel {
   addCalculatedColumn(table: string, name: string, expression: string, opts: ColumnSchema = {}): this {
     const t = this.table(table);
     const ast = parseDax(expression);
-    const values: CellValue[] = new Array(t.rowCount);
-    for (let i = 0; i < t.rowCount; i++) values[i] = this.evaluator.evalScalarInRow(ast, table, i);
+    const values = this.evaluator.evalColumn(ast, table, t.rowCount);
     let type: DataType = opts.type ?? 'string';
     if (!opts.type) {
       const sample = values.find((v) => v !== null);
@@ -708,6 +709,8 @@ export class DataModel {
     this.effectiveCache.clear();
     this.rowsCache.clear();
     this.allRowsCache.clear();
+    this.pathCache.clear();
+    this.relatedCache.clear();
     this.evaluator.clearCache();
   }
 
@@ -820,9 +823,18 @@ export class DataModel {
     return s;
   }
 
-  /** Relationship path from `from` (many side) to `to` (one side). */
+  /** Relationship path from `from` (many side) to `to` (one side). Cached; callers must not mutate it. */
   pathTo(from: string, to: string): Relationship[] | undefined {
     if (from === to) return [];
+    const key = `${from}|${to}`;
+    const hit = this.pathCache.get(key);
+    if (hit !== undefined) return hit ?? undefined;
+    const path = this.findPath(from, to);
+    this.pathCache.set(key, path ?? null);
+    return path;
+  }
+
+  private findPath(from: string, to: string): Relationship[] | undefined {
     const prev = new Map<string, Relationship>();
     const queue = [from];
     const seen = new Set([from]);
@@ -848,19 +860,50 @@ export class DataModel {
     return undefined;
   }
 
+  /**
+   * Row of `targetTable` related to each row of `table` (-1 when there is none), or null without a path. Each hop maps
+   * the foreign key's dictionary codes through the key index once, so RELATED costs two typed-array reads per row.
+   */
+  relatedRows(table: string, targetTable: string): Int32Array | null {
+    const key = `${table}|${targetTable}`;
+    const n = this.table(table).rowCount;
+    let map = this.relatedCache.get(key);
+    // the length check catches tables mutated without a model change notification
+    if (map !== undefined && (map === null || map.length === n)) return map;
+    const path = this.pathTo(table, targetTable);
+    map = null;
+    if (path && path.length) {
+      let rows: Int32Array | null = null; // rows of the current hop's "to" table, per row of `table`
+      for (const rel of path) {
+        const pk = this.table(rel.toTable).index(rel.toColumn);
+        const { codes, dict } = this.table(rel.fromTable).codes(rel.fromColumn);
+        // slot 0 is the blank key; slot k + 1 is dictionary entry k
+        const lookup = new Int32Array(dict.length + 1);
+        lookup[0] = pk.get(valueKey(null))?.[0] ?? -1;
+        for (let k = 0; k < dict.length; k++) lookup[k + 1] = pk.get(valueKey(dict[k]))?.[0] ?? -1;
+        const out = new Int32Array(n);
+        if (!rows) for (let r = 0; r < n; r++) out[r] = lookup[codes[r] + 1];
+        else
+          for (let r = 0; r < n; r++) {
+            const from = rows[r];
+            out[r] = from < 0 ? -1 : lookup[codes[from] + 1];
+          }
+        rows = out;
+      }
+      map = rows;
+    }
+    if (this.relatedCache.size > CACHE_LIMIT) this.relatedCache.clear();
+    this.relatedCache.set(key, map);
+    return map;
+  }
+
   /** Row index in `targetTable` related to `row` of `table` (RELATED semantics). */
   relatedRow(table: string, row: number, targetTable: string): number | undefined {
-    const path = this.pathTo(table, targetTable);
-    if (!path) return undefined;
-    let r: number | undefined = row;
-    let cur = table;
-    for (const rel of path) {
-      const key = this.table(cur).value(rel.fromColumn, r!);
-      r = this.table(rel.toTable).index(rel.toColumn).get(valueKey(key))?.[0];
-      if (r === undefined) return undefined;
-      cur = rel.toTable;
-    }
-    return r;
+    if (table === targetTable) return row;
+    const map = this.relatedRows(table, targetTable);
+    if (!map) return undefined;
+    const r = map[row];
+    return r < 0 ? undefined : r;
   }
 
   relatedValue(table: string, row: number, col: ColumnRef): CellValue {
@@ -985,9 +1028,22 @@ export class DataModel {
     }
     let result: number[] = cand ?? this.allRows(table);
     if (ownScan.length || crossScan.length) {
+      // per filter: a reader per column and one reused tuple, so the scan doesn't allocate per row
+      const scans = [...ownScan, ...crossScan].map((f) => {
+        const cf = f as ColumnsFilter;
+        const readers = cf.columns.map((c): ((row: number) => CellValue) => {
+          const vals = this.table(c.table).column(c.column).values;
+          if (c.table === table) return (row) => vals[row];
+          const map = this.relatedRows(table, c.table);
+          return map ? (row) => (map[row] < 0 ? null : vals[map[row]]) : () => null;
+        });
+        return { test: cf.test, readers, tuple: new Array<CellValue>(readers.length) };
+      });
       result = result.filter((i) => {
-        for (const f of ownScan) if (f.kind === 'columns' && !f.test(f.columns.map((c) => t.column(c.column).values[i]))) return false;
-        for (const f of crossScan) if (f.kind === 'columns' && !f.test(f.columns.map((c) => this.relatedValue(table, i, c)))) return false;
+        for (const s of scans) {
+          for (let j = 0; j < s.readers.length; j++) s.tuple[j] = s.readers[j](i);
+          if (!s.test(s.tuple)) return false;
+        }
         return true;
       });
     }

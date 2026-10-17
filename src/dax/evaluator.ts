@@ -8,6 +8,7 @@ import type { DataModel } from '../data/model';
 import { formatValue } from '../format/format';
 import { PartialAggregates, type PartialKind } from '../data/partials';
 import { fastPathsEnabled } from '../data/fastQuery';
+import { compileRowExpr, type RowFn, type RowPlan } from './rowCompile';
 
 export class DaxError extends Error {
   constructor(message: string) {
@@ -119,6 +120,8 @@ export class Evaluator {
   private measureCache = new Map<string, CellValue>();
   private partials: PartialAggregates;
   private stack: string[] = [];
+  /** Compiled row expressions per AST node and iterated table (WeakMap: ad-hoc ASTs don't accumulate). */
+  private rowPlans = new WeakMap<Expr, Map<string, RowPlan | null>>();
 
   constructor(private model: DataModel) {
     this.partials = new PartialAggregates(model);
@@ -128,6 +131,7 @@ export class Evaluator {
   clearCache(): void {
     this.measureCache.clear();
     this.partials.clear();
+    this.rowPlans = new WeakMap();
   }
 
   // ------------------------------------------------------------ entry points
@@ -140,6 +144,15 @@ export class Evaluator {
 
   evalScalarInRow(expr: Expr, table: string, row: number): CellValue {
     return this.evalScalar(expr, { filters: [], rows: [{ kind: 'row', table, row }] });
+  }
+
+  /** Evaluate `expr` in a row context on each of the first `count` rows of `table` (calculated columns). */
+  evalColumn(expr: Expr, table: string, count: number): CellValue[] {
+    const values: CellValue[] = new Array(count);
+    const f = this.rowFn(table, expr, { filters: [] });
+    if (f) for (let i = 0; i < count; i++) values[i] = f(i);
+    else for (let i = 0; i < count; i++) values[i] = this.evalScalarInRow(expr, table, i);
+    return values;
   }
 
   evalMeasure(name: string, filters: readonly Filter[]): CellValue {
@@ -524,9 +537,54 @@ export class Evaluator {
 
   /** Iterate `t`, evaluating `expr` in a row context for each row. */
   private iterate(t: TableValue, expr: Expr, ctx: EvalContext): CellValue[] {
+    const f = t.kind === 'rows' ? this.rowFn(t.table, expr, ctx) : null;
+    if (f && t.kind === 'rows') {
+      const rows = t.rows;
+      const out: CellValue[] = new Array(rows.length);
+      for (let i = 0; i < rows.length; i++) out[i] = f(rows[i]);
+      return out;
+    }
     const out: CellValue[] = [];
     for (const b of this.bindings(t)) out.push(this.evalScalar(expr, { ...ctx, rows: [...(ctx.rows ?? []), b] }));
     return out;
+  }
+
+  /** `expr` compiled for a row context on `table`, or null when it needs the interpreter (or fast paths are off). */
+  private rowFn(table: string, expr: Expr, ctx: EvalContext): RowFn | null {
+    if (!fastPathsEnabled()) return null;
+    const lenient = !ctx.rows?.length;
+    let byTable = this.rowPlans.get(expr);
+    if (!byTable) this.rowPlans.set(expr, (byTable = new Map()));
+    const key = lenient ? `${table}|lenient` : table;
+    let plan = byTable.get(key);
+    if (plan === undefined) byTable.set(key, (plan = this.model.hasTable(table) ? compileRowExpr(this.model, table, expr, lenient) : null));
+    return plan ? plan.bind() : null;
+  }
+
+  /** SUMX / AVERAGEX: compiled row expressions are summed in place, without materialising the values. */
+  private sumX(name: 'SUMX' | 'AVERAGEX', args: Expr[], ctx: EvalContext): CellValue {
+    const t = this.evalTable(args[0], ctx);
+    const f = t.kind === 'rows' ? this.rowFn(t.table, args[1], ctx) : null;
+    let sum = 0;
+    let n = 0;
+    if (f && t.kind === 'rows') {
+      const rows = t.rows;
+      for (let i = 0; i < rows.length; i++) {
+        const v = f(rows[i]);
+        if (v !== null) {
+          sum += v;
+          n++;
+        }
+      }
+    } else {
+      for (const v of this.iterate(t, args[1], ctx)) {
+        if (v === null || v === '') continue;
+        sum += num(v);
+        n++;
+      }
+    }
+    if (!n) return null;
+    return name === 'SUMX' ? sum : sum / n;
   }
 
   private colArg(e: Expr | undefined, fn: string): ColumnRef {
@@ -889,15 +947,8 @@ export class Evaluator {
 
       // ---- iterators
       case 'SUMX':
-        return iter((v) => {
-          const n = nums(v);
-          return n.length ? n.reduce((a, b) => a + b, 0) : null;
-        });
       case 'AVERAGEX':
-        return iter((v) => {
-          const n = nums(v);
-          return n.length ? n.reduce((a, b) => a + b, 0) / n.length : null;
-        });
+        return this.sumX(name, args, ctx);
       case 'MINX':
         return iter((v) => this.extreme(v, true));
       case 'MAXX':

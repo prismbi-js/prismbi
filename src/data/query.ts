@@ -152,15 +152,10 @@ export function resolveGroupField(model: DataModel, ref: string): QueryField & {
 function resolver(model: DataModel, anchor: string, col: ColumnRef): (row: number) => CellValue {
   const target = model.table(col.table).column(col.column).values;
   if (col.table === anchor) return (r) => target[r];
-  const path = model.pathTo(anchor, col.table)!;
-  const steps = path.map((rel) => ({ fk: model.table(rel.fromTable).column(rel.fromColumn).values, pk: model.table(rel.toTable).index(rel.toColumn) }));
+  const map = model.relatedRows(anchor, col.table)!;
   return (r) => {
-    let cur: number | undefined = r;
-    for (const s of steps) {
-      cur = s.pk.get(valueKey(s.fk[cur!]))?.[0];
-      if (cur === undefined) return null;
-    }
-    return target[cur!];
+    const t = map[r];
+    return t < 0 ? null : target[t];
   };
 }
 
