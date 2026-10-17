@@ -114,6 +114,9 @@ export class VisualHost {
     const themeStyles = this.rt.theme.visualStyles ?? {};
     const f = deepMerge(baseFormat, this.def.defaultFormat as Partial<VisualFormat>, themeStyles['*'] as Partial<VisualFormat>, themeStyles[this.spec.type] as Partial<VisualFormat>, this.spec.format as Partial<VisualFormat>);
     if (this.spec.title !== undefined && !this.spec.format?.title?.text) f.title = { ...f.title, text: this.spec.title };
+    if (f.title.text && this.rt.translate) f.title = { ...f.title, text: this.rt.translate('title', this.id, f.title.text) };
+    const text = (f as VisualFormat & { text?: { content?: string } }).text;
+    if (text?.content !== undefined && this.rt.translate) (f as VisualFormat & { text?: { content?: string } }).text = { ...text, content: this.rt.translate('text', this.id, text.content) };
     return f;
   }
 
@@ -268,7 +271,7 @@ export class VisualHost {
       return;
     }
     // role bindings for 'any' roles and roles the visual's custom query re-mapped
-    const data = this.data!;
+    const data = this.localized(this.data!);
     const roleFn = (name: string): RoleBinding => {
       const b = roles.get(name);
       if (!b) return { kind: 'group', indices: [], fields: [] };
@@ -310,9 +313,22 @@ export class VisualHost {
     this.rt.emit('rendered', { visualId: this.id, ms: performance.now() - t0 });
   }
 
+  /** The result with field display names translated for the current locale. */
+  private localized(data: QueryResult): QueryResult {
+    const tr = this.rt.translate;
+    if (!tr) return data;
+    const rename = (f: QueryField) => {
+      const name = tr.call(this.rt, 'field', f.ref, f.name);
+      return name === f.name ? f : { ...f, name };
+    };
+    const groups = data.groups.map(rename);
+    const values = data.values.map(rename);
+    return groups.every((g, i) => g === data.groups[i]) && values.every((v, i) => v === data.values[i]) ? data : { ...data, groups, values };
+  }
+
   /** Plain-language summary of what the visual shows (screen readers, alt text). */
   describe(): string {
-    return narrate(this.spec.type, this.data, { typeName: this.def.displayName, title: this.spec.title ?? this.format().title.text, fmt: (field, v) => formatValue(v, field?.format, { locale: this.rt.locale, displayUnits: typeof v === 'number' && Math.abs(v) >= 10_000 ? 'auto' : 'none' }) });
+    return narrate(this.spec.type, this.data && this.localized(this.data), { typeName: this.def.displayName, title: this.format().title.text || undefined, fmt: (field, v) => formatValue(v, field?.format, { locale: this.rt.locale, displayUnits: typeof v === 'number' && Math.abs(v) >= 10_000 ? 'auto' : 'none' }) });
   }
 
   private applyNarration(f: VisualFormat): void {

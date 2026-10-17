@@ -81,6 +81,22 @@ export interface ReportDefinition {
   /** Filters on all pages. */
   filters?: FilterSpec[];
   bookmarks?: Bookmark[];
+  /**
+   * Text per locale (`'fr'`, `'fr-CA'`…): page names, visual titles, text-box content and field display names
+   * (axis titles, legends, tooltips). The report's `locale` picks one, falling back from `fr-CA` to `fr`.
+   */
+  translations?: Record<string, ReportTranslation>;
+}
+
+export interface ReportTranslation {
+  /** Page id → name. */
+  pages?: Record<string, string>;
+  /** Visual id → title and/or text-box content. */
+  visuals?: Record<string, { title?: string; text?: string }>;
+  /** Measure name or `Table[Column]` → display name. */
+  fields?: Record<string, string>;
+  /** Report name. */
+  name?: string;
 }
 
 export interface ReportChrome {
@@ -105,6 +121,8 @@ export interface ReportOptions extends Partial<ReportDefinition> {
    * model. Visuals render asynchronously; slicers and metadata still use `model`.
    */
   engine?: QueryEngine;
+  /** Text direction; `'auto'` (default) is right-to-left for Arabic, Hebrew, Persian and Urdu locales. */
+  direction?: 'ltr' | 'rtl' | 'auto';
   /** `'auto'` (default) uses a page's phone layout below `mobileBreakpoint`; `'desktop'` / `'mobile'` force one. */
   layoutMode?: 'auto' | 'desktop' | 'mobile';
   /** Width in px below which phone layouts apply (default 640). */
@@ -268,6 +286,8 @@ export class Report implements ReportRuntime {
     this._layoutMode = opts.layoutMode ?? 'auto';
     this.mobileBreakpoint = opts.mobileBreakpoint ?? 640;
     this.locale = opts.locale;
+    this.translations = opts.translations ?? {};
+    this.direction = opts.direction ?? 'auto';
     this.name = opts.name ?? 'Report';
     this._theme = getTheme(opts.theme);
     this.reportFilters = opts.filters ?? [];
@@ -310,6 +330,7 @@ export class Report implements ReportRuntime {
     if (!this.pages.length) this.addPage({ name: 'Page 1', visuals: [] }, false);
     const initial = opts.initialPage ? this.pageIndex(opts.initialPage) : 0;
     this.applyTheme();
+    this.applyDirection();
     this.showPage(Math.max(0, initial), false);
   }
 
@@ -321,6 +342,45 @@ export class Report implements ReportRuntime {
   /** Engine running visual queries (see `ReportOptions.engine`). */
   readonly engine?: QueryEngine;
   readonly measure?: (visualId: string) => { width: number; height: number } | undefined;
+  private translations: Record<string, ReportTranslation> = {};
+  private direction: 'ltr' | 'rtl' | 'auto' = 'auto';
+
+  /** The translation for the current locale (exact, then language only), if any. */
+  private activeTranslation(): ReportTranslation | undefined {
+    const loc = this.locale;
+    if (!loc) return undefined;
+    return this.translations[loc] ?? this.translations[loc.split('-')[0]];
+  }
+
+  /** Translated text for a page, visual title, text-box or field, or the fallback. */
+  translate(kind: 'page' | 'title' | 'text' | 'field', key: string, fallback: string): string {
+    const t = this.activeTranslation();
+    if (!t) return fallback;
+    if (kind === 'page') return t.pages?.[key] ?? fallback;
+    if (kind === 'field') return t.fields?.[key] ?? t.fields?.[key.replace(/^\[|\]$/g, '')] ?? fallback;
+    const v = t.visuals?.[key];
+    return (kind === 'title' ? v?.title : v?.text) ?? fallback;
+  }
+
+  /** Switch language and number/date locale at runtime (re-renders; direction follows in `'auto'`). */
+  setLocale(locale: string | undefined): void {
+    this.locale = locale;
+    this.applyDirection();
+    this._modelVersion++; // visual caches include the version, so labels and formats refresh
+    this.renderTabs();
+    this.renderToolbar();
+    for (const p of this.pages) {
+      p.el?.setAttribute('aria-label', this.translate('page', p.def.id!, p.def.name));
+      for (const host of p.hosts.values()) host.update(host.spec);
+    }
+    this.schedule();
+  }
+
+  private applyDirection(): void {
+    const rtl = this.direction === 'rtl' || (this.direction === 'auto' && /^(ar|he|fa|ur|yi|ps|sd|ug)\b/i.test(this.locale ?? ''));
+    this.root.setAttribute('dir', rtl ? 'rtl' : 'ltr');
+  }
+
   private _layoutMode: 'auto' | 'desktop' | 'mobile' = 'auto';
   private mobileBreakpoint = 640;
   private phoneActive = false;
@@ -789,7 +849,7 @@ export class Report implements ReportRuntime {
       items.push({ label: 'Exclude', hint: 'remove this', onClick: () => this.setVisualFilters(visualId, [...(found.spec.filters ?? []), identityFilter(identity, true)]) });
     }
     const targets = this.pages.filter((p) => p !== found.page && p.def.drillthrough?.fields.some((f) => identity.columns.some((c) => sameRef(c, f))));
-    targets.forEach((p, i) => items.push({ label: `Drill through: ${p.def.name}`, separator: i === 0 && items.length > 0, onClick: () => this.drillThrough(p.def.id!, identity, visualId) }));
+    targets.forEach((p, i) => items.push({ label: `Drill through: ${this.translate('page', p.def.id!, p.def.name)}`, separator: i === 0 && items.length > 0, onClick: () => this.drillThrough(p.def.id!, identity, visualId) }));
     for (const provider of menuProviders()) {
       let extra: MenuItem[] = [];
       try {
@@ -1021,7 +1081,7 @@ export class Report implements ReportRuntime {
     Object.assign(p.def, patch);
     if (p.el) {
       this.applyPageLayout(p);
-      p.el.setAttribute('aria-label', p.def.name);
+      p.el.setAttribute('aria-label', this.translate('page', p.def.id!, p.def.name));
       for (const host of p.hosts.values()) host.invalidate();
       this.editor?.paintGrid();
     }
@@ -1069,6 +1129,7 @@ export class Report implements ReportRuntime {
     this.name = def.name ?? this.name;
     this.reportFilters = def.filters ?? [];
     this.bookmarks = def.bookmarks ?? [];
+    if (def.translations) this.translations = def.translations;
     for (const p of def.pages) this.addPage(p, false);
     if (!this.pages.length) this.addPage({ name: 'Page 1', visuals: [] }, false);
     const idx = keepPage ? this.pageIndex(keepPage) : -1;
@@ -1150,7 +1211,7 @@ export class Report implements ReportRuntime {
   }
 
   private mountPage(p: PageState, parent: HTMLElement): void {
-    p.el = h('div', { class: 'pbi-page', role: 'tabpanel', 'aria-label': p.def.name });
+    p.el = h('div', { class: 'pbi-page', role: 'tabpanel', 'aria-label': this.translate('page', p.def.id!, p.def.name) });
     p.el.addEventListener('pointerdown', (e) => {
       if (this.editor && e.target === p.el) this.setActiveVisual(null);
     });
@@ -1399,7 +1460,7 @@ export class Report implements ReportRuntime {
     this.tabs.replaceChildren();
     this.pages.forEach((p, i) => {
       if (p.def.hidden || p.def.tooltip) return;
-      const b = h('button', { type: 'button', class: 'pbi-tab', role: 'tab', 'aria-selected': String(i === this.current) }, p.def.name);
+      const b = h('button', { type: 'button', class: 'pbi-tab', role: 'tab', 'aria-selected': String(i === this.current) }, this.translate('page', p.def.id!, p.def.name));
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         if (i !== this.current) this.showPage(i);
@@ -1466,7 +1527,7 @@ export class Report implements ReportRuntime {
 
   /** Serialisable report definition (pages, visuals, filters, bookmarks). Dates are tagged and revived by {@link Report.parse}. */
   toJSON(): ReportDefinition {
-    return toPlain({ version: REPORT_SCHEMA_VERSION, name: this.name, pages: this.pages.map((p) => p.def), filters: this.reportFilters, bookmarks: this.bookmarks }) as ReportDefinition;
+    return toPlain({ version: REPORT_SCHEMA_VERSION, name: this.name, pages: this.pages.map((p) => p.def), filters: this.reportFilters, bookmarks: this.bookmarks, ...(Object.keys(this.translations).length ? { translations: this.translations } : {}) }) as ReportDefinition;
   }
 
   /** Parse a JSON string produced from {@link Report.toJSON}. */

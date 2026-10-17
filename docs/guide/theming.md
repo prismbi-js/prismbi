@@ -112,3 +112,28 @@ formatValue(1500000, '$#,0', { displayUnits: 'auto' }); // "$1.5M"
   - Marks are focusable, Enter selects, and tooltips follow focus.
   - Every chart has `role="img"` with its title.
   - Every visual offers **Show as table**.
+
+## Localization
+
+Translations travel with the report definition, one entry per locale:
+
+```ts
+new Report(el, {
+  model,
+  pages,
+  locale: 'fr-CA',                     // also drives number and date formatting
+  translations: {
+    fr: {
+      pages: { overview: 'Aperçu' },
+      visuals: { cols: { title: 'Ventes par catégorie' }, note: { text: 'Bonjour' } },
+      fields: { 'Total Sales': 'Ventes totales', 'Product[Category]': 'Catégorie' },
+    },
+  },
+});
+report.setLocale('ar-EG');             // switch at runtime
+```
+
+- **Locale matching:** the exact locale is tried first, then its language (`fr-CA` → `fr`). Anything untranslated keeps its original text.
+- **Field names:** these rename axis titles, legends, tooltips and screen-reader narration, without touching the model.
+- **Direction:** Arabic, Hebrew, Persian and Urdu locales switch the report to right-to-left. `direction: 'ltr' | 'rtl'` forces either.
+- **Saving:** `translations` are kept by `toJSON()` and `load()`.

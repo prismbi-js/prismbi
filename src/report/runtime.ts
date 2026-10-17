@@ -23,6 +23,8 @@ export interface ReportRuntime {
   readonly locale?: string;
   readonly modelVersion: number;
   readonly engine?: QueryEngine;
+  /** Translated text for the current locale (page names, visual titles, text-box content, field names). */
+  translate?(kind: 'page' | 'title' | 'text' | 'field', key: string, fallback: string): string;
   /** Phone layout position (`null` = hidden on phones), or undefined to use the visual's own layout. */
   layoutFor?(visualId: string): import('../visuals/types').VisualLayout | null | undefined;
   /** Explicit visual sizes (headless rendering, where layout reports 0). */
