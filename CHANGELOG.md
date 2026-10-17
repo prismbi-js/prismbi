@@ -8,6 +8,7 @@
 - **Localization:** `ReportDefinition.translations`, `ReportOptions.direction`, `report.setLocale()`, `report.translate()`.
 - **Lineage:** `lineage`, `impactOf`, `expressionRefs`, `renameInExpression`, `renameModelField`, `model.renameColumn`, `DataTable.renameColumn`. The Studio measure and column renames now update dependent DAX (previously only visual fields).
 
+- **SQL: USERELATIONSHIP, measures in FILTER, row-level security:** pushed down in filter-context mode (relationship swaps, per-row context transition, role rules that ALL can't remove).
 - **SQL filter-context mode:** `toSql` falls back to correlated subqueries with DAX filter-context semantics: `ALL` / `ALLSELECTED` / `ALLEXCEPT` / `REMOVEFILTERS`, `CALCULATE` replacing filters, `FILTER(ALL(...), ...)`, time intelligence (`SAMEPERIODLASTYEAR`, `DATEADD`, `DATES*TD`, `TOTAL*TD`, `PREVIOUS*`, `DATESBETWEEN`), single-direction filter flow. `SqlPlan.mode`.
 - **Time intelligence:** `DATEADD` / `SAMEPERIODLASTYEAR` extend a month's last day to the rest of the target month, as in DAX.
 - **Power BI import:** calculation groups (TMDL and model.bim) with ordinals, precedence and format string definitions.

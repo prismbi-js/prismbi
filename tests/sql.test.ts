@@ -102,7 +102,9 @@ model
   .addMeasure('Region Group Sales', 'CALCULATE([Total Sales], ALLEXCEPT(Region, Region[Group]))')
   .addMeasure('Big Orders', 'COUNTROWS(FILTER(Sales, Sales[SalesAmount] > 1000))')
   .addMeasure('Sales MTD', 'TOTALMTD([Total Sales], Date[Date])')
-  .addMeasure('Sales QTD', 'TOTALQTD([Total Sales], Date[Date])');
+  .addMeasure('Sales QTD', 'TOTALQTD([Total Sales], Date[Date])')
+  .addMeasure('Big Product Sales', 'CALCULATE([Total Sales], FILTER(VALUES(Product[Name]), [Total Sales] > 400000))')
+  .addMeasure('Big Products', 'COUNTROWS(FILTER(VALUES(Product[Name]), [Total Sales] > 400000))');
 
 const y2025 = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
 const CONTEXT_CASES: [string, QuerySpec][] = [
@@ -117,6 +119,8 @@ const CONTEXT_CASES: [string, QuerySpec][] = [
   ['ALLEXCEPT', { groupBy: ['Region[Region]'], values: ['Total Sales', 'Region Group Sales'] }],
   ['COUNTROWS(FILTER(...)), sorted, Top N filter', { groupBy: ['Product[Name]'], values: ['Big Orders', 'Sales LY'], filters: [{ target: 'Product[Name]', op: 'topN', n: 5, by: 'Total Sales' }, ...y2025], orderBy: [{ field: 'Big Orders', direction: 'desc' }] }],
   ['no grouping', { values: ['Sales LY', 'Sales YTD'], filters: y2025 }],
+  ['USERELATIONSHIP (sales by ship date)', { groupBy: ['Date[Year]', 'Date[Quarter]'], values: ['Total Sales', 'Sales by Ship Date'] }],
+  ['measures inside FILTER conditions (context transition)', { groupBy: ['Product[Category]'], values: ['Big Product Sales', 'Big Products'], filters: y2025 }],
   ['highlights in context mode', { groupBy: ['Product[Category]'], values: ['Sales LY'], highlight: [{ target: 'Region[Country]', op: 'eq', value: 'Canada' }], filters: y2025 }],
 ];
 
@@ -127,6 +131,31 @@ describe.skipIf(!sqliteOk)('sqlEngine on SQLite: filter-context mode', () => {
       expectSame(await engine.query(spec), model.query(spec));
     });
   }
+});
+
+describe.skipIf(!sqliteOk)('sqlEngine on SQLite: row-level security', () => {
+  const secure = () =>
+    buildModel()
+      .addRole('Europe', { Region: 'Region[Group] = "Europe"' })
+      .addRole('Manager', { Region: 'Region[Country] = USERNAME()' })
+      .addMeasure('All Region Sales', 'CALCULATE([Total Sales], ALL(Region))');
+  const spec: QuerySpec = { groupBy: ['Product[Category]'], values: ['Total Sales', 'All Region Sales', 'Share of Category'], totals: true };
+
+  it('applies role rules, which ALL cannot remove', async () => {
+    const m = secure().setRoles(['Europe']);
+    const e = sqlEngine(m, { run, dialect: 'sqlite', columns: { Sales: { ShipDate: 'ShipDate' } } });
+    expect(e.toSql(spec).mode).toBe('context');
+    const r = await e.query(spec);
+    expectSame(r, m.query(spec));
+    expect(r.totals![0]).toBeLessThan(buildModel().query({ values: ['Total Sales'] }).rows[0].values[0] as number);
+    expect(r.totals![1]).toBeCloseTo(r.totals![0] as number, 6); // ALL(Region) stays inside the role
+  });
+
+  it('unions roles and resolves USERNAME()', async () => {
+    const m = secure().setRoles(['Europe', 'Manager'], { user: 'Canada' });
+    const e = sqlEngine(m, { run, dialect: 'sqlite', columns: { Sales: { ShipDate: 'ShipDate' } } });
+    expectSame(await e.query(spec), m.query(spec));
+  });
 });
 
 describe.skipIf(!sqliteOk)('sqlEngine on SQLite', () => {
@@ -171,12 +200,13 @@ describe('toSql', () => {
     // time intelligence and ALLSELECTED now translate (filter-context mode); USERELATIONSHIP still doesn't
     expect(toSql(model, { values: ['Sales LY'] }).mode).toBe('context');
     expect(toSql(model, { values: ['Total Sales'] }).mode).toBe('aggregate');
-    expect(() => toSql(model, { values: ['Sales by Ship Date'] })).toThrow(/USERELATIONSHIP is not pushed down/);
-    const strict = sqlEngine(model, { run: async () => [] });
-    await expect(strict.query({ values: ['Sales by Ship Date'] })).rejects.toThrow(SqlUnsupportedError);
-    const lenient = sqlEngine(model, { run: async () => [], fallback: 'model' });
+    const m = buildModel().addMeasure('No Cross', 'CALCULATE([Total Sales], CROSSFILTER(Sales[ProductKey], Product[ProductKey], NONE))');
+    expect(() => toSql(m, { values: ['No Cross'] })).toThrow(/CROSSFILTER is not pushed down/);
+    const strict = sqlEngine(m, { run: async () => [] });
+    await expect(strict.query({ values: ['No Cross'] })).rejects.toThrow(SqlUnsupportedError);
+    const lenient = sqlEngine(m, { run: async () => [], fallback: 'model' });
     const y = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
-    expect((await lenient.query({ values: ['Sales by Ship Date'], filters: y })).rows[0].values[0]).toBe(model.query({ values: ['Sales by Ship Date'], filters: y }).rows[0].values[0]);
+    expect((await lenient.query({ values: ['No Cross'], filters: y })).rows[0].values[0]).toBe(m.query({ values: ['No Cross'], filters: y }).rows[0].values[0]);
   });
 });
 

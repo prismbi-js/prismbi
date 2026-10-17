@@ -71,6 +71,14 @@ const refOf = (t: { table: string; column: string } | string) => (typeof t === '
 
 // ---------------------------------------------------------------- builder
 
+/** A relationship to join along instead of the active one between the same tables (USERELATIONSHIP). */
+interface RelSwap {
+  fromTable: string;
+  fromColumn: string;
+  toTable: string;
+  toColumn: string;
+}
+
 /** FROM/JOIN/WHERE state for one SELECT. */
 class Scope {
   private aliases = new Map<string, string>();
@@ -83,6 +91,8 @@ class Scope {
     private rowExpr: (s: Scope, e: Expr) => string,
     /** Alias prefix, so nested queries never collide. */
     readonly prefix = 't',
+    /** Relationships that replace the active one between the same two tables. */
+    private rels: RelSwap[] = [],
   ) {
     this.aliases.set(base, `${prefix}0`);
   }
@@ -94,9 +104,13 @@ class Scope {
   private alias(table: string): string {
     const known = this.aliases.get(table);
     if (known) return known;
-    const path = this.model.pathTo(this.base, table) ?? unsupported(`No many-to-one relationship path from ${this.base} to ${table}`);
+    let path: RelSwap[] | undefined = this.model.pathTo(this.base, table);
+    // an inactive relationship turned on by USERELATIONSHIP may be the only link
+    if (!path) path = this.rels.filter((r) => r.fromTable === this.base && r.toTable === table).slice(0, 1);
+    if (!path.length && this.base !== table) unsupported(`No many-to-one relationship path from ${this.base} to ${table}`);
     let alias = `${this.prefix}0`;
-    for (const rel of path) {
+    for (const step of path) {
+      const rel = this.rels.find((r) => r.fromTable === step.fromTable && r.toTable === step.toTable) ?? step;
       const next = this.aliases.get(rel.toTable);
       if (next) {
         alias = next;
@@ -398,7 +412,10 @@ const toSpec = (f: FilterSpec | Filter): FilterSpec => {
  * for a given FROM scope.
  */
 interface CtxEntry {
-  kind: 'base' | 'group' | 'calc';
+  /** `security` entries (row-level security) survive ALL / REMOVEFILTERS. */
+  kind: 'base' | 'group' | 'calc' | 'security';
+  /** USERELATIONSHIP: join along this relationship instead (not a predicate). */
+  rel?: RelSwap;
   cols: string[];
   tables: string[];
   build: (s: Scope) => string;
@@ -443,15 +460,52 @@ class ContextTranslator {
     return `c.${name}`;
   }
 
-  /** The hoisted scalars of the last build, as `expr AS hN` select items (and reset). */
-  takeHoisted(): string[] {
-    const out = [...this.hoisted].map(([sql, name]) => `${sql} AS ${name}`);
+  /** Number of grouping columns of the query being built (for hoisted sets). */
+  groupCount = 0;
+  private sets = new Map<string, string>();
+
+  /** The hoisted scalars (`expr AS hN` select items) and sets (`[query, name]`) of the last build, and reset. */
+  takeHoisted(): { scalars: string[]; sets: [string, string][] } {
+    const out = { scalars: [...this.hoisted].map(([sql, name]) => `${sql} AS ${name}`), sets: [...this.sets] };
     this.hoisted.clear();
+    this.sets.clear();
     return out;
   }
 
-  scope(table: string): Scope {
-    return new Scope(this.model, this.opts, table, (sc, e) => this.tr.rowExpr(sc, e), `q${++this.seq}_`);
+  /**
+   * "The current row of `s` is one of the rows of `table` (under `inner`) that satisfy `cond`", for FILTER
+   * conditions with measures. When grouping, the set is computed once per group in a materialized CTE and each fact
+   * row only does a lookup; the measure inside runs per member row, not per fact row.
+   */
+  private membership(s: Scope, table: string, row: { table: string; column: string }[], inner: CtxEntry[], cond: (y: Scope) => string): string {
+    const y = this.scope(table, inner);
+    const keys = row.map((c) => y.col(c));
+    const preds = [...this.applicable(table, inner).filter((e) => !e.rel).map((e) => e.build(y)), cond(y)];
+    const lhs = row.length === 1 ? s.col(row[0]) : `(${row.map((c) => s.col(c)).join(', ')})`;
+    if (this.hoistTo !== 'groups') return `${lhs} IN (SELECT ${keys.join(', ')}\n${y.from()}\nWHERE ${preds.join(' AND ')})`;
+    const g = Array.from({ length: this.groupCount }, (_, i) => i);
+    const sql = `SELECT ${[...g.map((i) => `c.g${i}`), ...keys.map((k, i) => `${k} AS k${i}`)].join(', ')}\nFROM hz AS c CROSS JOIN ${y.from().replace(/^FROM /, '')}\nWHERE ${preds.join(' AND ')}`;
+    let name = this.sets.get(sql);
+    if (!name) {
+      name = `hs${this.sets.size}`;
+      this.sets.set(sql, name);
+    }
+    const match = g.map((i) => this.isNotDistinct(`${name}.g${i}`, `c.g${i}`));
+    return `${lhs} IN (SELECT ${keys.map((_, i) => `${name}.k${i}`).join(', ')} FROM ${name}${match.length ? ` WHERE ${match.join(' AND ')}` : ''})`;
+  }
+
+  /** Whether a condition needs a per-row context transition (a measure or CALCULATE). */
+  private transitions(e: Expr): boolean {
+    if (e.type === 'bracket') return this.model.hasMeasure(e.name);
+    if (e.type === 'call') return e.name.toUpperCase() === 'CALCULATE' || e.args.some((x) => this.transitions(x));
+    if (e.type === 'binary') return this.transitions(e.left) || this.transitions(e.right);
+    if (e.type === 'unary') return this.transitions(e.operand);
+    return false;
+  }
+
+  scope(table: string, ctx: CtxEntry[] = []): Scope {
+    const rels = ctx.flatMap((e) => (e.rel ? [e.rel] : []));
+    return new Scope(this.model, this.opts, table, (sc, e) => this.tr.rowExpr(sc, e), `q${++this.seq}_`, rels);
   }
 
   isNotDistinct(a: string, b: string): string {
@@ -470,9 +524,9 @@ class ContextTranslator {
 
   /** `(SELECT <select> FROM table … WHERE <filters in ctx that reach table>)`. */
   subquery(table: string, select: (s: Scope) => string, ctx: CtxEntry[], extra: ((s: Scope) => string)[] = []): string {
-    const s = this.scope(table);
+    const s = this.scope(table, ctx);
     const sel = select(s);
-    const preds = [...this.applicable(table, ctx).map((e) => e.build(s)), ...extra.map((f) => f(s))];
+    const preds = [...this.applicable(table, ctx).filter((e) => !e.rel).map((e) => e.build(s)), ...extra.map((f) => f(s))];
     return `(SELECT ${sel}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
   }
 
@@ -510,9 +564,9 @@ class ContextTranslator {
    */
   private shiftedDates(date: { table: string; column: string }, ctx: CtxEntry[], n: number, unit: DateUnit): (col: string) => string {
     const set = (select: (x: string) => string, more: (x: string) => string[] = () => []) => {
-      const s = this.scope(date.table);
+      const s = this.scope(date.table, ctx);
       const x = s.col(date);
-      const preds = [...this.applicable(date.table, ctx).map((e) => e.build(s)), ...more(x)];
+      const preds = [...this.applicable(date.table, ctx).filter((e) => !e.rel).map((e) => e.build(s)), ...more(x)];
       return `(SELECT ${select(x)}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
     };
     const direct = set((x) => this.shift(x, n, unit));
@@ -600,26 +654,59 @@ class ContextTranslator {
     return out;
   }
 
-  /** The table a table expression iterates, and how it changes the filters on it (ALL removes them). */
-  private tableArg(e: Expr, ctx: CtxEntry[]): { table: string; ctx: CtxEntry[] } {
-    if (e.type === 'table') return { table: e.name, ctx };
+  /** Columns that identify a row of a table: its key on the one side of a relationship, else every stored column. */
+  private keyCols(table: string): { table: string; column: string }[] {
+    const rel = this.model.relationships().find((r) => r.toTable === table);
+    if (rel) return [{ table, column: rel.toColumn }];
+    return [...this.model.table(table).columns.values()].filter((c) => !c.expression).map((c) => ({ table, column: c.name }));
+  }
+
+  /**
+   * The table a table expression iterates, how it changes the filters on it (ALL removes them), and the columns
+   * that identify one of its rows (for context transition in the condition).
+   */
+  private tableArg(e: Expr, ctx: CtxEntry[]): { table: string; ctx: CtxEntry[]; row: { table: string; column: string }[] } {
+    if (e.type === 'table') return { table: e.name, ctx, row: this.keyCols(e.name) };
     if (e.type === 'call') {
       const n = e.name.toUpperCase();
+      const x = e.args[0];
       if (n === 'ALL' || n === 'REMOVEFILTERS' || n === 'ALLSELECTED') {
-        const t = e.args[0]?.type === 'table' ? e.args[0].name : e.args[0]?.type === 'column' ? e.args[0].table : unsupported(`${n}() inside FILTER needs a table or column`);
-        return { table: t, ctx: this.applyOne(e, ctx) };
+        if (x?.type === 'table') return { table: x.name, ctx: this.applyOne(e, ctx), row: this.keyCols(x.name) };
+        if (x?.type === 'column') return { table: x.table, ctx: this.applyOne(e, ctx), row: e.args.filter((c) => c.type === 'column').map((c) => ({ table: (c as { table: string }).table, column: (c as { column: string }).column })) };
+        return unsupported(`${n}() inside FILTER needs a table or column`);
       }
       if (n === 'VALUES' || n === 'DISTINCT') {
-        const c = e.args[0];
-        if (c?.type === 'table') return { table: c.name, ctx };
-        if (c?.type === 'column') return { table: c.table, ctx };
+        if (x?.type === 'table') return { table: x.name, ctx, row: this.keyCols(x.name) };
+        if (x?.type === 'column') return { table: x.table, ctx, row: [{ table: x.table, column: x.column }] };
       }
     }
     return unsupported('FILTER over this table expression is not pushed down to SQL');
   }
 
+  /**
+   * Context transition for a row of the table FILTER iterates: the outer filters, with the row's identifying
+   * columns fixed to the current row of scope `s` (a correlated reference).
+   */
+  private transition(outer: CtxEntry[], row: { table: string; column: string }[], s: Scope): CtxEntry[] {
+    const keys = row.map(colKey);
+    return [
+      ...outer.filter((e) => e.kind === 'security' || !e.cols.some((c) => keys.includes(c))),
+      ...row.map((c): CtxEntry => ({ kind: 'calc', cols: [colKey(c)], tables: [c.table], build: (z) => this.isNotDistinct(z.col(c), s.col(c)) })),
+    ];
+  }
+
+  /** Row-level security can't be removed by ALL / REMOVEFILTERS / time intelligence: put it back. */
+  private secure(before: CtxEntry[], after: CtxEntry[]): CtxEntry[] {
+    const sec = before.filter((e) => e.kind === 'security');
+    return sec.length ? [...after.filter((e) => e.kind !== 'security'), ...sec] : after;
+  }
+
   /** Apply one CALCULATE filter argument to a context. */
   applyOne(f: Expr, ctx: CtxEntry[], keep = false): CtxEntry[] {
+    return this.secure(ctx, this.applyRaw(f, ctx, keep));
+  }
+
+  private applyRaw(f: Expr, ctx: CtxEntry[], keep: boolean): CtxEntry[] {
     const tablesOf = (t: string) => [...this.model.expanded(t)];
     const touches = (e: CtxEntry, tables: string[]) => e.tables.some((t) => tables.includes(t));
     if (f.type === 'call') {
@@ -650,13 +737,22 @@ class ContextTranslator {
         return ctx.filter((e) => !touches(e, tables) || (e.cols.length > 0 && e.cols.every((c) => keepCols.includes(c))));
       }
       if (n === 'FILTER') {
-        const { table, ctx: inner } = this.tableArg(a[0], ctx);
+        const { table, ctx: inner, row } = this.tableArg(a[0], ctx);
         const cond = a[1];
         const cols = this.columnsIn(cond).filter((c) => c.table === table || this.model.expanded(table).has(c.table));
-        // aggregates in the condition (e.g. MAX(Date[Date])) see the context outside FILTER
-        return [...inner, { kind: 'calc', cols: [], tables: [table, ...cols.map((c) => c.table)], build: (s) => this.rowCond(s, cond, ctx) }];
+        // aggregates in the condition (e.g. MAX(Date[Date])) see the context outside FILTER; measures transition per row
+        if (this.transitions(cond)) return [...inner, { kind: 'calc', cols: [], tables: [table], build: (s) => this.membership(s, table, row, inner, (y) => this.rowCond(y, cond, ctx, row)) }];
+        return [...inner, { kind: 'calc', cols: [], tables: [table, ...cols.map((c) => c.table)], build: (s) => this.rowCond(s, cond, ctx, row) }];
       }
-      if (n === 'USERELATIONSHIP' || n === 'CROSSFILTER') return unsupported(`${n} is not pushed down to SQL`);
+      if (n === 'USERELATIONSHIP') {
+        const [x, y] = a;
+        if (x?.type !== 'column' || y?.type !== 'column') return unsupported('USERELATIONSHIP needs two columns');
+        const hit = (r: RelSwap, p: { table: string; column: string }, q: { table: string; column: string }) => r.fromTable === p.table && r.fromColumn === p.column && r.toTable === q.table && r.toColumn === q.column;
+        const r = this.model.relationships().find((rr) => hit(rr, x, y) || hit(rr, y, x)) ?? unsupported(`USERELATIONSHIP: no relationship between ${x.table}[${x.column}] and ${y.table}[${y.column}]`);
+        const rel: RelSwap = { fromTable: r.fromTable, fromColumn: r.fromColumn, toTable: r.toTable, toColumn: r.toColumn };
+        return [...ctx.filter((e) => !(e.rel && e.rel.fromTable === rel.fromTable && e.rel.toTable === rel.toTable)), { kind: 'calc', cols: [], tables: [], rel, build: () => 'TRUE' }];
+      }
+      if (n === 'CROSSFILTER') return unsupported(`${n} is not pushed down to SQL`);
       if (TIME_FILTERS.has(n)) return this.timeFilter(n, a, ctx);
       return unsupported(`${n}() as a CALCULATE filter is not pushed down to SQL`);
     }
@@ -669,8 +765,8 @@ class ContextTranslator {
   }
 
   /** A row-level condition: columns come from the scope; aggregates and measures are scalars in `outer`. */
-  rowCond(s: Scope, e: Expr, outer: CtxEntry[]): string {
-    const rec = (x: Expr) => this.rowCond(s, x, outer);
+  rowCond(s: Scope, e: Expr, outer: CtxEntry[], row?: { table: string; column: string }[]): string {
+    const rec = (x: Expr) => this.rowCond(s, x, outer, row);
     switch (e.type) {
       case 'number':
       case 'string':
@@ -694,6 +790,10 @@ class ContextTranslator {
         if (n === 'RELATED') return rec(e.args[0]);
         if (n === 'BLANK') return 'NULL';
         if (n === 'ISBLANK') return `(${rec(e.args[0])} IS NULL)`;
+        if (n === 'USERNAME' || n === 'USERPRINCIPALNAME') return this.tr.literal(this.model.currentUser);
+        if (n === 'CUSTOMDATA') return this.tr.literal(this.model.customData);
+        // CALCULATE in a row context transitions the row into filters
+        if (n === 'CALCULATE' && row) return this.value(e, this.transition(outer, row, s));
         if (n === 'DATE') return this.tr.literal(new Date(Number((e.args[0] as { value: number }).value), Number((e.args[1] as { value: number }).value) - 1, Number((e.args[2] as { value: number }).value)));
         if (n === 'YEAR' || n === 'MONTH' || n === 'DAY') {
           const x = rec(e.args[0]);
@@ -704,7 +804,8 @@ class ContextTranslator {
         return this.value(e, outer);
       }
       case 'bracket':
-        if (this.model.hasMeasure(e.name)) return unsupported('Measures inside FILTER conditions (per-row context transition) are not pushed down to SQL');
+        // a measure in a row context: evaluated with the row's identity as filters (context transition)
+        if (this.model.hasMeasure(e.name)) return row ? `(${this.value(parseDax(this.model.measure(e.name).expression), this.transition(outer, row, s))})` : unsupported(`[${e.name}] outside a row context in a filter condition`);
         return unsupported(`[${e.name}] is not a measure`);
       default:
         return unsupported(`${e.type} in a filter condition`);
@@ -774,8 +875,8 @@ class ContextTranslator {
         const t = a[0];
         if (t?.type === 'table') return `NULLIF(${this.subquery(t.name, () => 'COUNT(*)', ctx)}, 0)`;
         if (t?.type === 'call' && t.name.toUpperCase() === 'FILTER') {
-          const { table, ctx: inner } = this.tableArg(t.args[0], ctx);
-          return `NULLIF(${this.subquery(table, () => 'COUNT(*)', inner, [(s) => this.rowCond(s, t.args[1], ctx)])}, 0)`;
+          const { table, ctx: inner, row } = this.tableArg(t.args[0], ctx);
+          return `NULLIF(${this.subquery(table, () => 'COUNT(*)', inner, [(s) => this.rowCond(s, t.args[1], ctx, row)])}, 0)`;
         }
         if (t?.type === 'call' && (t.name.toUpperCase() === 'VALUES' || t.name.toUpperCase() === 'DISTINCT') && t.args[0]?.type === 'column') return `NULLIF(${agg('COUNT', col(t.args[0]), true)}, 0)`;
         return unsupported('COUNTROWS of this table expression is not pushed down to SQL');
@@ -788,8 +889,8 @@ class ContextTranslator {
         const t = a[0];
         if (t?.type === 'table') return this.subquery(t.name, (s) => `${fn}(${this.tr.rowExpr(s, a[1])})`, ctx);
         if (t?.type === 'call' && t.name.toUpperCase() === 'FILTER') {
-          const { table, ctx: inner } = this.tableArg(t.args[0], ctx);
-          return this.subquery(table, (s) => `${fn}(${this.tr.rowExpr(s, a[1])})`, inner, [(s) => this.rowCond(s, t.args[1], ctx)]);
+          const { table, ctx: inner, row } = this.tableArg(t.args[0], ctx);
+          return this.subquery(table, (s) => `${fn}(${this.tr.rowExpr(s, a[1])})`, inner, [(s) => this.rowCond(s, t.args[1], ctx, row)]);
         }
         return unsupported(`${n} over this table expression is not pushed down to SQL`);
       }
@@ -818,7 +919,7 @@ class ContextTranslator {
       case 'TOTALYTD':
       case 'TOTALQTD':
       case 'TOTALMTD':
-        return rec(a[0], this.timeFilter(n.replace('TOTAL', 'DATES'), [a[1]], ctx));
+        return rec(a[0], this.secure(ctx, this.timeFilter(n.replace('TOTAL', 'DATES'), [a[1]], ctx)));
       default:
         return unsupported(`${n}() is not pushed down to SQL`);
     }
@@ -856,7 +957,12 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
     };
   };
   let cx!: ContextTranslator;
-  const baseEntries = filters.map((f) => entryOf(f, filters, () => cx));
+  // row-level security: per table, the rows any active role allows (as the in-memory engine); ALL can't remove it
+  const roles = model.activeRoleNames.length ? (model.toJSON().roles as Record<string, Record<string, string>>) : {};
+  const ruleTables = new Map<string, string[]>();
+  for (const role of model.activeRoleNames) for (const [table, rule] of Object.entries(roles[role] ?? {})) ruleTables.set(table, [...(ruleTables.get(table) ?? []), rule]);
+  const securityEntries: CtxEntry[] = [...ruleTables].map(([table, rules]) => ({ kind: 'security', cols: [], tables: [table], build: (s) => `(${rules.map((r) => `COALESCE(${cx.rowCond(s, parseDax(r), [])}, FALSE)`).join(' OR ')})` }));
+  const baseEntries = [...securityEntries, ...filters.map((f) => entryOf(f, filters, () => cx))];
   cx = new ContextTranslator(model, opts, tr, dialect, baseEntries);
   const groupEntries: CtxEntry[] = groups.map((g, i) => ({ kind: 'group', cols: [colKey(g.column!)], tables: [g.column!.table], build: (s) => cx.isNotDistinct(s.col(g.column!), `c.g${i}`) }));
 
@@ -872,15 +978,19 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
     const ctx = [...baseEntries, ...extra.map((f) => entryOf(f, [...filters, ...extra], () => cx)), ...(grouped ? groupEntries : [])];
     const hoisting = grouped && groups.length > 0;
     cx.hoistTo = hoisting ? 'groups' : null;
+    cx.groupCount = groups.length;
     const vs = values.map((v) => cx.value(v.ast, ctx));
     cx.hoistTo = null;
-    const hoisted = cx.takeHoisted();
+    const { scalars: hoisted, sets } = cx.takeHoisted();
     if (!hoisting) return `SELECT ${vs.map((v, i) => `${v} AS v${i}`).join(', ') || 'NULL AS v0'}`;
     const cols = [...groups.map((_, i) => `c.g${i}`), ...vs.map((v, i) => `${v} AS v${i}`), ...sortCols.flatMap((sc, i) => (sc ? [`c.s${i}`] : []))];
     // group-only scalars are computed once per group, in a layer around the combinations
     // (a materialized CTE, so SQLite's query flattener doesn't inline them back into every fact row)
-    const withClause = hoisted.length ? `WITH hz AS ${dialect === 'duckdb' ? '' : 'MATERIALIZED '}(SELECT c.*, ${hoisted.join(',\n  ')}\nFROM ${combos} AS c)\n` : '';
-    const parts = [`${withClause}SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${hoisted.length ? 'hz' : combos} AS c) AS r`];
+    // FILTER sets with measures are materialized per group as well
+    const mat = dialect === 'duckdb' ? '' : 'MATERIALIZED ';
+    const ctes = hoisted.length || sets.length ? [`hz AS ${mat}(SELECT c.*${hoisted.length ? `, ${hoisted.join(',\n  ')}` : ''}\nFROM ${combos} AS c)`, ...sets.map(([sql, name]) => `${name} AS ${mat}(${sql})`)] : [];
+    const withClause = ctes.length ? `WITH ${ctes.join(',\n')}\n` : '';
+    const parts = [`${withClause}SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${ctes.length ? 'hz' : combos} AS c) AS r`];
     if (values.length && !spec.includeEmpty) parts.push(`WHERE NOT (${values.map((_, i) => `r.v${i} IS NULL`).join(' AND ')})`);
     const order: string[] = [];
     const groupOrder = (i: number, dir: string) => `r.${sortCols[i] ? 's' : 'g'}${i} ${dir} NULLS FIRST`;
@@ -917,7 +1027,6 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
 
 /** Translate a query to SQL. Throws {@link SqlUnsupportedError} for what SQL can't express. */
 export function toSql(model: DataModel, spec: QuerySpec, opts: SqlOptions = {}): SqlPlan {
-  if (model.activeRoleNames.length) unsupported('Row-level security roles are active; they are not pushed down to SQL');
   if (visualCalcPlan(spec)) unsupported('Run visual calculations through sqlEngine (it applies them after the query)');
   // plain aggregates become one GROUP BY query; anything else (ALL, time intelligence, CALCULATE replacing filters…)
   // is translated with full filter-context semantics
@@ -930,6 +1039,7 @@ export function toSql(model: DataModel, spec: QuerySpec, opts: SqlOptions = {}):
 }
 
 function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPlan {
+  if (model.activeRoleNames.length) unsupported('Row-level security is applied in filter-context mode');
   const dialect = opts.dialect ?? 'duckdb';
   const groups = (spec.groupBy ?? []).map((g) => resolveGroupField(model, g));
   const values = (spec.values ?? []).map((v) => resolveValueField(model, v));

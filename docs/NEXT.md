@@ -32,7 +32,7 @@ Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forw
   - WebGL scatter;
   - screenshots throughout the docs (`npm run docs:images` regenerates them).
 - **Known gaps:**
-  - SQL: `USERELATIONSHIP` / `CROSSFILTER`, measures inside `FILTER` conditions, and RLS. These throw `SqlUnsupportedError`; set `fallback: 'model'` to answer them in memory.
+  - SQL: `CROSSFILTER` and bidirectional relationships throw `SqlUnsupportedError`; set `fallback: 'model'` to answer them in memory. (`USERELATIONSHIP`, measures in `FILTER` and RLS are pushed down.)
   - SQLite is slow on non-contiguous date contexts (no subquery decorrelation); DuckDB and Postgres are fine.
 - **Playground:** add more ```` ```js playground ```` examples to the guides; each one is tested automatically.
 

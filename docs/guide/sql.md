@@ -56,13 +56,18 @@ Queries that a single `GROUP BY` can't answer switch to filter-context mode auto
 
 Filters reach a table only along its many-to-one relationships, as in DAX. Group combinations follow the in-memory engine: one dimension lists its values, several list the combinations present in the fact table. Results are checked against the in-memory engine on SQLite in the tests. DuckDB and Postgres decorrelate these subqueries well; SQLite is slower, but contiguous date contexts (years, months, ranges) use range checks.
 
+Also handled in filter-context mode:
+
+- **`USERELATIONSHIP`:** joins along the inactive relationship for that calculation (e.g. sales by ship date).
+- **Measures inside `FILTER` conditions:** `FILTER(VALUES(Product[Name]), [Total Sales] > 400000)` evaluates the measure per row with the row's key as a filter (context transition).
+- **Row-level security:** the active roles' rules become filters on their tables. Roles are unioned per table, as in memory, and `USERNAME()` / `CUSTOMDATA()` resolve to the values passed to `setRoles`. `ALL` and `REMOVEFILTERS` can't remove them.
+
 ### Still not pushed down
 
 These throw a `SqlUnsupportedError` that names the cause:
 
-- `USERELATIONSHIP`, `CROSSFILTER` and bidirectional filtering.
-- Measures inside `FILTER` conditions (they need a context transition per row).
-- Row-level security roles and compiled row-set filters.
+- `CROSSFILTER` and bidirectional relationships.
+- Compiled row-set filters passed in a query (filter specs work).
 - `MEDIAN` outside DuckDB, and DAX functions without an SQL equivalent.
 
 `fallback: 'model'` answers those queries from the in-memory model instead. That only helps if the model holds the rows it needs, e.g. a summary table.
