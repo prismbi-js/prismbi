@@ -6,6 +6,7 @@ import type { DataModel } from './model';
 import type { Expr } from '../dax/ast';
 import { parseDax } from '../dax/parser';
 import { fastGroupQuery, useFastQuery } from './fastQuery';
+import { computeVisualCalc } from './visualCalc';
 
 export type Aggregation = 'sum' | 'avg' | 'min' | 'max' | 'count' | 'countRows' | 'distinctCount' | 'median' | 'first' | 'last';
 
@@ -25,6 +26,13 @@ export type FieldSpec =
       /** Display name. */
       name?: string;
       format?: string;
+      /**
+       * Visual calculation over this visual's result rows, e.g. `RUNNINGSUM([Total Sales])` or
+       * `[Total Sales] - PREVIOUS([Total Sales])`. Evaluated after sorting and Top N.
+       */
+      visualCalc?: string;
+      /** For visual calculations: `'parent'` restarts window functions when the outer group changes. */
+      reset?: 'none' | 'parent';
     };
 
 export interface QuerySpec {
@@ -168,6 +176,46 @@ function resolveTopN(model: DataModel, spec: TopNFilterSpec, ctx: Filter[]): Col
 }
 
 export function runQuery(model: DataModel, spec: QuerySpec): QueryResult {
+  const all = spec.values ?? [];
+  const isCalc = (v: FieldSpec): v is Exclude<FieldSpec, string> & { visualCalc: string } => typeof v === 'object' && !!v.visualCalc;
+  if (!all.some(isCalc)) return runQueryCore(model, spec);
+  // run the plain values, then evaluate visual calculations over the final (sorted, Top N) rows
+  const plain = all.filter((v) => !isCalc(v));
+  const res = runQueryCore(model, { ...spec, values: plain, orderBy: spec.orderBy?.filter((o) => typeof o.field !== 'object' || !('value' in o.field)) });
+  const plainFields = res.values;
+  const values: QueryField[] = [];
+  const calcCols = new Map<number, { values: CellValue[]; highlights?: CellValue[]; total?: CellValue }>();
+  let pi = 0;
+  all.forEach((v, i) => {
+    if (!isCalc(v)) {
+      values.push(plainFields[pi++]);
+      return;
+    }
+    values.push({ kind: 'value', name: v.name ?? v.visualCalc, ref: v.visualCalc, format: v.format, type: 'number' });
+    const calc = { expression: v.visualCalc, reset: v.reset };
+    const col = computeVisualCalc(calc, res.rows, plainFields, res.groups.length);
+    const hasHl = res.rows.some((r) => r.highlights);
+    const hl = hasHl ? computeVisualCalc(calc, res.rows, plainFields, res.groups.length, (r) => r.highlights) : undefined;
+    const total = res.totals ? computeVisualCalc(calc, [{ keys: [], values: res.totals }], plainFields, 0)[0] : undefined;
+    calcCols.set(i, { values: col, highlights: hl, total });
+  });
+  const merge = (plainVals: CellValue[] | undefined, row: number, which: 'values' | 'highlights'): CellValue[] | undefined => {
+    if (!plainVals) return undefined;
+    let k = 0;
+    return all.map((v, i) => (isCalc(v) ? ((calcCols.get(i)![which]?.[row] as CellValue | undefined) ?? null) : plainVals[k++]));
+  };
+  return {
+    ...res,
+    values,
+    rows: res.rows.map((r, ri) => ({ ...r, values: merge(r.values, ri, 'values')!, highlights: merge(r.highlights, ri, 'highlights') })),
+    totals: res.totals ? (() => {
+      let k = 0;
+      return all.map((v, i) => (isCalc(v) ? (calcCols.get(i)!.total ?? null) : res.totals![k++]));
+    })() : undefined,
+  };
+}
+
+function runQueryCore(model: DataModel, spec: QuerySpec): QueryResult {
   const groups = (spec.groupBy ?? []).map((g) => resolveGroupField(model, g));
   const values = (spec.values ?? []).map((v) => resolveValueField(model, v));
   const limit = spec.limit ?? 30_000;
