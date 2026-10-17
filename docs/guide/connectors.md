@@ -5,6 +5,7 @@
 ```ts
 import { DataModel } from '@prismbi/prismbi';
 import { loadCsv, loadRest, scheduleRefresh, streamInto } from '@prismbi/prismbi/connectors';
+import { periodStart } from '@prismbi/prismbi';
 
 const model = new DataModel()
   .addTable('Sales', await loadCsv('/data/sales.csv'))
@@ -128,9 +129,34 @@ Options:
 
 | Option | Default | Effect |
 |---|---|---|
-| `mode` | `'replace'` | Swap the table's rows on each refresh. `'append'` (with `maxRows`) adds them instead. |
+| `mode` | `'replace'` | Swap the table's rows on each refresh. `'append'` (with `maxRows`) adds them instead. `'incremental'` applies the table's refresh policy (below). |
 | `immediate` | `true` | Load once straight away. |
 | `pauseWhenHidden` | `true` | Skip ticks while the tab is hidden. |
 | `onRefresh` / `onError` | none | Report each successful refresh or failure. |
 
 A refresh that is still running when the next tick comes is not duplicated. Calling `refresh()` manually aborts the one in flight. `stop()` cancels everything.
+
+### Incremental refresh
+
+Large tables don't need a full reload. A refresh policy reloads only the recent periods and keeps the history, as in Power BI:
+
+```ts
+model.setRefreshPolicy('Sales', {
+  column: 'OrderDate',
+  refresh: { last: 3, unit: 'month' },  // this month and the two before are replaced on every refresh
+  keep: { last: 5, unit: 'year' },      // optional: drop history older than five years
+});
+
+// load only the window from your source…
+const since = periodStart(new Date(), 'month', 3);
+const result = model.incrementalRefresh('Sales', await loadRest(`/api/sales?since=${since.toISOString()}`));
+// { from, keepFrom, kept, replaced, added, ignored, dropped }
+
+// …or on a schedule
+scheduleRefresh(model, 'Sales', (signal) => loadRest('/api/sales?since=…', { signal }), { intervalMs: 300_000, mode: 'incremental' });
+```
+
+- **Units:** `day`, `week` (weeks start on Monday), `month`, `quarter` and `year`. Periods are local calendar periods, counting the current one.
+- **Ignored rows:** incoming rows dated before the window are skipped, so a source that sends a little extra is harmless. Rows without a date count as history.
+- **What else updates:** calculated columns and transform steps update as on a full refresh. The column formats are kept.
+- **Saving:** the policy is saved in `model.toJSON().refreshPolicies`. `applyRefreshPolicy(existing, incoming, policy, now)` is the same merge as a pure function.

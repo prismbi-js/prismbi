@@ -19,6 +19,8 @@ export type { DateTableOptions } from './data/dates';
 export { compileFilter } from './data/filters';
 export type { ColumnFilterSpec, Filter, FilterOp, FilterSpec, RelFilter, TopNFilterSpec, TupleFilterSpec } from './data/filters';
 export type { Aggregation, FieldSpec, QueryField, QueryResult, QueryRow, QuerySpec } from './data/query';
+export { applyRefreshPolicy, periodStart } from './data/refreshPolicy';
+export type { RefreshPolicy, IncrementalRefreshResult, PeriodUnit } from './data/refreshPolicy';
 export { visualCalcPlan, resolveValueField, resolveGroupField } from './data/query';
 export { columnRefToString, compareValues, parseColumnRef } from './data/types';
 export type { CellValue, ColumnRef, ColumnSchema, DataType, MeasureDef, RelationshipDef, Row } from './data/types';

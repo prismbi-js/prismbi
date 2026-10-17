@@ -1,3 +1,4 @@
+import { applyRefreshPolicy, type IncrementalRefreshResult, type RefreshPolicy } from './refreshPolicy';
 import type { CellValue, ColumnRef, ColumnSchema, DataType, MeasureDef, RelationshipDef, Row } from './types';
 import { columnRefToString, isColumnRefString, parseColumnRef, valueKey } from './types';
 import { DataTable } from './table';
@@ -121,6 +122,7 @@ export class DataModel {
   private calcTables = new Map<string, string>();
   /** Power Query-style steps per table, with the untransformed source rows they replay over. */
   private transforms = new Map<string, { source: Row[]; steps: TransformStep[] }>();
+  private policies = new Map<string, RefreshPolicy>();
   private calcGroupMap = new Map<string, CalculationGroup>();
   private fieldParams = new Map<string, { column: string; fields: FieldParameterDef[] }>();
   private hierarchies = new Map<string, { table: string; name: string; levels: string[] }>();
@@ -171,6 +173,40 @@ export class DataModel {
     for (const c of calc) this.addCalculatedColumn(name, c.name, c.expression!, { format: c.format, type: c.type, hidden: c.hidden });
     this.recalculateTables();
     return this;
+  }
+
+  /** Set (or clear with null) a table's incremental refresh policy, used by {@link incrementalRefresh}. */
+  setRefreshPolicy(name: string, policy: RefreshPolicy | null): this {
+    const t = this.table(name);
+    if (policy) {
+      if (!t.hasColumn(policy.column) && !this.transforms.get(name)?.source.some((r) => policy.column in r)) throw new Error(`Table "${name}" has no column "${policy.column}"`);
+      if (!(policy.refresh.last >= 1)) throw new Error('refresh.last must be at least 1');
+      this.policies.set(name, policy);
+    } else this.policies.delete(name);
+    return this;
+  }
+
+  refreshPolicyOf(name: string): RefreshPolicy | undefined {
+    return this.policies.get(name);
+  }
+
+  /**
+   * Incremental refresh: `rows` holds the latest data for the refresh window (older rows in it are ignored). Rows in
+   * the window are replaced, history before it is kept, and history older than `keep` is dropped. Uses the table's
+   * policy, or `policy` for this call.
+   */
+  incrementalRefresh(name: string, rows: Row[], opts: { policy?: RefreshPolicy; now?: Date } = {}): IncrementalRefreshResult {
+    const policy = opts.policy ?? this.policies.get(name);
+    if (!policy) throw new Error(`Table "${name}" has no refresh policy (setRefreshPolicy)`);
+    const tf = this.transforms.get(name);
+    // transformed tables keep their source rows: the policy applies to the source, then the steps replay
+    const existing = tf ? tf.source : this.rowsOfTable(name, true);
+    const merged = applyRefreshPolicy(existing, rows, policy, opts.now);
+    const old = this.table(name);
+    const schema: Record<string, ColumnSchema> = {};
+    for (const c of old.columns.values()) if (!c.expression) schema[c.name] = { type: c.type, format: c.format, hidden: c.hidden, sortBy: c.sortBy, description: c.description };
+    this.refreshTable(name, merged.rows, tf ? undefined : schema);
+    return merged.result;
   }
 
   /**
@@ -642,6 +678,7 @@ export class DataModel {
       perspectives: Object.fromEntries([...this.perspectives].map(([k, v]) => [k, [...v]])),
       roles: Object.fromEntries(this.roles),
       transforms: Object.fromEntries([...this.transforms].map(([k, v]) => [k, v.steps])),
+      refreshPolicies: Object.fromEntries(this.policies),
     };
   }
 

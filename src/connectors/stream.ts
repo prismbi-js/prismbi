@@ -104,8 +104,8 @@ export function streamInto(model: DataModel, table: string, source: MessageSourc
 export interface RefreshOptions {
   /** Refresh period in milliseconds. */
   intervalMs: number;
-  /** `replace` (default) swaps the table's rows; `append` adds them (use with `maxRows`). */
-  mode?: 'replace' | 'append';
+  /** `replace` (default) swaps the table's rows; `append` adds them (use with `maxRows`); `incremental` applies the table's refresh policy. */
+  mode?: 'replace' | 'append' | 'incremental';
   maxRows?: number;
   /** Load once immediately (default true). */
   immediate?: boolean;
@@ -135,6 +135,7 @@ export function scheduleRefresh(model: DataModel, table: string, load: (signal: 
       const rows = await load(ctrl.signal);
       if (ctrl.signal.aborted || stopped) return;
       if (opts.mode === 'append') model.appendRows(table, rows, { maxRows: opts.maxRows });
+      else if (opts.mode === 'incremental') model.incrementalRefresh(table, rows);
       else if (model.hasTable(table)) model.refreshTable(table, rows);
       else model.addTable(table, rows);
       opts.onRefresh?.(rows);
