@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0 (unreleased): Phase 6, in progress
+
+- **`prismbi/ai`:**
+  - `ask` / `askSync`, with an optional `llm` hook.
+  - `explain`, `findInsights`, `suggestQuestions`.
+  - The `qna` and `insights` visuals and "Explain this" in context menus.
+  - Agent support: `getAIContext`, `contextToPrompt`, `createAgentTools`, `runTool`, `toAnthropicTools`, `toOpenAITools`, `toMcpTools`.
+- **`prismbi/elements`:** web components `<prism-report>` and `<prism-visual>`, `registerModel`, and the Svelte actions `prismReport` / `prismVisual`.
+- **`prismbi/files`:** `splitReport`, `joinReport`, `diffReports`, `formatDiff`, and the `prismbi split|join|diff` CLI.
+- **Core:** `registerMenuItems` (context-menu plugins), plus `Report.reportFilterList` and `Report.currentSelection`.
+
+
 ## 0.5.0 (unreleased): Phase 5, scale, performance and connectors
 
 - **Faster engine.**

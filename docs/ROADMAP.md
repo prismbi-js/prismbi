@@ -11,7 +11,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 3 | Advanced modeling and DAX coverage | `0.3` | ✅ Implemented |
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | ✅ Implemented |
 | 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
-| 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | Planned |
+| 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | In progress (3 of 6) |
 
 ## Guiding principles
 
@@ -218,7 +218,22 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - A Node server runtime with scheduled refresh
 - Performance budgets in CI
 
-## Phase 6: Beyond Power BI
+## Phase 6: Beyond Power BI (in progress)
+
+**Done:**
+- [x] **`prismbi/ai`:**
+  - `ask`: plain-language questions become visuals, offline, with an optional LLM hook.
+  - `explain`: change and composition drivers, plus "Explain this" on right-click.
+  - `findInsights`: anomalies, trends, movers, concentration, outliers.
+  - The `qna` and `insights` visuals.
+  - Agent context (`getAIContext`, `contextToPrompt`) and provider-agnostic tools (`createAgentTools`) for Claude, OpenAI and MCP.
+- [x] **`prismbi/elements`:** `<prism-report>` and `<prism-visual>` web components, plus Svelte actions. Vue and Angular use them directly.
+- [x] **`prismbi/files`:** split, join and diff of report files, plus the `prismbi` CLI.
+
+**Remaining:**
+- Headless rendering, scheduled sends and measure alerts (`prismbi/server`)
+- Real-time co-editing, comments and shared bookmarks
+- Signed plugins and the marketplace
 
 **Goal:** features Power BI doesn't have, or that are clunky there.
 

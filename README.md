@@ -84,6 +84,9 @@ import { PrismReport, PrismVisual } from 'prismbi/react';
 - [Studio (report editor)](docs/guide/studio.md)
 - [React](docs/guide/react.md)
 - [Custom visuals](docs/guide/custom-visuals.md)
+- [AI: ask, explain, insights, agents](docs/guide/ai.md)
+- [Web components, Vue, Svelte, Angular](docs/guide/frameworks.md)
+- [Report files and version control](docs/guide/files.md)
 - [Connectors and live data](docs/guide/connectors.md): CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh
 - [Performance and scale](docs/guide/performance.md): the fast query path, rendering at scale, the worker engine, benchmarks
 - [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
