@@ -136,6 +136,18 @@ export const STUDIO_CSS = /* css */ `
 
 .pbs-modal{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;background:rgb(0 0 0/.35);padding:16px}
 .pbs-dialog{width:min(640px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--pbs-pane);color:var(--pbi-fg);border:1px solid var(--pbs-line);border-radius:12px;box-shadow:0 20px 60px rgb(0 0 0/.3);display:flex;flex-direction:column}
+.pbs-dialog:has(.pbs-transform){width:min(880px,100%)}
+.pbs-transform h4{margin:12px 0 6px;font-size:12px;color:var(--pbi-fg-2)}
+.pbs-steps{margin:0;padding-left:20px;display:grid;gap:4px}
+.pbs-steps li{display:flex;gap:4px;align-items:center}
+.pbs-steps li>span{flex:1}
+.pbs-steps .pbs-empty{list-style:none;margin-left:-20px;color:var(--pbi-fg-3)}
+.pbs-icon-btn{border:1px solid var(--pbs-line);background:transparent;color:inherit;border-radius:6px;width:24px;height:24px;cursor:pointer}
+.pbs-step-pick{display:flex;gap:8px;margin-bottom:8px}
+.pbs-step-fields{display:flex;flex-wrap:wrap;gap:8px 12px}
+.pbs-step-fields label{display:grid;gap:2px;font-size:11px;color:var(--pbi-fg-2)}
+.pbs-step-fields input,.pbs-step-fields select,.pbs-step-pick select{font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--pbs-line);border-radius:6px;background:var(--pbi-bg);color:var(--pbi-fg)}
+.pbs-step-preview{max-height:220px;margin-top:6px}
 .pbs-dialog header{padding:14px 16px;font-weight:700;font-size:15px;border-bottom:1px solid var(--pbs-line)}
 .pbs-dialog .pbs-body{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .pbs-dialog footer{padding:12px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--pbs-line)}

@@ -19,6 +19,7 @@ export interface StudioContext {
   editMeasure(name?: string): void;
   deleteMeasure(name: string): void;
   editColumn(table?: string, name?: string): void;
+  editTransforms(table?: string): void;
   deleteColumn(table: string, name: string): void;
   isStudioColumn(table: string, name: string): boolean;
   /** Theme overrides edited in the format pane. */

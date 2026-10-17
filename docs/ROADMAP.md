@@ -251,6 +251,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 **Done:**
 - [x] **Visual calculations** (`visualCalc` on value fields: RUNNINGSUM, MOVINGAVERAGE, PREVIOUS/NEXT, FIRST/LAST, RANK, ROWNUMBER, PERCENTOFTOTAL, with per-parent reset)
 - [x] **DAX window functions:** OFFSET, INDEX, WINDOW, RANK, ROWNUMBER with ORDERBY (columns or measures) and PARTITIONBY
+- [x] **Transforms (Power Query-style):** 19 serialisable step types, `model.transformTable` with replay on refresh and append, and a Studio step editor with a live preview
 - [x] **Visual regression tests** (`npm run test:visual`): 35 visuals × light and dark, compared with an in-browser pixel diff. They caught and fixed four defects: combo-chart lines flattened on the primary axis (now a secondary axis), map bubbles clipped, radar labels overlapping, decomposition tree clipped.
 
 **Goal:** close the gaps an analyst hits in the first week, and lock in visual quality.

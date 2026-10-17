@@ -164,3 +164,36 @@ describe('transform steps', () => {
     expect(m.table('Sales').column('Amount').values).toEqual(['7']);
   });
 });
+
+describe('studio transforms', () => {
+  it('persists steps in the studio document and re-applies them on load', async () => {
+    const { Studio } = await import('../src/studio');
+    const { makeModel } = await import('./fixtures');
+    const el = document.createElement('div');
+    el.style.height = '700px';
+    document.body.append(el);
+    const model = makeModel();
+    const studio = new Studio(el, { model });
+    const table = model.tableNames().find((t) => model.table(t).rowCount > 3)!;
+    const before = model.table(table).rowCount;
+    model.transformTable(table, [{ op: 'keepTop', n: 2 }]);
+    (studio as unknown as { commit(): void }).commit();
+    const doc = studio.document;
+    expect(doc.model.transforms?.[table]).toEqual([{ op: 'keepTop', n: 2 }]);
+    // a fresh studio on a fresh model applies the saved steps
+    const el2 = document.createElement('div');
+    el2.style.height = '700px';
+    document.body.append(el2);
+    const model2 = makeModel();
+    const studio2 = new Studio(el2, { model: model2 });
+    studio2.load(doc);
+    expect(model2.table(table).rowCount).toBe(2);
+    // loading a document without transforms restores the source rows
+    studio2.load({ ...doc, model: { ...doc.model, transforms: undefined } });
+    expect(model2.table(table).rowCount).toBe(before);
+    studio.destroy();
+    studio2.destroy();
+    el.remove();
+    el2.remove();
+  });
+});

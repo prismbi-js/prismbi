@@ -91,6 +91,7 @@ import { PrismReport, PrismVisual } from '@prismbi/prismbi/react';
 ## Documentation
 
 - [Getting started](docs/guide/getting-started.md)
+- [Transforms: clean and reshape data](docs/guide/transforms.md)
 - [Data modeling](docs/guide/data-model.md): tables, relationships, measures, calculated columns, date tables
 - [Advanced modeling](docs/guide/advanced-modeling.md): relationships, calculation groups, parameters, hierarchies, RLS
 - [Expressions (DAX) reference](docs/guide/expressions.md)

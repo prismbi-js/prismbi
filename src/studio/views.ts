@@ -25,9 +25,12 @@ export function renderDataView(ctx: StudioContext, container: HTMLElement, state
     const cols = [...t.columns.values()];
     const addCol = h('button', { type: 'button', class: 'pbs-btn' }, 'New column');
     addCol.addEventListener('click', () => ctx.editColumn(state.table));
+    const steps = model.transformsOf(state.table)?.length ?? 0;
+    const transform = h('button', { type: 'button', class: 'pbs-btn', title: 'Clean and reshape this table (Power Query-style steps)' }, steps ? `Transform (${steps})` : 'Transform');
+    transform.addEventListener('click', () => ctx.editTransforms(state.table));
     const addMeasure = h('button', { type: 'button', class: 'pbs-btn' }, 'New measure');
     addMeasure.addEventListener('click', () => ctx.editMeasure());
-    main.append(h('div', { class: 'pbs-data-bar' }, h('b', {}, state.table), h('span', { class: 'pbs-status' }, `${formatValue(t.rowCount, '#,0')} rows · ${cols.length} columns`), h('span', { class: 'pbs-spacer' }), addCol, addMeasure));
+    main.append(h('div', { class: 'pbs-data-bar' }, h('b', {}, state.table), h('span', { class: 'pbs-status' }, `${formatValue(t.rowCount, '#,0')} rows · ${cols.length} columns`), h('span', { class: 'pbs-spacer' }), transform, addCol, addMeasure));
     const table = h('table');
     table.append(
       h(

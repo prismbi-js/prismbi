@@ -1,4 +1,6 @@
 import type { DataModel } from '../data/model';
+import { transformDialog } from './transforms';
+import type { TransformStep } from '../data/transform';
 import type { MeasureDef, RelationshipDef } from '../data/types';
 import { columnRefToString, parseColumnRef } from '../data/types';
 import { h } from '../render/svg';
@@ -41,6 +43,8 @@ export interface StudioModelState {
   removedRelationships: string[];
   /** Changes to original relationships. */
   relationshipEdits: { key: string; active: boolean; crossFilter: 'single' | 'both' }[];
+  /** Power Query-style steps per table, added in the studio. */
+  transforms?: Record<string, TransformStep[]>;
 }
 
 /** Everything the studio saves: the report, model changes, theme overrides and the diagram layout. */
@@ -345,6 +349,21 @@ export class Studio implements StudioContext {
     });
   }
 
+  /** Open the Power Query-style step editor for a table. */
+  editTransforms(table?: string): void {
+    const t = table ?? this.dataState.table ?? this.model.tableNames()[0];
+    if (!t) return;
+    transformDialog(this.root, this.model, t, (steps) => {
+      try {
+        this.model.transformTable(t, steps);
+        this.commit();
+        this.toast(steps.length ? `Applied ${steps.length} step${steps.length === 1 ? '' : 's'} to ${t}` : `Removed the steps from ${t}`);
+      } catch (e) {
+        this.toast(`Transform failed: ${(e as Error).message}`);
+      }
+    });
+  }
+
   editColumn(table?: string, name?: string): void {
     const existing = table && name ? this.studioColumns().find((c) => c.table === table && c.name === name) ?? null : null;
     columnDialog(this.root, this.model, existing, table ?? this.dataState.table, (def, previous) => {
@@ -479,12 +498,28 @@ export class Studio implements StudioContext {
       else if (base.active !== r.active || base.crossFilter !== r.crossFilter) relationshipEdits.push({ key, active: r.active, crossFilter: r.crossFilter });
     }
     const removedRelationships = [...this.baseline.rels.keys()].filter((k) => !current.has(k));
-    return { measures, removedMeasures, columns: this.studioColumns(), relationships, removedRelationships, relationshipEdits };
+    const transforms: Record<string, TransformStep[]> = {};
+    for (const t of this.model.tableNames()) {
+      const steps = this.model.transformsOf(t);
+      if (steps?.length) transforms[t] = steps;
+    }
+    return { measures, removedMeasures, columns: this.studioColumns(), relationships, removedRelationships, relationshipEdits, ...(Object.keys(transforms).length ? { transforms } : {}) };
   }
 
   /** Bring the live model to baseline + `state`. */
   private applyModelState(state: StudioModelState): void {
     const m = this.model;
+    // transforms first: they rebuild table rows (calculated columns are recomputed on top)
+    for (const t of m.tableNames()) {
+      const want = state.transforms?.[t] ?? [];
+      if (JSON.stringify(m.transformsOf(t) ?? []) !== JSON.stringify(want)) {
+        try {
+          m.transformTable(t, want);
+        } catch {
+          /* steps no longer apply to this data */
+        }
+      }
+    }
     const wanted = new Map(state.measures.map((d) => [d.name, d]));
     for (const def of m.measureList()) {
       if (wanted.has(def.name)) continue;
