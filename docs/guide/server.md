@@ -71,6 +71,7 @@ const stopSends = runSubscriptions(model, report, { window, send: (sub, html) =>
 const stopAlerts = watchAlerts(model, report, (alert, e) => notifyChannel(alert.recipients, `${alert.name}: ${e.value}`));
 ```
 
+- **Anomaly alerts:** `when: { anomaly: true }` (optional `kinds`) alerts on unusual spikes and dips found by the insights engine. The event carries `insight: { kind, title, detail }`, and `condition` is the insight's title. These run with `watchAlerts`. The Studio's live preview covers threshold alerts only.
 - **Disabled entries:** `enabled: false` skips a subscription or alert.
 - **Live data:** alerts re-evaluate on every model change.
 - **Studio preview:** alerts fire as notifications while editing, so authors can check their thresholds.

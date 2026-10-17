@@ -110,7 +110,8 @@ export interface ReportAlert {
   /** Measure name. */
   measure: string;
   filters?: FilterSpec[];
-  when: { above: number } | { below: number } | { changeBy: number };
+  /** A threshold, a relative change, or `{ anomaly: true }` for unusual spikes and dips (server `watchAlerts`). */
+  when: { above: number } | { below: number } | { changeBy: number } | { anomaly: true; kinds?: ('anomaly' | 'trend' | 'mover' | 'outlier' | 'concentration')[] };
   recipients?: string[];
   enabled?: boolean;
 }

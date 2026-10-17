@@ -415,19 +415,21 @@ export class Studio implements StudioContext {
   /** Alerts fire as toasts while editing, so authors can check their thresholds. */
   private watchAlertsLive(): void {
     this.stopAlerts?.();
-    const alerts = this.report.alertList.filter((a) => a.enabled !== false);
+    // anomaly alerts need the insights engine (@prismbi/prismbi/ai); they run with watchAlerts on a server
+    const alerts = this.report.alertList.filter((a) => a.enabled !== false && !('anomaly' in a.when));
     const offs = alerts.map((a) => {
+      const when = a.when as { above: number } | { below: number } | { changeBy: number };
       const read = () => {
         const v = this.model.query({ values: [a.measure], filters: a.filters ?? [] }).rows[0]?.values[0];
         return typeof v === 'number' ? v : null;
       };
       let last = read();
-      const over = (v: number | null, prev: number | null) => v !== null && ('above' in a.when ? v > a.when.above : 'below' in a.when ? v < a.when.below : prev !== null && prev !== 0 && Math.abs((v - prev) / prev) >= a.when.changeBy);
-      let active = !('changeBy' in a.when) && over(last, null);
+      const over = (v: number | null, prev: number | null) => v !== null && ('above' in when ? v > when.above : 'below' in when ? v < when.below : prev !== null && prev !== 0 && Math.abs((v - prev) / prev) >= when.changeBy);
+      let active = !('changeBy' in when) && over(last, null);
       return this.model.onChange(() => {
         const v = read();
         const hit = over(v, last);
-        if (hit && (!active || 'changeBy' in a.when)) this.toast(`🔔 ${a.name}: ${a.measure} is ${v}`);
+        if (hit && (!active || 'changeBy' in when)) this.toast(`🔔 ${a.name}: ${a.measure} is ${v}`);
         active = hit;
         last = v;
       });

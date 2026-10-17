@@ -328,6 +328,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 ## Phase 9: Ecosystem (in progress)
 
 **Done:**
+- [x] **Anomaly alerts:** `watchAnomalies` (AI entry) and `when: { anomaly: true }` report alerts in the server's `watchAlerts` and the Studio Schedules dialog
 - [x] **DAX copilot:** `writeDax` / `writeDaxSync` (rules, or an LLM with validation, retry and fallback), `explainDax`, and `daxCopilot` for the Studio measure editor (`StudioOptions.copilot`, `studio.setCopilot`)
 - [x] **Narrative visual:** `type: 'narrative'` with change, contributors, breakdown and insights; `{[Measure]}` templates; optional LLM rewording via `setNarrativeWriter`; `writeNarrative` API
 - [x] **Agent panel in the Studio:** `agentPanel(studio, { llm })` with a step log, per-step undo and optional Apply/Skip previews; `runAgent` with `anthropicLLM`, `openAILLM` and an offline `ruleBasedLLM`; new `add_page` tool

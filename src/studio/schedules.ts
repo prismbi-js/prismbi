@@ -13,7 +13,7 @@ export function schedulesDialog(host: HTMLElement, model: DataModel, report: Rep
   const alertList = h('ul', { class: 'pbs-sched-list', 'aria-label': 'Alerts' });
   const status = h('div', { class: 'pbs-status', role: 'status' });
 
-  const describeWhen = (a: ReportAlert) => ('above' in a.when ? `above ${a.when.above}` : 'below' in a.when ? `below ${a.when.below}` : `changes by ${Math.round(a.when.changeBy * 100)}%`);
+  const describeWhen = (a: ReportAlert) => ('above' in a.when ? `above ${a.when.above}` : 'below' in a.when ? `below ${a.when.below}` : 'anomaly' in a.when ? 'is unusual' : `changes by ${Math.round(a.when.changeBy * 100)}%`);
   const render = () => {
     subList.replaceChildren();
     alertList.replaceChildren();
@@ -62,14 +62,15 @@ export function schedulesDialog(host: HTMLElement, model: DataModel, report: Rep
   const measures = model.measureList().filter((m) => !(m as { hidden?: boolean }).hidden).map((m) => m.name);
   const aName = input('Name', 'Sales drop');
   const aMeasure = select('Measure', measures.map((m) => [m, m]));
-  const aOp = select('Condition', [['below', 'goes below'], ['above', 'goes above'], ['changeBy', 'changes by (%)']]);
+  const aOp = select('Condition', [['below', 'goes below'], ['above', 'goes above'], ['changeBy', 'changes by (%)'], ['anomaly', 'is unusual (spike or dip)']]);
   const aValue = input('Value', '', 'number');
   const aTo = input('Recipients (optional)');
   const aAdd = h('button', { type: 'button', class: 'pbs-btn' }, 'Add alert');
+  aOp.addEventListener('change', () => (aValue.disabled = aOp.value === 'anomaly'));
   aAdd.addEventListener('click', () => {
     const v = Number(aValue.value);
-    if (!aValue.value || !Number.isFinite(v)) return void (status.textContent = 'Enter a number for the alert.');
-    const when = aOp.value === 'above' ? { above: v } : aOp.value === 'below' ? { below: v } : { changeBy: Math.abs(v) / 100 };
+    if (aOp.value !== 'anomaly' && (!aValue.value || !Number.isFinite(v))) return void (status.textContent = 'Enter a number for the alert.');
+    const when: ReportAlert['when'] = aOp.value === 'anomaly' ? { anomaly: true } : aOp.value === 'above' ? { above: v } : aOp.value === 'below' ? { below: v } : { changeBy: Math.abs(v) / 100 };
     alerts.push({ id: uid('alert'), name: aName.value.trim() || 'Alert', measure: aMeasure.value, when, recipients: emails(aTo.value) });
     status.textContent = '';
     render();
@@ -85,7 +86,7 @@ export function schedulesDialog(host: HTMLElement, model: DataModel, report: Rep
     h('h4', {}, 'Alerts'),
     alertList,
     h('div', { class: 'pbs-step-fields' }, lab('Name', aName), lab('Measure', aMeasure), lab('When it', aOp), lab('Value', aValue), lab('Recipients', aTo), aAdd),
-    h('p', { class: 'pbs-note' }, 'Sends run on your server with runSubscriptions(); alerts fire here while editing and anywhere watchAlerts() runs.'),
+    h('p', { class: 'pbs-note' }, 'Sends run on your server with runSubscriptions(). Alerts run anywhere watchAlerts() runs; threshold alerts also fire here while editing.'),
     status,
   );
   openDialog(host, 'Schedules & alerts', body, [{ label: 'Cancel' }, { label: 'Save', primary: true, onClick: () => onSave(subs, alerts) }]);

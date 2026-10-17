@@ -10,6 +10,7 @@
  * ```
  */
 import { Report, prismCss } from '@prismbi/prismbi';
+import { watchAnomalies } from './ai/anomaly';
 import type { CellValue, DataModel, DeepPartial, FieldSpec, FilterSpec, PageDefinition, ReportDefinition, Theme, VisualSpec } from '@prismbi/prismbi';
 
 /** The parts of a DOM `window` PrismBI needs. */
@@ -158,6 +159,8 @@ export interface AlertEvent {
   previous: number | null;
   condition: string;
   at: Date;
+  /** For `{ anomaly: true }` alerts: what was unusual. */
+  insight?: { kind: string; title: string; detail: string };
 }
 
 export interface WatchOptions {
@@ -250,7 +253,21 @@ export function runSubscriptions(model: DataModel, def: ReportDefinition, opts: 
 export function watchAlerts(model: DataModel, def: ReportDefinition, notify: (alert: import('@prismbi/prismbi').ReportAlert, event: AlertEvent) => void, opts: { debounceMs?: number } = {}): () => void {
   const stops = (def.alerts ?? [])
     .filter((a) => a.enabled !== false)
-    .map((a) => watchMeasure(model, { measure: a.measure, filters: a.filters, when: a.when, debounceMs: opts.debounceMs, onAlert: (e) => notify(a, { ...e, measure: a.name || a.measure }) }));
+    .map((a) => {
+      const w = a.when;
+      if ('anomaly' in w)
+        return watchAnomalies(model, {
+          measure: a.measure,
+          filters: a.filters,
+          kinds: w.kinds,
+          debounceMs: opts.debounceMs,
+          onAnomaly: (e) => {
+            const v = model.query({ values: [a.measure], filters: a.filters ?? [] }).rows[0]?.values[0];
+            notify(a, { measure: a.name || a.measure, value: typeof v === 'number' ? v : null, previous: null, condition: e.insight.title, at: e.at, insight: { kind: e.insight.kind, title: e.insight.title, detail: e.insight.detail } });
+          },
+        });
+      return watchMeasure(model, { measure: a.measure, filters: a.filters, when: w, debounceMs: opts.debounceMs, onAlert: (e) => notify(a, { ...e, measure: a.name || a.measure }) });
+    });
   return () => stops.forEach((stop) => stop());
 }
 

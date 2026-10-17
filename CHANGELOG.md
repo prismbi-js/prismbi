@@ -7,6 +7,7 @@
 - **Localization:** `ReportDefinition.translations`, `ReportOptions.direction`, `report.setLocale()`, `report.translate()`.
 - **Lineage:** `lineage`, `impactOf`, `expressionRefs`, `renameInExpression`, `renameModelField`, `model.renameColumn`, `DataTable.renameColumn`. The Studio measure and column renames now update dependent DAX (previously only visual fields).
 
+- **Anomaly alerts:** `watchAnomalies`; `ReportAlert.when` accepts `{ anomaly: true, kinds? }`; `AlertEvent.insight`.
 - **DAX copilot:** `writeDax`, `writeDaxSync`, `explainDax`, `daxCopilot`, `daxPrompt`, `dateColumn`; `StudioOptions.copilot`, `studio.setCopilot()` and the `ExpressionCopilot` type.
 - **Narrative visual:** `narrative` (registered by the AI entry), `writeNarrative`, `filterPhrase`, `setNarrativeWriter`.
 - **Agent panel:** `agentPanel` (Studio), `runAgent`, `anthropicLLM`, `openAILLM`, `ruleBasedLLM`, `planPrompt`, the `add_page` agent tool, and `studio.restore()` / `studio.addToolbarButton()`.

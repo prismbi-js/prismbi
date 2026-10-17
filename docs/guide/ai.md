@@ -95,6 +95,22 @@ findInsights(model, { measure: 'Total Sales', filters, max: 6 });
 
 The `insights` visual (`fields: { values: 'Total Sales' }`, optional `dimensions`) lists them for the current filters. Clicking one shows its chart.
 
+### Anomaly alerts
+
+`watchAnomalies` re-runs the insights whenever the model changes (streams, refreshes, appended rows) and reports each new finding once:
+
+```ts
+const stop = watchAnomalies(model, {
+  measure: 'Total Sales',
+  filters: [{ target: 'Region[Country]', op: 'eq', value: 'Canada' }],
+  kinds: ['anomaly', 'mover'],      // default ['anomaly']: unusual spikes and dips
+  debounceMs: 500,
+  onAnomaly: ({ insight }) => notify(`${insight.title}: ${insight.detail}`),
+});
+```
+
+What is already unusual when watching starts doesn't alert, unless you set `alertExisting: true`. In a report definition, use `alerts: [{ …, when: { anomaly: true } }]`. The server's `watchAlerts` runs those too (see [Server](server.md)).
+
 ## Narrative
 
 The `narrative` visual writes a short summary of its measures that updates with filters and selections, like Power BI's smart narrative:
