@@ -26,6 +26,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "prismbi": "./bin/prismbi.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -57,6 +60,11 @@
       "import": "./dist/worker.js",
       "require": "./dist/worker.cjs"
     },
+    "./files": {
+      "types": "./dist/files.d.ts",
+      "import": "./dist/files.js",
+      "require": "./dist/files.cjs"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",
@@ -66,6 +74,7 @@
   },
   "files": [
     "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
