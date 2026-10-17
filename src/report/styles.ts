@@ -159,6 +159,9 @@ export const CSS = /* css */ `
 .pbi-between-inputs{display:flex;align-items:center;gap:6px}
 .pbi-between-sep{color:var(--pbi-fg-3)}
 .pbi-dual-range{position:relative;height:20px;margin:0 8px}
+.pbi-zoom{display:flex;align-items:center;gap:8px;height:26px;padding-top:4px}
+.pbi-zoom .pbi-dual-range{flex:1;position:relative;height:20px}
+.pbi-zoom-reset{font-size:11px}
 .pbi-range-track{position:absolute;left:0;right:0;top:8px;height:4px;border-radius:2px;background:var(--pbi-grid)}
 .pbi-range-fill{position:absolute;top:0;bottom:0;border-radius:2px;background:var(--pbi-accent)}
 .pbi-range{position:absolute;left:-8px;right:-8px;top:0;width:calc(100% + 16px);height:20px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none;outline:none}

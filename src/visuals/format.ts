@@ -44,6 +44,8 @@ export interface VisualFormat {
     gridlines: boolean;
     /** `auto`: continuous for date/number fields on line, area and scatter charts. */
     type: 'auto' | 'categorical' | 'continuous';
+    /** Show a range slider under line and area charts to zoom into part of the axis. */
+    zoom?: boolean;
     /** Scatter x-axis scale. */
     scale?: 'linear' | 'log';
   };

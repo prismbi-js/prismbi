@@ -408,3 +408,28 @@ describe('calendar heatmap', () => {
     el.remove();
   });
 });
+
+describe('axis zoom', () => {
+  it('narrows the visible categories with a range slider and resets', async () => {
+    const { createVisual } = await import('../src/index');
+    const el = document.createElement('div');
+    el.style.height = '400px';
+    document.body.append(el);
+    const r = createVisual(el, { model: buildModel(), type: 'line', fields: { category: 'Date[MonthYear]', values: 'Total Sales' }, format: { categoryAxis: { zoom: true } } });
+    r.flush();
+    const points = () => el.querySelector('path.pbi-line')!.getAttribute('d')!.split(/[ML]/).filter(Boolean).length;
+    expect(points()).toBe(24);
+    const [from, to] = el.querySelectorAll<HTMLInputElement>('.pbi-zoom input[type=range]');
+    from.value = '12';
+    to.value = '17';
+    to.dispatchEvent(new Event('change'));
+    r.flush();
+    expect(points()).toBe(6);
+    expect(el.textContent).toContain('Jan 2025');
+    (el.querySelector('.pbi-zoom-reset') as HTMLButtonElement).click();
+    r.flush();
+    expect(points()).toBe(24);
+    r.destroy();
+    el.remove();
+  });
+});

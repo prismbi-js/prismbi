@@ -14,6 +14,7 @@ export const GALLERY: Spec[] = [
   { type: 'percentStackedBar', fields: { category: 'Region[Group]', legend: 'Product[Category]', values: 'Total Sales' } },
   { type: 'line', fields: { category: 'Date[MonthYear]', values: ['Total Sales', 'Sales LY'] } },
   { key: 'line-forecast', type: 'line', fields: { category: 'Date[Date]', values: 'Total Sales' }, filters: [{ target: 'Date[Date]', op: 'between', min: new Date(2025, 8, 1), max: new Date(2025, 11, 31) }], format: { analytics: { forecast: { periods: 21 } } } },
+  { key: 'line-zoom', type: 'line', fields: { category: 'Date[MonthYear]', values: 'Total Sales' }, format: { categoryAxis: { zoom: true } } },
   { type: 'area', fields: { category: 'Date[MonthShort]', values: 'Total Sales' } },
   { type: 'stackedArea', fields: { category: 'Date[YearQuarter]', legend: 'Region[Group]', values: 'Total Sales' } },
   { type: 'lineClusteredColumn', fields: { category: 'Date[MonthShort]', values: 'Total Sales', lineValues: 'Margin %' } },

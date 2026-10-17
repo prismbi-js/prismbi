@@ -1,4 +1,4 @@
-import { s, barPath, measureText } from '../render/svg';
+import { s, h, barPath, measureText } from '../render/svg';
 import { downsampleRuns } from '../render/lttb';
 import { forecastSeries, futureKeys, type Forecast } from './forecast';
 import { bandScale, linearScale, logScale, pointScale, timeScale } from '../render/scales';
@@ -75,12 +75,32 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       }
     }
   }
+  // axis zoom: keep the chosen slice of categories (view state only; nothing is re-queried)
+  const zoomOn = !!f.categoryAxis.zoom && kind !== 'combo' && categories.length > 4;
+  const allLabels = categories.map((c) => c.label);
+  const fullCount = categories.length;
+  const zs = ctx.host.state as { zoom?: [number, number] };
+  let z0 = 0;
+  let z1 = fullCount - 1;
+  if (zoomOn && zs.zoom) {
+    z0 = Math.max(0, Math.min(fullCount - 2, zs.zoom[0]));
+    z1 = Math.max(z0 + 1, Math.min(fullCount - 1, zs.zoom[1]));
+  }
+  if (zoomOn && (z0 > 0 || z1 < fullCount - 1)) {
+    categories.splice(0, categories.length, ...categories.slice(z0, z1 + 1));
+    for (const se of [...lineSeries, ...colSeries]) {
+      se.values = se.values.slice(z0, z1 + 1);
+      if (se.highlights) se.highlights = se.highlights.slice(z0, z1 + 1);
+    }
+  }
   const all = [...colSeries, ...lineSeries];
   const legend = renderLegend(
     ctx,
     all.map((se, i) => ({ name: se.name, color: se.color, identity: se.identity, shape: i >= colSeries.length ? 'line' : 'square' })),
   );
-  const { plot, width, height } = withLegend(ctx, legend);
+  const { plot, width, height: fullHeight } = withLegend(ctx, legend);
+  const zoomH = zoomOn ? 30 : 0;
+  const height = fullHeight - zoomH;
   const fs = t.labelFontSize;
   const va = f.valueAxis;
 
@@ -340,6 +360,29 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       });
     });
 
+  if (zoomOn) {
+    const max = fullCount - 1;
+    const r1 = h('input', { type: 'range', min: 0, max, value: z0, class: 'pbi-range', 'aria-label': `Zoom from (${allLabels[z0]})` }) as HTMLInputElement;
+    const r2 = h('input', { type: 'range', min: 0, max, value: z1, class: 'pbi-range', 'aria-label': `Zoom to (${allLabels[z1]})` }) as HTMLInputElement;
+    const fill = h('i', { class: 'pbi-range-fill' });
+    fill.style.left = `${(z0 / max) * 100}%`;
+    fill.style.right = `${100 - (z1 / max) * 100}%`;
+    const commit = () => {
+      let a = Number(r1.value);
+      let b = Number(r2.value);
+      if (a > b) [a, b] = [b, a];
+      if (b - a < 1) b = Math.min(max, a + 1);
+      ctx.host.setState({ zoom: a === 0 && b === max ? undefined : [a, b] });
+      ctx.host.rerender();
+    };
+    r1.addEventListener('change', commit);
+    r2.addEventListener('change', commit);
+    const reset = h('button', { type: 'button', class: 'pbi-link pbi-zoom-reset', title: 'Show the whole axis' }, 'Reset');
+    reset.hidden = z0 === 0 && z1 === max;
+    reset.addEventListener('click', () => (ctx.host.setState({ zoom: undefined }), ctx.host.rerender()));
+    const bar = h('div', { class: 'pbi-zoom', style: `margin-left:${left}px;margin-right:${right}px` }, h('div', { class: 'pbi-dual-range' }, h('div', { class: 'pbi-range-track' }, fill), r1, r2), reset);
+    plot.append(bar);
+  }
   // crosshair + hit layer
   const cross = s('line', { y1: top, y2: bottom, stroke: t.axis, 'stroke-width': 1, visibility: 'hidden', 'pointer-events': 'none' });
   const dots = s('g', { 'pointer-events': 'none' });

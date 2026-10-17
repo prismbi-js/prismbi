@@ -12,7 +12,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | ✅ Implemented |
 | 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | ✅ Implemented |
-| 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | In progress |
+| 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | ✅ Implemented |
 | 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | Planned |
 | 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | Planned |
 
@@ -246,7 +246,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - Framework packages: `@prismbi/vue`, `@prismbi/svelte`, `@prismbi/angular`, web components
 - Version-control-friendly report files (one file per page or visual) and diffable reviews
 
-## Phase 7: Analyst essentials (in progress)
+## Phase 7: Analyst essentials ✅
 
 **Done:**
 - [x] **Visual calculations** (`visualCalc` on value fields: RUNNINGSUM, MOVINGAVERAGE, PREVIOUS/NEXT, FIRST/LAST, RANK, ROWNUMBER, PERCENTOFTOTAL, with per-parent reset)
@@ -256,9 +256,14 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **Multi-select in the Studio:** Ctrl/Shift-click selection, multi-drag, align, distribute, group and ungroup, layer order, a Layers pane, and shortcuts (Ctrl+G, Ctrl+Shift+G, Ctrl+A)
 - [x] **Forecast band** on line and area charts (damped Holt-Winters with auto-detected seasonality, a prediction interval, non-negative series stay non-negative, calendar-aware future dates)
 - [x] **Error bars** on clustered column and bar charts (`errorLower` / `errorUpper` roles)
+- [x] **Calendar heatmap** visual and **axis zoom** slider on line and area charts
 - [x] **Visual regression tests** (`npm run test:visual`): 35 visuals × light and dark, compared with an in-browser pixel diff. They caught and fixed four defects: combo-chart lines flattened on the primary axis (now a secondary axis), map bubbles clipped, radar labels overlapping, decomposition tree clipped.
 
 **Goal:** close the gaps an analyst hits in the first week, and lock in visual quality.
+
+**Deferred:** animated transitions between data states, keyboard-only walkthrough tests, calculation-item format strings, and NATURALINNERJOIN / SAMPLE.
+
+**Original plan:**
 
 ### Calculations
 - **Visual calculations:** running total, moving average, rank, percent of parent or grand total, and difference from previous, all defined on a visual and computed over its result.

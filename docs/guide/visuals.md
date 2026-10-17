@@ -197,3 +197,18 @@ Clustered column and bar charts with a single series accept two optional measure
 - **Drawing:** each bar gets a whisker with caps between the two bounds. With only one bound, the whisker runs from the bar's value to that bound.
 - **Axis:** the value axis grows to include the bounds.
 - **Tooltip:** shows the range.
+
+## Calendar heatmap
+
+`type: 'calendar'` draws one square per day, with weeks as columns and weekdays as rows, and one band per year. It's coloured on the theme's sequential ramp, or by `format.colors.gradient` and rules.
+
+```ts
+{ type: 'calendar', fields: { date: 'Date[Date]', values: 'Total Sales' } }
+```
+
+- **Labels:** month names collapse to initials when space is tight, and weekday labels appear when the cells are large enough.
+- **Interaction:** clicking a day cross-filters the page like any data point.
+
+## Axis zoom
+
+`format.categoryAxis.zoom: true` adds a range slider under line and area charts. Dragging its thumbs narrows the visible part of the axis, and **Reset** shows everything again. The zoom is view state kept per visual, so it doesn't change filters or re-query.
