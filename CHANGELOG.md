@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased: Phase 9, ecosystem (in progress)
+## Unreleased: Phases 8 and 9 (in progress)
+
+- **Lineage:** `lineage`, `impactOf`, `expressionRefs`, `renameInExpression`, `renameModelField`, `model.renameColumn`, `DataTable.renameColumn`. The Studio measure and column renames now update dependent DAX (previously only visual fields).
 
 - **Power BI import:** `@prismbi/prismbi/powerbi` with `importPowerBI`, `parseTmdl`, `parseModelBim`, `buildModelFrom`, `mapPbirReport`, `mapLegacyReport`; the `prismbi pbip <dir> [report.json]` CLI.
 

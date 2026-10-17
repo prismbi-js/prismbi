@@ -210,6 +210,20 @@ export class DataTable {
     this.invalidate();
   }
 
+  /** Rename a column in place (order and values kept; sort-by references follow). */
+  renameColumn(from: string, to: string): void {
+    if (!this.columns.has(from)) throw new Error(`Column "${from}" not found in table "${this.name}"`);
+    if (this.columns.has(to)) throw new Error(`Column "${to}" already exists in table "${this.name}"`);
+    const entries = [...this.columns];
+    this.columns.clear();
+    for (const [k, c] of entries) {
+      const col = k === from ? { ...c, name: to } : c;
+      if (col.sortBy === from) col.sortBy = to;
+      this.columns.set(col.name, col);
+    }
+    this.invalidate();
+  }
+
   removeColumn(name: string): void {
     this.columns.delete(name);
     this.invalidate(name);

@@ -52,3 +52,23 @@ Use it for lineage views, impact analysis ("what breaks if I rename this column?
 ## Function catalog
 
 `DAX_FUNCTIONS` lists every supported function with its signature, description and category, and `DAX_KEYWORDS` lists the bare keywords (intervals, sort orders, directions, types). A test checks that every catalogued function is implemented.
+
+## Lineage, impact and safe renames
+
+```ts
+import { lineage, impactOf, renameModelField } from '@prismbi/prismbi';
+
+const graph = lineage(model, report.toJSON());          // nodes (tables, columns, measures, visuals) and "uses" edges
+const impact = impactOf(model, { kind: 'column', table: 'Sales', name: 'Amount' }, report.toJSON());
+// { measures: ['Total Sales', 'Margin %', …], columns: ['Sales[Profit]'], visuals: [{ pageName, visualId, title }, …] }
+
+const { report: updated } = renameModelField(model, { kind: 'measure', name: 'Total Sales' }, 'Revenue', report.toJSON());
+report.load(updated!);
+```
+
+- **Impact:** `impactOf` follows dependencies transitively, through measures and calculated columns, up to the visuals that would break.
+- **Renaming:** `renameModelField` renames a measure or column and rewrites the references in other measures, calculated columns, and the report's visual fields and filters.
+  - Rewriting works on DAX tokens, so a string like `"[Total Sales]"` is never touched.
+  - `Table[Name]` keeps meaning a column when that table has one.
+  - `model.renameColumn` renames just the column; relationships follow.
+- **In the Studio:** renaming a measure or calculated column in its editor applies all of this automatically. Deleting a measure lists everything that uses it first.

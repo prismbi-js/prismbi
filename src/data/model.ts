@@ -394,6 +394,18 @@ export class DataModel {
   }
 
   /** Remove a (calculated) column. */
+  /** Rename a column; relationships follow. (Use `renameModelField` to also rewrite DAX and reports.) */
+  renameColumn(table: string, from: string, to: string): this {
+    this.table(table).renameColumn(from, to);
+    this.rels = this.rels.map((r) => ({
+      ...r,
+      fromColumn: r.fromTable === table && r.fromColumn === from ? to : r.fromColumn,
+      toColumn: r.toTable === table && r.toColumn === from ? to : r.toColumn,
+    }));
+    this.changed();
+    return this;
+  }
+
   removeColumn(table: string, column: string): this {
     this.table(table).removeColumn(column);
     this.rels = this.rels.filter((r) => !((r.fromTable === table && r.fromColumn === column) || (r.toTable === table && r.toColumn === column))).map((r, i) => ({ ...r, index: i }));

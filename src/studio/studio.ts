@@ -1,4 +1,5 @@
 import type { DataModel } from '../data/model';
+import { impactOf, renameModelField } from '../data/lineage';
 import { transformDialog } from './transforms';
 import type { TransformStep } from '../data/transform';
 import type { MeasureDef, RelationshipDef } from '../data/types';
@@ -334,9 +335,13 @@ export class Studio implements StudioContext {
   editMeasure(name?: string): void {
     const existing = name ? (({ ast: _a, ...m }) => m)(this.model.measure(name)) : null;
     measureDialog(this.root, this.model, existing, (def, previous) => {
-      if (previous) this.model.removeMeasure(previous);
+      // a rename also rewrites other measures, calculated columns and visual fields that use the measure
+      if (previous && previous !== def.name && this.model.hasMeasure(previous)) {
+        const res = renameModelField(this.model, { kind: 'measure', name: previous }, def.name, this.report.toJSON());
+        if (res.report) this.report.load(res.report);
+        if (res.measures.length || res.columns.length) this.toast(`Updated ${res.measures.length + res.columns.length} dependent expression(s)`);
+      } else if (previous && previous !== def.name) this.model.removeMeasure(previous);
       this.model.addMeasure(def);
-      if (previous) this.renameMeasureRefs(previous, def.name);
       this.commit();
       this.toast(existing ? `Saved measure ${def.name}` : `Created measure ${def.name}`);
     });
@@ -344,7 +349,9 @@ export class Studio implements StudioContext {
 
   deleteMeasure(name: string): void {
     const uses = this.measureUsage(name);
-    confirmDialog(this.root, 'Delete measure', uses ? `"${name}" is used in ${uses} visual field(s). They will show an error until you replace it.` : `Delete "${name}"?`, 'Delete', () => {
+    const imp = impactOf(this.model, { kind: 'measure', name }, this.report.toJSON());
+    const parts = [imp.measures.length && `${imp.measures.length} measure(s) (${imp.measures.slice(0, 3).join(', ')}${imp.measures.length > 3 ? ', …' : ''})`, imp.columns.length && `${imp.columns.length} calculated column(s)`, (imp.visuals.length || uses) && `${Math.max(imp.visuals.length, uses)} visual(s)`].filter(Boolean);
+    confirmDialog(this.root, 'Delete measure', parts.length ? `"${name}" is used by ${parts.join(', ')}. They will show an error until you replace it.` : `Delete "${name}"?`, 'Delete', () => {
       this.model.removeMeasure(name);
       this.commit();
     });
@@ -440,7 +447,12 @@ export class Studio implements StudioContext {
     const existing = table && name ? this.studioColumns().find((c) => c.table === table && c.name === name) ?? null : null;
     columnDialog(this.root, this.model, existing, table ?? this.dataState.table, (def, previous) => {
       try {
-        if (previous) this.model.removeColumn(previous.table, previous.name);
+        if (previous && previous.table === def.table && previous.name !== def.name && this.model.table(def.table).hasColumn(previous.name)) {
+          // renamed: rewrite what refers to it, then apply the edited expression
+          const res = renameModelField(this.model, { kind: 'column', table: def.table, name: previous.name }, def.name, this.report.toJSON());
+          if (res.report) this.report.load(res.report);
+          this.model.removeColumn(def.table, def.name);
+        } else if (previous) this.model.removeColumn(previous.table, previous.name);
         this.model.addCalculatedColumn(def.table, def.name, def.expression, { format: def.format });
         this.commit();
         this.toast(`${previous ? 'Saved' : 'Created'} column ${def.table}[${def.name}]`);
@@ -659,24 +671,6 @@ export class Studio implements StudioContext {
       for (const v of this.report.pageDefinition(p.id).visuals)
         for (const f of Object.values(v.fields ?? {})) for (const x of ([] as unknown[]).concat(f)) if (x === name || (typeof x === 'object' && x && (x as { field?: string }).field === name)) n++;
     return n;
-  }
-
-  /** After renaming a measure, update visual fields that referenced it. */
-  private renameMeasureRefs(from: string, to: string): void {
-    for (const p of this.report.pageList)
-      for (const v of this.report.pageDefinition(p.id).visuals) {
-        let changed = false;
-        const fields: Record<string, unknown> = {};
-        for (const [role, f] of Object.entries(v.fields ?? {})) {
-          const swap = (x: unknown) => {
-            if (x === from) return (changed = true), to;
-            if (x && typeof x === 'object' && (x as { field?: string }).field === from) return (changed = true), { ...(x as object), field: to };
-            return x;
-          };
-          fields[role] = Array.isArray(f) ? f.map(swap) : swap(f);
-        }
-        if (changed) this.report.updateVisual(v.id!, { fields: fields as VisualSpec['fields'] });
-      }
   }
 
   private markSaved(saved: boolean): void {

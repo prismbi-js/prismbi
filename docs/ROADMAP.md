@@ -13,7 +13,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | ✅ Implemented |
 | 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | ✅ Implemented |
-| 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | Planned |
+| 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | In progress |
 | 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | In progress |
 
 ## Guiding principles
@@ -293,7 +293,10 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - A transform pipeline round-trips through the report JSON.
 - Every built-in visual has light and dark baselines.
 
-## Phase 8: Teams (planned)
+## Phase 8: Teams (in progress)
+
+**Done:**
+- [x] **Lineage and impact analysis:** `lineage`, `impactOf`, token-safe `renameModelField` and `model.renameColumn`. The Studio rewrites dependents on rename and shows the impact before a delete.
 
 **Goal:** what an organisation needs to roll PrismBI out.
 
