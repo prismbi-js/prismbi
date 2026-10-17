@@ -97,3 +97,21 @@ new Report(el, { model, ...definition });
 
 - [Data modeling](data-model.md) · [Expressions](expressions.md) · [Visuals](visuals.md) · [Interactions](interactions.md) · [Theming](theming.md) · [React](react.md) · [Custom visuals](custom-visuals.md)
 - Run the demo: `npm run dev` and open http://localhost:5173. It has about 31k rows, 8 pages (including tooltip and drill-through pages), and 61 visual instances.
+
+## Try it
+
+One visual, bound to the demo model:
+
+```js playground
+import { createVisual } from '@prismbi/prismbi';
+
+return createVisual(el, {
+  model,
+  type: 'clusteredColumn',
+  title: 'Sales by category',
+  fields: { category: 'Product[Category]', values: 'Total Sales' },
+  format: { dataLabels: { show: true } },
+});
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

@@ -165,3 +165,16 @@ fields: {
 - **References:** `[Name]` refers to another value of the same visual.
 - **Scalar functions:** arithmetic and comparisons, `DIVIDE`, `ABS`, `ROUND`, `IF`, `BLANK`, `ISBLANK`, and two-argument `MIN` / `MAX`.
 - **Restarting per group:** with two or more group columns, `reset: 'parent'` restarts window functions for each outer group. Year-to-date by month is `{ visualCalc: 'RUNNINGSUM([Sales])', reset: 'parent' }` grouped by year then month.
+
+## Try it
+
+```js playground
+return {
+  total: model.evaluate('[Total Sales]'),
+  bikes2025: model.evaluate('CALCULATE([Total Sales], Product[Category] = "Bikes", Date[Year] = 2025)'),
+  bestMonth: model.evaluate('MAXX(VALUES(Date[MonthYear]), [Total Sales])'),
+  categories: model.evaluateTable('ADDCOLUMNS(VALUES(Product[Category]), "Sales", [Total Sales])').rows,
+};
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

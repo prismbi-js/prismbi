@@ -1,22 +1,34 @@
 # Where work stopped (handoff)
 
-Last updated 2026-10-17. Branch `phase-5`; local `master` fast-forwarded to the same commit. **Nothing is pushed**: pushing needs the owner's explicit go-ahead. There is deliberately no CI workflow.
+Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/santhoshkumarhari/PrismBI). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
 
 ## State
 
-- **Phases 1–5 are done.** Phase 6 is half done: 3 of 6 items.
-- **Tests:** 253 pass (`npm test`).
-- **Checks:** `npm run typecheck` and `npm run build` are clean. `npm run bench` gives the 200k / 1M-row timings.
-- **Entries:** `@prismbi/prismbi`, `/core`, `/visuals`, `/studio`, `/react`, `/connectors`, `/worker`, `/files`, `/elements`, `/ai`.
-- **CLI:** `bin/prismbi.mjs`.
-- **Demo pages** (`npm run dev`, then http://localhost:5173): `/`, `/studio.html`, `/perf.html`, `/elements.html`.
+- **Phases 1–9 are done**, except the deferred items listed under "What's left".
+- **Tests:** 350+ pass (`npm test`). `npm run test:visual` covers 78 screenshot baselines. `npm run typecheck` and `npm run build` are clean.
+- **Entries:**
+  - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (22).
+  - UI and frameworks: `/studio`, `/react`, `/elements`.
+  - Data: `/connectors`, `/worker`, `/sql`.
+  - Other: `/files`, `/ai`, `/server`, `/collab`, `/plugins`, `/powerbi`.
+- **CLI:** `bin/prismbi.mjs` (split, join, diff, pbip) and `scripts/sign-plugin.mjs`.
+- **Demo pages** (`npm run dev`, then http://localhost:5173): `/`, `/studio.html` (agent panel, DAX copilot), `/perf.html`, `/elements.html`, `/gallery.html`, `/playground.html`.
+- **Docs site:** `npm run docs` (or `npm run docs:build`) writes `examples/docs/`, which is gitignored and served at `/docs/`. Guide code blocks fenced as ```` ```js playground ```` get a Run link, appear in the playground, and are executed by `tests/playground.test.ts`.
+
+## What's left
+
+- **Deferred:**
+  - Phase 7: animated transitions, keyboard walkthrough tests, calculation-item format strings.
+  - Phase 8: geo upgrades (built-in boundaries, clustering).
+- **SQL pushdown gaps:** time intelligence, `ALL` / `ALLSELECTED`, and `CALCULATE` overriding a column the query also uses. These throw `SqlUnsupportedError`; set `fallback: 'model'` to answer them in memory.
+- **Playground:** add more `js playground` examples to the guides; each one is tested automatically.
 
 ## Publishing (deferred by the owner: "we will deploy later")
 
 - **Package:** `@prismbi/prismbi@0.6.0` is ready. npm rejected the unscoped name `prismbi` as too close to `prisma` and `prismjs`.
 - **Before publishing:** the owner creates the free npm organization `prismbi` on npmjs.com.
 - **Then:** run `npm publish --access public --auth-type=web` in a real terminal, since the passkey prompt opens in the browser.
-- **Bump first:** if new features land before then, bump the version and date the CHANGELOG entry.
+- **Bump first:** Phases 7–9 landed after 0.6.0. Bump to 0.9.0, merge the two unreleased CHANGELOG sections under it with the date, then publish.
 
 ## Remaining Phase 6 items (do in this order)
 

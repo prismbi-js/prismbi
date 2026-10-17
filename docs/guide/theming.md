@@ -137,3 +137,19 @@ report.setLocale('ar-EG');             // switch at runtime
 - **Field names:** these rename axis titles, legends, tooltips and screen-reader narration, without touching the model.
 - **Direction:** Arabic, Hebrew, Persian and Urdu locales switch the report to right-to-left. `direction: 'ltr' | 'rtl'` forces either.
 - **Saving:** `translations` are kept by `toJSON()` and `load()`.
+
+## Try it
+
+```js playground
+import { createVisual } from '@prismbi/prismbi';
+
+return createVisual(el, {
+  model,
+  type: 'donut',
+  title: 'Sales by region group',
+  theme: { dataColors: ['#0f766e', '#f59e0b', '#7c3aed', '#e11d48'] },
+  fields: { legend: 'Region[Group]', values: 'Total Sales' },
+});
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

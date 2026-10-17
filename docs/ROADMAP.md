@@ -293,7 +293,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - A transform pipeline round-trips through the report JSON.
 - Every built-in visual has light and dark baselines.
 
-## Phase 8: Teams (in progress)
+## Phase 8: Teams (done; geo upgrades deferred)
 
 **Done:**
 - [x] **Accessibility:** automatic chart narration (`aria-description` and screen-reader text, `describe()`, `narrate()`), a high-contrast theme, and accessibility tests across chart types
@@ -325,9 +325,10 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - Screen-reader narration is available on every chart.
 - A rename is blocked with an impact list when it would break visuals.
 
-## Phase 9: Ecosystem (in progress)
+## Phase 9: Ecosystem (done)
 
 **Done:**
+- [x] **Docs site and live playground:** `npm run docs` builds `docs/guide` into a searchable static site (zero-dependency generator, `scripts/build-docs.mjs`). `/playground.html` runs the guides' `js playground` examples in an editor, and `tests/playground.test.ts` runs each of them.
 - [x] **Per-visual entry points:** `@prismbi/prismbi/visuals/<family>` (22 self-registering entries; core + one visual ≈ 41 KB gzipped vs 78 KB for everything)
 - [x] **Incremental refresh policies:** `model.setRefreshPolicy`, `incrementalRefresh` (replace the last N periods, keep and trim history; works with transforms), `scheduleRefresh({ mode: 'incremental' })`, `applyRefreshPolicy`, `periodStart`
 - [x] **SQL pushdown** (`@prismbi/prismbi/sql`): `sqlEngine` / `toSql` for DuckDB, Postgres and SQLite (joins, filters, Top N, totals, highlights, sort-by columns, measures with CALCULATE column filters, SUMX, inlined calculated columns), `duckdbRunner`, and an optional in-memory fallback; checked against SQLite in tests

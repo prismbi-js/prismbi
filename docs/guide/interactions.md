@@ -245,3 +245,28 @@ Actions are `select`, `drill`, `drillThrough`, `filter` and `bookmark`. A handle
 ```
 
 `field` and `roles` combine (both must hold). Hidden visuals don't run queries. In edit mode every visual stays visible, so authors can still lay them out. `report.isVisualVisible(id)` tells you the current state.
+
+## Try it
+
+A slicer and two charts that filter each other. Click a bar or pick a year:
+
+```js playground
+import { Report } from '@prismbi/prismbi';
+
+const report = new Report(el, {
+  model,
+  chrome: { toolbar: false },
+  pages: [{
+    name: 'Sales',
+    visuals: [
+      { id: 'year', type: 'slicer', layout: { x: 0, y: 0, w: 3, h: 6 }, fields: { field: 'Date[Year]' } },
+      { id: 'cat', type: 'clusteredBar', title: 'By category', layout: { x: 3, y: 0, w: 9, h: 6 }, fields: { category: 'Product[Category]', values: 'Total Sales' } },
+      { id: 'trend', type: 'line', title: 'By month', layout: { x: 0, y: 6, w: 12, h: 6 }, fields: { category: 'Date[MonthYear]', values: 'Total Sales' } },
+    ],
+  }],
+});
+report.on('selectionChanged', (e) => console.log('filters', e.filters));
+return report;
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

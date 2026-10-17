@@ -120,3 +120,16 @@ model.setRoles(null); // remove security
 - `USERNAME()`, `USERPRINCIPALNAME()` and `CUSTOMDATA()` return what you pass to `setRoles`.
 
 > Row-level security in the browser decides **what the report shows**, not what the user can download. Every row you send to the client can be read there. For real data protection, filter on the server before sending data, and use the same role definitions to describe the rules.
+
+## Try it
+
+Row-level security: the same measure, as seen by a role:
+
+```js playground
+model.addRole('Europe', { Region: 'Region[Group] = "Europe"' });
+const everyone = model.evaluate('[Total Sales]');
+model.setRoles(['Europe']);
+return { everyone, europeOnly: model.evaluate('[Total Sales]') };
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

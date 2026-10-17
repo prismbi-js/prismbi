@@ -51,3 +51,15 @@ npx @prismbi/prismbi diff old.json reports/sales          # either side may be a
 ```
 
 `diff` exits with code 1 when there are changes and 0 when there are none, so it fits in CI checks and pre-commit hooks.
+
+## Try it
+
+```js playground
+import { splitReport, diffReports, formatDiff } from '@prismbi/prismbi/files';
+
+const before = { name: 'Sales', pages: [{ id: 'p1', name: 'Overview', visuals: [{ id: 'v1', type: 'card', fields: { value: 'Total Sales' } }] }] };
+const after = { ...before, pages: [{ ...before.pages[0], visuals: [{ ...before.pages[0].visuals[0], type: 'kpi' }] }] };
+return { files: Object.keys(splitReport(before)), diff: formatDiff(diffReports(before, after)) };
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

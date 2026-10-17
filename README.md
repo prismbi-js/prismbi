@@ -130,6 +130,7 @@ npm test           # vitest (engine, DAX, formatting, rendering, interactions)
 npm run typecheck
 npm run bench      # 200k / 1M-row query timings
 npm run build      # dist/ (ESM + CJS + .d.ts)
+npm run docs       # docs site at /docs/ and the live playground at /playground.html
 ```
 
 ## License

@@ -292,3 +292,17 @@ await server.connect(new StdioServerTransport());
 ```
 
 The model engine has no DOM dependency, so this runs on Node. Load data with `@prismbi/prismbi/connectors`.
+
+## Try it
+
+```js playground
+import { askSync, writeDaxSync, explainDax } from '@prismbi/prismbi/ai';
+import { createVisual } from '@prismbi/prismbi';
+
+const answer = askSync(model, 'top 5 products by sales in 2025');
+const measure = writeDaxSync(model, 'sales year to date for bikes');
+console.log(measure.expression, explainDax(model, measure.expression));
+return createVisual(el, { model, ...answer.spec });
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

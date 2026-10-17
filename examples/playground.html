@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrismBI playground</title>
+    <style>
+      :root { --bg: #f9f9f7; --fg: #1d2330; --fg2: #5b6475; --line: #dfe2e8; --side: #f1f2f4; --accent: #2f6fde; --code: #fff; color-scheme: light; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #111418; --fg: #e4e7ec; --fg2: #9aa3b2; --line: #2a2f38; --side: #171a20; --accent: #6aa0ff; --code: #1a1e25; color-scheme: dark; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; height: 100vh; display: grid; grid-template-columns: 250px minmax(0, 1fr) minmax(0, 1.1fr); grid-template-rows: 44px minmax(0, 1fr); background: var(--bg); color: var(--fg); font: 13px/1.5 system-ui, sans-serif; }
+      header { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+      header b { font-size: 15px; }
+      header a { color: var(--accent); }
+      header .spacer { flex: 1; }
+      button { font: inherit; padding: 5px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+      button.secondary { background: transparent; color: var(--fg); border-color: var(--line); }
+      aside { overflow: auto; border-right: 1px solid var(--line); background: var(--side); padding: 8px; }
+      aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--fg2); margin: 12px 6px 4px; }
+      aside a { display: block; padding: 4px 8px; border-radius: 6px; color: var(--fg); text-decoration: none; }
+      aside a[aria-current] { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+      .editor { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+      textarea { flex: 1; min-height: 0; resize: none; border: 0; padding: 14px 16px; background: var(--code); color: var(--fg); font: 13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; outline: none; }
+      .hint { padding: 6px 14px; color: var(--fg2); border-top: 1px solid var(--line); font-size: 12px; }
+      .output { display: flex; flex-direction: column; min-height: 0; padding: 12px; gap: 10px; overflow: auto; }
+      #el { flex: 1; min-height: 320px; position: relative; }
+      #el > .pbi-report, #el > .pbi-visual-standalone { height: 100%; }
+      #result { margin: 0; white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 40%; overflow: auto; }
+      #result:empty { display: none; }
+      #result.error { color: #d0343a; }
+      @media (max-width: 900px) { body { grid-template-columns: 1fr; grid-template-rows: 44px auto 40vh minmax(60vh, auto); height: auto; } aside { max-height: 30vh; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>PrismBI playground</b>
+      <span id="where"></span>
+      <span class="spacer"></span>
+      <button id="reset" class="secondary" type="button">Reset</button>
+      <button id="run" type="button" title="Ctrl+Enter">▶ Run</button>
+      <a href="./docs/index.html">Docs</a>
+      <a href="./index.html">Demo</a>
+    </header>
+    <aside id="list" aria-label="Examples"></aside>
+    <div class="editor">
+      <textarea id="code" spellcheck="false" aria-label="Example code"></textarea>
+      <div class="hint">JavaScript with <code>model</code> (the demo model) and <code>el</code> (the output) in scope. Imports from <code>@prismbi/prismbi…</code> work; return a value to print it. Ctrl+Enter runs.</div>
+    </div>
+    <div class="output">
+      <div id="el"></div>
+      <pre id="result" role="status"></pre>
+    </div>
+    <script type="module" src="./playground-main.ts"></script>
+  </body>
+</html>

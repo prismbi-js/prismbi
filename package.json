@@ -147,7 +147,9 @@
     "bench": "vitest run --config vitest.bench.config.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run typecheck && npm test && npm run build",
-    "test:visual": "node scripts/visual-test.mjs"
+    "test:visual": "node scripts/visual-test.mjs",
+    "docs:build": "node scripts/build-docs.mjs",
+    "docs": "node scripts/build-docs.mjs && vite --config examples/vite.config.ts --open /docs/index.html"
   },
   "peerDependencies": {
     "react": ">=17",

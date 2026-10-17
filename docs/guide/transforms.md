@@ -42,3 +42,23 @@ In the Studio, open the Data view and press **Transform** on a table. You can ad
   - `maxRows` windows the source.
 - **Inspecting:** `model.transformsOf(name)` returns the steps, and `model.sourceRowsOf(name)` the source rows. The steps also appear in `model.toJSON().transforms`.
 - **Standalone use:** `applySteps(rows, steps, { lookup })` runs steps without a model, for example in a server job. `describeStep(step)` gives the plain-language label shown in the editor.
+
+## Try it
+
+```js playground
+import { applySteps } from '@prismbi/prismbi';
+
+return applySteps(
+  [
+    { Customer: '  ana lopez ', Q1: 10, Q2: 12 },
+    { Customer: 'ben ito', Q1: 5, Q2: null },
+  ],
+  [
+    { op: 'transformText', columns: ['Customer'], fn: 'clean' },
+    { op: 'transformText', columns: ['Customer'], fn: 'title' },
+    { op: 'unpivot', columns: ['Q1', 'Q2'], attribute: 'Quarter', value: 'Units' },
+  ],
+);
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

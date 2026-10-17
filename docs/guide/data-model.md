@@ -101,3 +101,17 @@ model.fields();   // [{ kind: 'column' | 'measure', table, name, ref, type, form
 model.toJSON();   // tables/columns/types, relationships, measures (no row data)
 model.onChange(() => ...);
 ```
+
+## Try it
+
+```js playground
+return model.query({
+  groupBy: ['Region[Group]'],
+  values: ['Total Sales', 'Orders', 'Margin %'],
+  filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
+  orderBy: [{ field: 'Total Sales', direction: 'desc' }],
+  totals: true,
+});
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

@@ -56,3 +56,21 @@ These throw a `SqlUnsupportedError` that names the cause:
 ## Dates
 
 Dates are calendar dates. Literals are written from the local date (`DATE '2025-03-01'`, or `'2025-03-01'` for SQLite). `DATE` values that come back, whether as ISO strings, epoch days or UTC-midnight timestamps, become local-midnight `Date`s, the way the model creates them.
+
+## Try it
+
+See the SQL a visual query becomes:
+
+```js playground
+import { toSql } from '@prismbi/prismbi/sql';
+
+return toSql(model, {
+  groupBy: ['Product[Category]'],
+  values: ['Total Sales', 'Orders'],
+  filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
+  orderBy: [{ field: 'Total Sales', direction: 'desc' }],
+  top: 3,
+}).sql;
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.

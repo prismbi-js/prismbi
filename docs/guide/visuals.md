@@ -212,3 +212,19 @@ Clustered column and bar charts with a single series accept two optional measure
 ## Axis zoom
 
 `format.categoryAxis.zoom: true` adds a range slider under line and area charts. Dragging its thumbs narrows the visible part of the axis, and **Reset** shows everything again. The zoom is view state kept per visual, so it doesn't change filters or re-query.
+
+## Try it
+
+```js playground
+import { createVisual } from '@prismbi/prismbi';
+
+return createVisual(el, {
+  model,
+  type: 'waterfall',
+  title: 'Change vs last year by category',
+  fields: { category: 'Product[Category]', values: 'Sales Change' },
+  filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
+});
+```
+
+On the docs site (`npm run docs`), **▶ Run in playground** opens it in an editor next to its output.
