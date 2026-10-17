@@ -94,6 +94,11 @@
       "import": "./dist/server.js",
       "require": "./dist/server.cjs"
     },
+    "./collab": {
+      "types": "./dist/collab.d.ts",
+      "import": "./dist/collab.js",
+      "require": "./dist/collab.cjs"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",

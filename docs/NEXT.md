@@ -46,7 +46,9 @@ Contents:
 - **Tests:** run with `// @vitest-environment node` plus `new JSDOM()`. `measureText` already falls back to an estimate under jsdom.
 - **Docs:** `docs/guide/server.md`.
 
-### 2. NEXT: Collaboration: `@prismbi/prismbi/collab`
+### 2. ✅ DONE: Collaboration (src/collab.ts, tests/collab.test.ts, docs/guide/collab.md; demo /studio.html?room=demo)
+
+#### Original plan: Collaboration: `@prismbi/prismbi/collab`
 
 - **Document:** an operation-based document over report JSON. Visuals and pages are keyed by id, and properties use last-writer-wins with Lamport clocks and a site id.
   - Hook into the Studio history snapshots (`src/studio/history.ts`) and `Report.load` / `definitionChanged`.
@@ -55,7 +57,7 @@ Contents:
 - **Shared bookmarks:** stored in the document.
 - **Demo:** open `/studio.html` in two tabs. Test with two in-memory peers.
 
-### 3. Plugins: `@prismbi/prismbi/plugins`
+### 3. NEXT: Plugins: `@prismbi/prismbi/plugins`
 
 - **Manifest:** `{ name, version, kind: 'visual' | 'connector' | 'theme', entry, integrity: 'sha256-…', signature }`.
 - **`loadPlugin(url, { trustedKeys })`:**

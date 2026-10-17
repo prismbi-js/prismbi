@@ -18,6 +18,7 @@ export default defineConfig({
       { find: /^@prismbi\/prismbi\/elements$/, replacement: src('elements.ts') },
       { find: /^@prismbi\/prismbi\/ai$/, replacement: src('ai.ts') },
       { find: /^@prismbi\/prismbi\/server$/, replacement: src('server.ts') },
+      { find: /^@prismbi\/prismbi\/collab$/, replacement: src('collab.ts') },
     ],
   },
   build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html'), perf: here('./perf.html'), elements: here('./elements.html') } } },
