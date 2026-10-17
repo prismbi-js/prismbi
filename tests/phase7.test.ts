@@ -96,3 +96,71 @@ describe('DAX window functions', () => {
     expect(() => m.evaluate('ORDERBY(Date[Year])')).toThrow(/only be used inside/);
   });
 });
+
+describe('transform steps', () => {
+  const raw = [
+    { Order: 'A-1', Customer: '  ana lopez ', Region: 'North', Q1: 10, Q2: 12, Date: '2025-01-05', Amount: '1,200' },
+    { Order: 'A-2', Customer: 'ben ito', Region: '', Q1: 5, Q2: null, Date: '2025-02-10', Amount: '300' },
+    { Order: 'A-3', Customer: 'cara day', Region: 'South', Q1: 7, Q2: 9, Date: '2025-02-11', Amount: 'n/a' },
+    { Order: 'A-3', Customer: 'cara day', Region: 'South', Q1: 7, Q2: 9, Date: '2025-02-11', Amount: 'n/a' },
+  ];
+
+  it('cleans, reshapes and aggregates like Power Query', async () => {
+    const { applySteps, describeStep } = await import('../src/index');
+    const clean = applySteps(raw, [
+      { op: 'removeDuplicates' },
+      { op: 'transformText', columns: ['Customer'], fn: 'clean' },
+      { op: 'transformText', columns: ['Customer'], fn: 'title' },
+      { op: 'fillDown', columns: ['Region'] },
+      { op: 'changeType', column: 'Amount', type: 'number' },
+      { op: 'changeType', column: 'Date', type: 'date' },
+      { op: 'splitColumn', column: 'Order', delimiter: '-', into: ['Series', 'Number'] },
+      { op: 'renameColumns', names: { Customer: 'Name' } },
+      { op: 'addColumn', name: 'Label', template: '{Name} ({Region})' },
+    ]);
+    expect(clean).toHaveLength(3);
+    expect(clean[0]).toMatchObject({ Name: 'Ana Lopez', Series: 'A', Number: '1', Amount: 1200, Label: 'Ana Lopez (North)' });
+    expect(clean[1].Region).toBe('North'); // filled down
+    expect(clean[2].Amount).toBeNull(); // "n/a" is not a number
+    expect(clean[0].Date).toBeInstanceOf(Date);
+    const long = applySteps(clean, [{ op: 'keepColumns', columns: ['Name', 'Q1', 'Q2'] }, { op: 'unpivot', columns: ['Q1', 'Q2'], attribute: 'Quarter', value: 'Units' }]);
+    expect(long).toHaveLength(5); // Ben's blank Q2 is dropped
+    const wide = applySteps(long, [{ op: 'pivot', attribute: 'Quarter', value: 'Units' }]);
+    expect(wide.find((r) => r.Name === 'Cara Day')).toEqual({ Name: 'Cara Day', Q1: 7, Q2: 9 });
+    const grouped = applySteps(clean, [{ op: 'groupBy', by: ['Region'], aggregations: [{ name: 'Orders', agg: 'count' }, { name: 'Units', column: 'Q1', agg: 'sum' }] }, { op: 'sort', by: [{ column: 'Units', desc: true }] }]);
+    expect(grouped).toEqual([{ Region: 'North', Orders: 2, Units: 15 }, { Region: 'South', Orders: 1, Units: 7 }]);
+    const joined = applySteps(clean, [{ op: 'merge', with: 'Regions', on: [['Region', 'Code']], columns: ['Manager'] }, { op: 'filterRows', column: 'Manager', test: 'notBlank' }], { lookup: () => [{ Code: 'North', Manager: 'Dee' }] });
+    expect(joined.map((r) => r.Manager)).toEqual(['Dee', 'Dee']);
+    expect(() => applySteps(clean, [{ op: 'append', with: 'Nope' }])).toThrow(/Step 1 \(append\)/);
+    expect(describeStep({ op: 'groupBy', by: ['Region'], aggregations: [{ name: 'Orders', agg: 'count' }] })).toBe('Group by Region: Orders = count');
+  });
+
+  it('replays steps on refresh and append, and stores them with the model', async () => {
+    const { DataModel } = await import('../src/index');
+    const m = new DataModel().addTable('Sales', raw).addMeasure('Units', 'SUM(Sales[Q1])');
+    m.transformTable('Sales', [
+      { op: 'removeDuplicates' },
+      { op: 'filterRows', column: 'Region', test: 'notBlank' },
+      { op: 'changeType', column: 'Amount', type: 'number' },
+    ]);
+    expect(m.table('Sales').rowCount).toBe(2);
+    expect(m.table('Sales').column('Amount').type).toBe('number');
+    expect(m.evaluate('[Units]')).toBe(17);
+    // appended rows go through the (row-local) steps
+    m.appendRows('Sales', [{ Order: 'B-1', Customer: 'x', Region: '', Q1: 100 }, { Order: 'B-2', Customer: 'y', Region: 'East', Q1: 1, Amount: '50' }]);
+    expect(m.evaluate('[Units]')).toBe(18);
+    // a whole-table step re-runs over the full source
+    m.transformTable('Sales', [...m.transformsOf('Sales')!, { op: 'keepTop', n: 1 }]);
+    m.appendRows('Sales', [{ Order: 'C-1', Customer: 'z', Region: 'West', Q1: 3 }]);
+    expect(m.table('Sales').rowCount).toBe(1);
+    expect(m.sourceRowsOf('Sales')).toHaveLength(7);
+    expect(m.toJSON().transforms.Sales).toHaveLength(4);
+    // refresh treats rows as the new source
+    m.refreshTable('Sales', [{ Order: 'Z', Customer: 'q', Region: 'R', Q1: 2, Amount: '7' }]);
+    expect(m.table('Sales').column('Amount').values).toEqual([7]);
+    // clearing restores the source
+    m.transformTable('Sales', []);
+    expect(m.transformsOf('Sales')).toBeUndefined();
+    expect(m.table('Sales').column('Amount').values).toEqual(['7']);
+  });
+});

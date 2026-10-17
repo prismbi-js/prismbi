@@ -10,6 +10,8 @@ import { parseDax } from '../dax/parser';
 import { Evaluator } from '../dax/evaluator';
 import type { QueryResult, QuerySpec } from './query';
 import { runQuery } from './query';
+import { applySteps, rowLocalSteps } from './transform';
+import type { TransformStep } from './transform';
 
 export interface AppendOptions {
   /** Keep at most this many rows, dropping the oldest (sliding window). */
@@ -117,6 +119,8 @@ export class DataModel {
   private allRowsCache = new Map<string, number[]>();
   private listeners = new Set<Listener>();
   private calcTables = new Map<string, string>();
+  /** Power Query-style steps per table, with the untransformed source rows they replay over. */
+  private transforms = new Map<string, { source: Row[]; steps: TransformStep[] }>();
   private calcGroupMap = new Map<string, CalculationGroup>();
   private fieldParams = new Map<string, { column: string; fields: FieldParameterDef[] }>();
   private hierarchies = new Map<string, { table: string; name: string; levels: string[] }>();
@@ -153,6 +157,12 @@ export class DataModel {
 
   /** Replace a table's rows (e.g. on refresh), keeping calculated columns. Calculated tables are recomputed. */
   refreshTable(name: string, rows: Row[], schema?: Record<string, ColumnSchema>): this {
+    // a transformed table treats new rows as its source and replays its steps
+    const tf = this.transforms.get(name);
+    if (tf) {
+      tf.source = rows;
+      rows = applySteps(rows, tf.steps, { lookup: (n) => this.rowsOfTable(n) });
+    }
     const old = this.table(name);
     const calc = [...old.columns.values()].filter((c) => c.expression);
     const table = new DataTable(name, rows, schema);
@@ -168,6 +178,14 @@ export class DataModel {
    * computed for the new rows; the rest are recomputed. `maxRows` keeps a sliding window by dropping the oldest rows.
    */
   appendRows(name: string, rows: Row[], opts: AppendOptions = {}): this {
+    const tf = this.transforms.get(name);
+    if (tf) {
+      tf.source.push(...rows);
+      if (opts.maxRows !== undefined && tf.source.length > opts.maxRows) tf.source.splice(0, tf.source.length - opts.maxRows);
+      // whole-table steps (group, sort, pivot, …) need the full source again
+      if (!rowLocalSteps(tf.steps)) return this.refreshTable(name, tf.source);
+      rows = applySteps(rows, tf.steps, { lookup: (n) => this.rowsOfTable(n) });
+    }
     const t = this.table(name);
     const calc = [...t.columns.values()].filter((c) => c.expression);
     const before = t.rowCount;
@@ -232,6 +250,47 @@ export class DataModel {
       }
     };
     return walk(ast);
+  }
+
+  /**
+   * Apply Power Query-style steps to a table (see {@link TransformStep}). The current rows, or the rows
+   * given as `source`, become the source the steps replay over on every refresh and append; calling it
+   * again replaces the steps. An empty list restores the source.
+   */
+  transformTable(name: string, steps: TransformStep[], opts: { source?: Row[] } = {}): this {
+    const existing = this.transforms.get(name);
+    const source = opts.source ?? existing?.source ?? this.rowsOfTable(name, true);
+    if (!steps.length) {
+      this.transforms.delete(name);
+      return this.refreshTable(name, source);
+    }
+    this.transforms.set(name, { source, steps: steps.map((st) => ({ ...st })) });
+    return this.refreshTable(name, source);
+  }
+
+  /** The transform steps of a table, if any. */
+  transformsOf(name: string): TransformStep[] | undefined {
+    const tf = this.transforms.get(name);
+    return tf ? tf.steps.map((st) => ({ ...st })) : undefined;
+  }
+
+  /** The untransformed rows of a transformed table (a copy), for previews and editors. */
+  sourceRowsOf(name: string): Row[] | undefined {
+    return this.transforms.get(name)?.source.slice();
+  }
+
+  /** Rows of a table as objects (calculated columns optional). */
+  private rowsOfTable(name: string, withoutCalculated = false): Row[] {
+    const t = this.table(name);
+    const rows = t.toRows();
+    if (!withoutCalculated) return rows;
+    const calc = [...t.columns.values()].filter((c) => c.expression).map((c) => c.name);
+    if (!calc.length) return rows;
+    return rows.map((r) => {
+      const o = { ...r };
+      for (const c of calc) delete o[c];
+      return o;
+    });
   }
 
   removeTable(name: string): this {
@@ -570,6 +629,7 @@ export class DataModel {
       hierarchies: [...this.hierarchies.values()],
       perspectives: Object.fromEntries([...this.perspectives].map(([k, v]) => [k, [...v]])),
       roles: Object.fromEntries(this.roles),
+      transforms: Object.fromEntries([...this.transforms].map(([k, v]) => [k, v.steps])),
     };
   }
 

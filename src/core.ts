@@ -5,6 +5,8 @@
  */
 // data & model
 export { DataModel } from './data/model';
+export { applySteps, applyStep, describeStep } from './data/transform';
+export type { TransformStep, TransformContext } from './data/transform';
 export type { AppendOptions, CalculationGroup, CalculationGroupDef, CalculationItemDef, FieldInfo, FieldParameterDef, Measure, Relationship, WhatIfParameterDef } from './data/model';
 export { setFastQuery } from './data/fastQuery';
 export type { FastQueryMode } from './data/fastQuery';
