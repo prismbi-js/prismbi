@@ -42,6 +42,11 @@
       "import": "./dist/visuals.js",
       "require": "./dist/visuals.cjs"
     },
+    "./studio": {
+      "types": "./dist/studio.d.ts",
+      "import": "./dist/studio.js",
+      "require": "./dist/studio.cjs"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",

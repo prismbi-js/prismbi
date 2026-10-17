@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 (unreleased): Phase 4, the studio
+
+- **`prismbi/studio`** and **`<PrismStudio>`**: a drag-and-drop report editor. Canvas edit mode (select, move, resize, grid snap, keyboard), Fields, Build, Format and Filters panes, page management, measure and column editors, data and model views (relationship diagram), theme designer, Auto page, preview, export and import.
+- **Undo/redo** across report and model edits, **autosave** (`storageKey`), and a studio document that stores model changes as a diff.
+- **Report edit-mode APIs:** `setEditMode`, `selectedVisual`, `visualFormat`, `updatePage`, `movePage`, `duplicatePage`, `pageDefinition`, `duplicateVisual`, `arrange`, `findFreeSpot`, `load`, plus the events `definitionChanged` and `visualSelected`.
+- **Versioned report JSON:** `REPORT_SCHEMA_VERSION` and `migrateReport`.
+- **Model:** `updateRelationship`, `removeRelationship`, `removeColumn`.
+- **Fixes:** data labels use each series' own format and avoid collisions. Clustered charts flag mixed scales.
+
+
 ## 0.3.0 (unreleased): Phase 3
 
 - **Relationships:** `crossFilter: 'both'`, `cardinality: 'manyToMany'`, inactive relationships, `USERELATIONSHIP`, `CROSSFILTER`, `TREATAS`.

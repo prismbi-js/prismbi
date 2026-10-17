@@ -2,7 +2,7 @@
 
 **Power BI-style data modeling and interactive reports for the web, written in TypeScript.**
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It has zero dependencies: about 52 KB min+gzip for the core, about 66 KB for a typical dashboard, and about 82 KB with every visual. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`prismbi/studio`). It has zero dependencies: about 55 KB min+gzip for the core, about 70 KB for a typical dashboard, and about 87 KB with every visual. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install prismbi
@@ -42,6 +42,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 |---|---|
 | **Real BI semantics** | Filter context, row context, context transition, `CALCULATE` with `ALL`, `ALLEXCEPT`, `ALLSELECTED`, `KEEPFILTERS`, `USERELATIONSHIP` and `CROSSFILTER`, time intelligence, table functions, auto-exist grouping, and true (non-additive) totals. About 160 DAX functions |
 | **Advanced modeling** | Bidirectional, many-to-many and inactive relationships, calculated tables, calculation groups, field and what-if parameters, hierarchies, perspectives, row-level security |
+| **Report editor** | `prismbi/studio`: drag-and-drop canvas, fields, build, format and filters panes, measure and column editors, data and model views, theme designer, undo/redo, autosave, versioned JSON |
 | **Developer tooling** | DAX language service (completion, hover, diagnostics, signature help), formatter, dependency explanation, `evaluateTable()` queries |
 | **Slice and narrow down** | Slicers (list, dropdown, tiles, range, relative date, hierarchy tree, synced across pages), cross-filter and cross-highlight, Ctrl+click multi-select, right-click Include / Exclude, drill down / up / expand all, drill-through pages with Back, a decomposition tree, report, page and visual filters, a filter pane with Basic, Advanced and Top N, bookmarks |
 | **34 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps, decomposition tree, card, multi-row card, KPI, gauge, table, matrix, slicer, text, and small multiples for cartesian charts |
@@ -79,6 +80,7 @@ import { PrismReport, PrismVisual } from 'prismbi/react';
 - [Visuals reference](docs/guide/visuals.md): every visual, its data roles and format options
 - [Slicing, filtering and interactions](docs/guide/interactions.md)
 - [Theming and formatting](docs/guide/theming.md)
+- [Studio (report editor)](docs/guide/studio.md)
 - [React](docs/guide/react.md)
 - [Custom visuals](docs/guide/custom-visuals.md)
 - [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
@@ -87,7 +89,7 @@ import { PrismReport, PrismVisual } from 'prismbi/react';
 
 ```bash
 npm install
-npm run dev        # demo dashboard at http://localhost:5173 (examples/)
+npm run dev        # demo dashboard at http://localhost:5173, studio at /studio.html
 npm test           # vitest (engine, DAX, formatting, rendering, interactions)
 npm run typecheck
 npm run build      # dist/ (ESM + CJS + .d.ts)

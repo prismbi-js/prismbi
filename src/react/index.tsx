@@ -2,6 +2,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import type { CSSProperties } from 'react';
 import { Report, createVisual } from 'prismbi';
 import type { DataModel, DeepPartial, FilterSpec, ReportChrome, ReportDefinition, ReportEvents, Theme, VisualSpec } from 'prismbi';
+import { Studio } from 'prismbi/studio';
+import type { StudioDocument } from 'prismbi/studio';
 
 type ThemeProp = string | Theme | DeepPartial<Theme>;
 
@@ -125,4 +127,46 @@ export function usePrismReport() {
   return useRef<Report | null>(null);
 }
 
-export type { Report };
+export interface PrismStudioProps {
+  model: DataModel;
+  /** Document to open. Changing its identity reopens it. */
+  document?: StudioDocument;
+  /** Autosave key (localStorage). */
+  storageKey?: string;
+  theme?: 'light' | 'dark' | DeepPartial<Theme>;
+  /** Fires after every change (debounced per action) with the full document. */
+  onChange?: (doc: StudioDocument) => void;
+  onSave?: (doc: StudioDocument) => void;
+  preview?: boolean;
+  className?: string;
+  style?: CSSProperties;
+}
+
+/** The drag-and-drop report editor. Use a ref to reach the imperative {@link Studio} API. */
+export const PrismStudio = forwardRef<Studio | null, PrismStudioProps>(function PrismStudio(props, ref) {
+  const { model, document: doc, storageKey, theme, preview, className, style } = props;
+  const el = useRef<HTMLDivElement>(null);
+  const [studio, setStudio] = useState<Studio | null>(null);
+  const latest = useRef(props);
+  latest.current = props;
+  useImperativeHandle(ref, () => studio as Studio, [studio]);
+
+  useEffect(() => {
+    if (!el.current) return;
+    const s = new Studio(el.current, { model, document: doc, storageKey, theme, preview });
+    const offs = [s.on('change', (d) => latest.current.onChange?.(d)), s.on('save', (d) => latest.current.onSave?.(d))];
+    setStudio(s);
+    return () => {
+      offs.forEach((off) => off());
+      s.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, doc, storageKey]);
+  useEffect(() => {
+    if (studio && preview !== undefined) studio.setPreview(preview);
+  }, [studio, preview]);
+
+  return <div ref={el} className={className} style={{ height: '100%', minHeight: 520, ...style }} />;
+});
+
+export type { Report, Studio, StudioDocument };

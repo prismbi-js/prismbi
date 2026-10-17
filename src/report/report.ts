@@ -788,6 +788,13 @@ export class Report implements ReportRuntime {
     return { id: this.page.def.id!, name: this.page.def.name };
   }
 
+  /** The definition object of a page (current page by default). Change it through updatePage(). */
+  pageDefinition(idOrName?: string): PageDefinition {
+    const p = idOrName ? this.pages[this.pageIndex(idOrName)] : this.page;
+    if (!p) throw new Error(`Page "${idOrName}" not found`);
+    return p.def;
+  }
+
   get pageList(): { id: string; name: string; hidden: boolean }[] {
     return this.pages.map((p) => ({ id: p.def.id!, name: p.def.name, hidden: !!p.def.hidden }));
   }

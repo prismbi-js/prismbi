@@ -4,7 +4,9 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ react/            <PrismReport>, <PrismVisual>                │  framework bindings
+│ react/            <PrismReport>, <PrismVisual>, <PrismStudio> │  framework bindings
+├──────────────────────────────────────────────────────────────┤
+│ studio/           Studio shell · panes · editors · history    │  authoring
 ├──────────────────────────────────────────────────────────────┤
 │ report/           Report · VisualHost · FilterPane · Tooltip  │  runtime & chrome
 │                   cross-filter state, bookmarks, JSON, events │
@@ -39,6 +41,9 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling |
 | `src/report/filterPane.ts` | Filter pane UI (Basic, Advanced, Top N) |
 | `src/report/styles.ts` | The single injected stylesheet, driven by CSS variables |
+| `src/report/editing.ts` | Edit mode: selection overlays, drag and resize with grid snapping, free-spot finder |
+| `src/report/migrate.ts` | Report schema version and migrations |
+| `src/studio/*` | Studio: shell and history (`studio.ts`), field assignment (`assign.ts`), panes (`panes.ts`, `formatPane.ts`), format schema, dialogs and expression editor, data and model views (`views.ts`), auto report |
 
 ## How a filter flows
 

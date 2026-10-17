@@ -16,6 +16,7 @@
       body.dark .demo-bar button { border-color: rgba(255,255,255,.2); }
       #stats { font: 12px ui-monospace, Consolas, monospace; opacity: .7; }
       #app { flex: 1; min-height: 0; }
+      .studio-link { color: inherit; font-weight: 600; text-decoration: none; padding: 4px 10px; border-radius: 6px; border: 1px solid #2a78d6; }
       .view-as { display: inline-flex; gap: 6px; align-items: center; }
       .view-as select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(0,0,0,.15); background: transparent; color: inherit; }
       body.dark .view-as select { border-color: rgba(255,255,255,.2); }
@@ -49,6 +50,7 @@
       <button id="json" type="button">Log report JSON</button>
       <label class="view-as">View as <select id="view-as"><option value="all">Everyone</option><option value="europe">Europe role</option><option value="manager">Germany manager (USERNAME)</option></select></label>
       <button id="dax" type="button">DAX console</button>
+      <a href="./studio.html" class="studio-link">Open Studio →</a>
     </div>
     <div id="app"></div>
     <script type="module" src="./main.ts"></script>

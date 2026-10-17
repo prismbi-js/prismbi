@@ -9,13 +9,13 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 1 | Core engine and essential visuals | `0.1` | ✅ Implemented (this repo) |
 | 2 | Pro visuals and deeper interactivity | `0.2` | ✅ Implemented |
 | 3 | Advanced modeling and DAX coverage | `0.3` | ✅ Implemented |
-| 4 | Authoring studio (drag-and-drop editor) | `0.4` | Planned |
+| 4 | Authoring studio (drag-and-drop editor) | `0.4` | ✅ Implemented |
 | 5 | Scale, performance and data connectors | `0.5` | Planned |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | Planned |
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine, report runtime) is **≈52 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈66 KB**, and everything (34 visuals) is **≈82 KB**. Editor tooling is tree-shaken out unless imported.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine, report runtime with edit mode) is **≈55 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈70 KB**, everything (34 visuals) is **≈87 KB**, and the full studio app (`prismbi/studio`) is **≈94 KB**. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -154,17 +154,23 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 **Deferred:** `NATURALINNERJOIN`, `SAMPLE`, `RANK`/`WINDOW` functions and visual calculations (Phase 4 studio work), plus calculation-item format strings (use `FORMAT()` inside the item for now).
 
-## Phase 4: Authoring studio
+## Phase 4: Authoring studio ✅
 
 **Goal:** end users build reports in the browser, the way they do in Power BI Desktop.
 
-- `@prismbi/studio`: drag-and-drop canvas with snap, resize and align, Fields pane, Visualizations pane, Format pane (generated from each visual's format schema), Filters pane, page management
-- A measure editor with syntax highlighting, autocomplete and live preview
-- A data view and model view (relationship diagram), Power Query-lite transforms (rename, type, split, unpivot, merge)
-- Undo and redo, autosave, versioned report JSON with migrations, templates, and a theme designer
-- Embeddable in any app. Every pane is replaceable.
+- [x] `prismbi/studio` (+ `<PrismStudio>`): edit-mode canvas with select, drag, 8-way resize and grid snapping, plus keyboard nudges, duplicate, copy/paste, delete and front/back
+- [x] **Fields pane** (search, folders, hidden toggle, drag and drop, click to add, measure and column actions), **Build pane** (visual picker that keeps fields, wells with reorder, remove and aggregation)
+- [x] **Format pane generated from a format schema** (common sections plus visual-specific ones), page settings, report name and a **theme designer**
+- [x] **Filters pane** (visual, page, report), **page management** (add, rename, duplicate, hide, reorder, delete)
+- [x] **Measure and calculated-column editors** with completion, diagnostics, signature help, a live preview and formats. Renaming a measure updates the visuals that use it
+- [x] **Data view** and **model view** (relationship diagram: drag a column to relate tables, edit direction and active state, delete)
+- [x] **Undo/redo** for report *and* model edits, **autosave**, export and import. The document stores model changes as a diff
+- [x] **Versioned report JSON** (`REPORT_SCHEMA_VERSION`, `migrateReport`, migrations applied by `Report.parse` / `load`)
+- [x] **Auto page**: a starter report generated from the model (`autoReport`)
+- [x] Report edit-mode APIs (`setEditMode`, `updatePage`, `movePage`, `duplicatePage`, `duplicateVisual`, `arrange`, `findFreeSpot`, `load`, `definitionChanged`)
+- [x] Demo: `examples/studio.html`. 18 studio tests (189 in total)
 
-**Acceptance:** non-developers rebuild the demo report from scratch in a usability test, without docs.
+**Deferred:** multi-select with align and distribute, a Power Query-style transform editor, animated transitions between data states, and per-page mobile layouts (Phase 5 polish). Also a usability test with non-developers (acceptance criterion), which is pending the live review.
 
 ## Phase 5: Scale, performance and connectors
 
