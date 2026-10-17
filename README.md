@@ -67,6 +67,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | `@prismbi/prismbi/plugins` | Signed plugins, catalogs and an install gallery |
 | `@prismbi/prismbi/collab` | Live co-editing, presence and comments |
 | `@prismbi/prismbi/server` | Headless SVG/HTML rendering, measure alerts, scheduled report jobs |
+| `@prismbi/prismbi/powerbi` | Import Power BI .pbip projects (model, measures, report) |
 | `@prismbi/prismbi/files` | Report files for Git, plus diffs (also the `@prismbi/prismbi` CLI) |
 
 ## Lean builds
@@ -92,6 +93,7 @@ import { PrismReport, PrismVisual } from '@prismbi/prismbi/react';
 
 - [Getting started](docs/guide/getting-started.md)
 - [Transforms: clean and reshape data](docs/guide/transforms.md)
+- [Importing Power BI projects (.pbip)](docs/guide/powerbi.md)
 - [Data modeling](docs/guide/data-model.md): tables, relationships, measures, calculated columns, date tables
 - [Advanced modeling](docs/guide/advanced-modeling.md): relationships, calculation groups, parameters, hierarchies, RLS
 - [Expressions (DAX) reference](docs/guide/expressions.md)

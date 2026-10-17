@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: Phase 9, ecosystem (in progress)
+
+- **Power BI import:** `@prismbi/prismbi/powerbi` with `importPowerBI`, `parseTmdl`, `parseModelBim`, `buildModelFrom`, `mapPbirReport`, `mapLegacyReport`; the `prismbi pbip <dir> [report.json]` CLI.
+
 ## 0.7.0 (unreleased): Phase 7, analyst essentials
 
 - **Visual calculations:** `{ visualCalc: 'RUNNINGSUM([Total Sales])', reset? }` on value fields, evaluated over the visual's rows after sorting and Top N.

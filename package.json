@@ -105,6 +105,11 @@
       "import": "./dist/plugins.js",
       "require": "./dist/plugins.cjs"
     },
+    "./powerbi": {
+      "types": "./dist/powerbi.d.ts",
+      "import": "./dist/powerbi.js",
+      "require": "./dist/powerbi.cjs"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",

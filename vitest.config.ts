@@ -18,6 +18,7 @@ export default defineConfig({
       { find: /^@prismbi\/prismbi\/server$/, replacement: src('server.ts') },
       { find: /^@prismbi\/prismbi\/collab$/, replacement: src('collab.ts') },
       { find: /^@prismbi\/prismbi\/plugins$/, replacement: src('plugins.ts') },
+      { find: /^@prismbi\/prismbi\/powerbi$/, replacement: src('powerbi.ts') },
     ],
   },
   test: { environment: 'jsdom', globals: true, include: ['tests/**/*.test.ts'] },

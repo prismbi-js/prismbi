@@ -14,7 +14,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | ✅ Implemented |
 | 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | ✅ Implemented |
 | 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | Planned |
-| 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | Planned |
+| 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | In progress |
 
 ## Guiding principles
 
@@ -317,7 +317,10 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - Screen-reader narration is available on every chart.
 - A rename is blocked with an impact list when it would break visuals.
 
-## Phase 9: Ecosystem (planned)
+## Phase 9: Ecosystem (in progress)
+
+**Done:**
+- [x] **Power BI import** (`@prismbi/prismbi/powerbi`): TMDL and model.bim semantic models, PBIR and legacy report.json reports, about 30 visual types mapped, data supplied per table, plain-language warnings, and a `prismbi pbip` CLI
 
 **Goal:** adoption: bring existing work in, and make PrismBI easy to learn and extend.
 

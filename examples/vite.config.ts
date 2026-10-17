@@ -20,6 +20,7 @@ export default defineConfig({
       { find: /^@prismbi\/prismbi\/server$/, replacement: src('server.ts') },
       { find: /^@prismbi\/prismbi\/collab$/, replacement: src('collab.ts') },
       { find: /^@prismbi\/prismbi\/plugins$/, replacement: src('plugins.ts') },
+      { find: /^@prismbi\/prismbi\/powerbi$/, replacement: src('powerbi.ts') },
     ],
   },
   build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html'), perf: here('./perf.html'), elements: here('./elements.html'), gallery: here('./gallery.html') } } },
