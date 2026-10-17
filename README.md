@@ -52,6 +52,20 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | **Customizable** | Theme tokens and CSS variables, Power BI theme JSON import, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, PNG/SVG/CSV/PDF export, edit-interactions mode |
 | **Accessible** | Keyboard-reachable marks, ARIA roles, legends whenever there are two or more series, show-as-table on every chart, reduced motion, light and dark palettes validated for colour-vision deficiency |
 
+## Entry points
+
+| Import | What |
+|---|---|
+| `prismbi` | Everything: model, DAX, report runtime and all 34 visuals |
+| `prismbi/core` + `prismbi/visuals` | Lean builds: register only the visuals you use |
+| `prismbi/studio` | Drag-and-drop report editor |
+| `prismbi/react` | `<PrismReport>`, `<PrismVisual>`, `<PrismStudio>` |
+| `prismbi/elements` | `<prism-report>`, `<prism-visual>` web components (Vue, Svelte, Angular, plain HTML) |
+| `prismbi/connectors` | CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh |
+| `prismbi/worker` | Run the model in a Web Worker |
+| `prismbi/ai` | Ask, explain, insights, and agent context and tools (Claude, OpenAI, MCP) |
+| `prismbi/files` | Report files for Git, plus diffs (also the `prismbi` CLI) |
+
 ## Lean builds
 
 ```ts

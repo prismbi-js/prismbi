@@ -1,7 +1,7 @@
 {
   "name": "prismbi",
   "version": "0.1.0",
-  "description": "PrismBI - a Power BI-style, TypeScript-first data modeling & interactive report engine for the web. Columnar data model, DAX-like formulas, cross-filtering visuals, themes, and React bindings.",
+  "description": "PrismBI - Power BI-style data modeling and interactive reports for the web, in TypeScript. DAX-like engine, 34 visuals, slicing and cross-filtering, a drag-and-drop studio, connectors, a Web Worker engine, AI questions/insights/agent tools, web components and React bindings. Zero dependencies.",
   "keywords": [
     "bi",
     "business-intelligence",
@@ -13,7 +13,17 @@
     "report",
     "analytics",
     "react",
-    "typescript"
+    "typescript",
+    "olap",
+    "pivot",
+    "report-builder",
+    "web-components",
+    "ai",
+    "agents",
+    "mcp",
+    "csv",
+    "streaming",
+    "web-worker"
   ],
   "license": "MIT",
   "author": "Santhoshkumar Hariharan",
