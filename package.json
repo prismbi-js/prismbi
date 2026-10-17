@@ -41,7 +41,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "prismbi": "./bin/prismbi.mjs"
+    "prismbi": "bin/prismbi.mjs"
   },
   "exports": {
     ".": {
