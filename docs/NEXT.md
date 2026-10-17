@@ -66,10 +66,14 @@ Agreed on 2026-10-17 to be done later, in this order. Before starting, check wit
   - `SAMEPERIODLASTYEAR` / `DATEADD` / `DATESYTD` / `TOTALYTD` when the visual groups by date-table columns.
   - Map each fact row to the group(s) its shifted date belongs to, using the in-memory engine's month-end rule. YTD rows feed every later group of the same year (a prefix sum over date-ordered groups).
   - Today about 190 ms at 1M rows through partial aggregates. Gate it with an equivalence test (fast vs off), like `tests/fastcalc.test.ts`.
-- **Dictionary-encoded text columns at load** (`src/data/table.ts`):
-  - Store text columns as an `Int32Array` of codes plus a dictionary, and decode lazily in `values` / `toRows`.
+- **Columnar storage from load time** (`src/data/table.ts`; merges both sessions' items):
+  - Keep number and date columns as `Float64Array`, and text as an `Int32Array` of codes plus a dictionary, from the moment a table loads, instead of plain arrays plus lazily built views.
   - Expect about 3–5× less memory on large tables, and faster filters and group-bys.
-  - Watch out for the incremental append caches added on 2026-10-17 (streaming); appends must extend the dictionary.
+  - Do it as a phased refactor, because `Column.values` is read in many places: decode lazily in `values` / `toRows`, and move hot readers to the typed views first.
+  - Watch the incremental append caches (streaming, 2026-10-17): appends must extend the dictionary and grow the typed arrays.
+- **Typed row lists** (`rowsOf` / `rowsCache` as `Int32Array`):
+  - Less memory and faster intersections.
+  - Audit every caller first: `.map` on a typed array coerces results to integers.
 - **Zero-copy worker transfer** (`src/worker.ts`):
   - When `crossOriginIsolated` is true, share numeric columns as `SharedArrayBuffer`; otherwise transfer `ArrayBuffer`s instead of structured-cloning arrays.
   - Measure worker start and memory on `/perf.html` at 1M rows.
@@ -89,6 +93,22 @@ Agreed on 2026-10-17 to be done later, in this order. Before starting, check wit
   - Store JSON patches (or structural diffs) between documents instead of full snapshots, with a snapshot every N steps.
   - Keep the 200-step limit.
 - **Perf budgets:** `npm run size` exists (added by the other session). Extend `npm run bench` with per-query time budgets that fail when exceeded (some cases already carry budgets in `bench/scale.test.ts`).
+
+### 5. From the other session (reactbi-9e, 2026-10-17)
+
+- **Excel export: implemented but NOT committed.**
+  - New files: `src/report/xlsx.ts` and `tests/xlsx.test.ts`.
+  - Changes in `src/core.ts`, `src/report/report.ts`, `src/report/visualHost.ts`, `docs/guide/interactions.md`, `docs/guide/visuals.md` and `CHANGELOG.md`.
+  - The full suite passed (406 tests), and openpyxl reads the files back correctly.
+  - Before committing, run `npm run build && npm run size`: the `core (api)` scenario grows a little from the new exports, while the writer itself loads lazily.
+- **Visual baselines after lazy rendering:** run `npm run test:visual` once, to confirm lazy off-screen rendering didn't change the screenshots. The gallery renders through `flush()`, so it should pass. (A run on 2026-10-17 after `e499abb`/`8bb376b` passed: 86 screenshots, 0 failures.)
+- **Core trimming (optional, decided against for now):** lazy-loading edit mode (`setEditMode`), the filter pane (`toggleFilterPane`) and transforms (`transformTable`) would save about 5–6 KB gzipped, but needs API changes. The size budgets in `scripts/size.mjs` prevent further growth.
+- **Feature ideas:**
+  - a key influencers visual;
+  - aggregation tables (Power BI's "manage aggregations", alongside SQL pushdown);
+  - warm start from IndexedDB (persist the model and its caches);
+  - goals and scorecards (built on `watchMeasure`);
+  - a sunburst visual.
 
 ## Publishing (deferred by the owner: "we will deploy later")
 
