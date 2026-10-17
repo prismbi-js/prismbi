@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ask, askSync, contextToPrompt, createAgentTools, explain, findInsights, getAIContext, runTool, suggestQuestions, toAnthropicTools, toMcpTools, toOpenAITools } from 'prismbi/ai';
+import { ask, askSync, contextToPrompt, createAgentTools, explain, findInsights, getAIContext, runTool, suggestQuestions, toAnthropicTools, toMcpTools, toOpenAITools } from '@prismbi/prismbi/ai';
 import { Report, createVisual } from '../src/index';
 import { buildModel } from '../examples/model';
 

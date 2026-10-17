@@ -1,5 +1,5 @@
-import { formatValue } from 'prismbi';
-import type { CellValue, DataModel, FieldSpec, FilterSpec, QuerySpec, Report, VisualSpec } from 'prismbi';
+import { formatValue } from '@prismbi/prismbi';
+import type { CellValue, DataModel, FieldSpec, FilterSpec, QuerySpec, Report, VisualSpec } from '@prismbi/prismbi';
 import { askSync, ask, type AskOptions } from './ask';
 import { explain } from './explain';
 import { findInsights } from './insights';

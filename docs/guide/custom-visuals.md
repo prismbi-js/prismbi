@@ -3,7 +3,7 @@
 A visual is a plain object: its data roles plus a `render` function. PrismBI runs the query, works out the filters, cross-filtering and highlighting, and handles the chrome (title, header, focus mode, CSV export, show as table).
 
 ```ts
-import { defineVisual, registerVisual, svg as s, linearScale, bandScale, chart } from 'prismbi';
+import { defineVisual, registerVisual, svg as s, linearScale, bandScale, chart } from '@prismbi/prismbi';
 
 registerVisual(defineVisual({
   type: 'lollipop',

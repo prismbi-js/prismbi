@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { prismReport, registerModel, type PrismReportElement, type PrismVisualElement } from 'prismbi/elements';
+import { prismReport, registerModel, type PrismReportElement, type PrismVisualElement } from '@prismbi/prismbi/elements';
 import type { ReportDefinition } from '../src/index';
 import { makeModel } from './fixtures';
 

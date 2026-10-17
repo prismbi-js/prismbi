@@ -1,9 +1,9 @@
 # Studio (report editor)
 
-`prismbi/studio` is a drag-and-drop report editor that works like Power BI Desktop, in the browser. End users build and change reports, and the result is a JSON document you store wherever you like.
+`@prismbi/prismbi/studio` is a drag-and-drop report editor that works like Power BI Desktop, in the browser. End users build and change reports, and the result is a JSON document you store wherever you like.
 
 ```ts
-import { Studio } from 'prismbi/studio';
+import { Studio } from '@prismbi/prismbi/studio';
 
 const studio = new Studio(document.getElementById('editor')!, {
   model,                          // your DataModel
@@ -19,7 +19,7 @@ studio.on('save', (doc) => api.publish(doc));        // Ctrl+S / studio.save()
 React:
 
 ```tsx
-import { PrismStudio } from 'prismbi/react';
+import { PrismStudio } from '@prismbi/prismbi/react';
 <PrismStudio model={model} storageKey="sales-report" onChange={saveDraft} style={{ height: '100vh' }} />
 ```
 

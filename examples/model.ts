@@ -1,4 +1,4 @@
-import { DataModel } from 'prismbi';
+import { DataModel } from '@prismbi/prismbi';
 import { makeSales, products, regions } from './data';
 
 /** The demo's semantic model (shared by the report demo and the studio demo). */

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { DataModel } from 'prismbi/core';
+import { DataModel } from '@prismbi/prismbi/core';
 import { runQuery } from '../src/data/query';
 import { setFastQuery } from '../src/data/fastQuery';
 import { buildModel } from '../examples/model';

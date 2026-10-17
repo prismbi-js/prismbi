@@ -38,13 +38,13 @@ Pre-aggregated results can differ from a row-by-row scan in the last floating-po
 
 ## Off the main thread
 
-`prismbi/worker` (about 1.3 KB) runs the model in a Web Worker. Build or load the model inside the worker, then talk to it from the page:
+`@prismbi/prismbi/worker` (about 1.3 KB) runs the model in a Web Worker. Build or load the model inside the worker, then talk to it from the page:
 
 ```ts
 // model.worker.ts
-import { serveModel } from 'prismbi/worker';
-import { loadCsv } from 'prismbi/connectors';
-import { DataModel } from 'prismbi/core';
+import { serveModel } from '@prismbi/prismbi/worker';
+import { loadCsv } from '@prismbi/prismbi/connectors';
+import { DataModel } from '@prismbi/prismbi/core';
 
 const model = new DataModel().addTable('Sales', await loadCsv('/sales.csv')).addMeasure('Total', 'SUM(Sales[Amount])');
 serveModel(model);
@@ -52,7 +52,7 @@ serveModel(model);
 
 ```ts
 // main thread
-import { createWorkerEngine } from 'prismbi/worker';
+import { createWorkerEngine } from '@prismbi/prismbi/worker';
 
 const engine = createWorkerEngine(new Worker(new URL('./model.worker.ts', import.meta.url), { type: 'module' }));
 const ctrl = new AbortController();

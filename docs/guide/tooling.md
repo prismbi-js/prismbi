@@ -5,7 +5,7 @@ These are building blocks for editors, consoles and documentation. They're tree-
 ## Language service
 
 ```ts
-import { DaxLanguageService } from 'prismbi';
+import { DaxLanguageService } from '@prismbi/prismbi';
 
 const ls = new DaxLanguageService(model);
 
@@ -27,7 +27,7 @@ Diagnostics cover:
 ## Formatter
 
 ```ts
-import { formatDax } from 'prismbi';
+import { formatDax } from '@prismbi/prismbi';
 formatDax('VAR a=1 VAR b=2 RETURN a+b');
 // VAR a = 1
 // VAR b = 2
@@ -41,7 +41,7 @@ The formatter adds parentheses only where precedence needs them, keeps spacing c
 ## Dependency explanation
 
 ```ts
-import { explainDax } from 'prismbi';
+import { explainDax } from '@prismbi/prismbi';
 explainDax(model, '[Margin %]');
 // { formatted, functions: ['DIVIDE', 'SUM'], measures: ['Total Sales', 'Total Cost', 'Profit', 'Margin %'],
 //   columns: ['Sales[Amount]', 'Sales[Cost]'], tables: ['Sales'] }

@@ -90,7 +90,7 @@ export interface ReportOptions extends Partial<ReportDefinition> {
   /** Called for every event (handy for frameworks). */
   onEvent?: <K extends keyof ReportEvents>(event: K, payload: ReportEvents[K]) => void;
   /**
-   * Run visual queries on another engine, e.g. `createWorkerEngine(worker)` from `prismbi/worker` serving the same
+   * Run visual queries on another engine, e.g. `createWorkerEngine(worker)` from `@prismbi/prismbi/worker` serving the same
    * model. Visuals render asynchronously; slicers and metadata still use `model`.
    */
   engine?: QueryEngine;

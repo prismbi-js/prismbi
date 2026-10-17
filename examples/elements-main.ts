@@ -1,4 +1,4 @@
-import { registerModel, type PrismReportElement } from 'prismbi/elements';
+import { registerModel, type PrismReportElement } from '@prismbi/prismbi/elements';
 import { buildModel } from './model';
 
 const report = document.getElementById('report') as PrismReportElement;

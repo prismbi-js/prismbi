@@ -1,6 +1,6 @@
 # AI: questions, explanations, insights and agents
 
-`prismbi/ai` adds four things. Everything runs offline on the model by default, with no API keys or network calls:
+`@prismbi/prismbi/ai` adds four things. Everything runs offline on the model by default, with no API keys or network calls:
 
 - **Ask:** a plain-language question becomes a visual.
 - **Explain:** why a value is what it is.
@@ -10,8 +10,8 @@
 Language models are optional, plugged in through a function you provide.
 
 ```ts
-import 'prismbi/ai'; // registers the `qna` and `insights` visuals and "Explain this" on right-click
-import { ask, explain, findInsights, getAIContext, createAgentTools } from 'prismbi/ai';
+import '@prismbi/prismbi/ai'; // registers the `qna` and `insights` visuals and "Explain this" on right-click
+import { ask, explain, findInsights, getAIContext, createAgentTools } from '@prismbi/prismbi/ai';
 ```
 
 ## Ask
@@ -76,7 +76,7 @@ x.drivers; // [{ column: 'Product[Category]', value: 'Bikes', current, baseline,
 - **Composition mode:** otherwise, it says which members make up the value.
 - **Dimensions:** text columns of tables wired into the model. Calculation groups and parameter tables are skipped. Pass `dimensions` to choose them.
 
-Right-clicking any data point offers **Explain this** once `prismbi/ai` is imported (`enableExplain(false)` turns it off). Its panel shows the summary, the top drivers and a chart.
+Right-clicking any data point offers **Explain this** once `@prismbi/prismbi/ai` is imported (`enableExplain(false)` turns it off). Its panel shows the summary, the top drivers and a chart.
 
 ## Insights
 
@@ -138,7 +138,7 @@ Run this on your server with the Anthropic SDK:
 
 ```ts
 import Anthropic from '@anthropic-ai/sdk';
-import { createAgentTools, getAIContext, contextToPrompt, runTool, toAnthropicTools } from 'prismbi/ai';
+import { createAgentTools, getAIContext, contextToPrompt, runTool, toAnthropicTools } from '@prismbi/prismbi/ai';
 
 const client = new Anthropic();
 const tools = createAgentTools({ model, report });
@@ -175,10 +175,10 @@ Expose a model to MCP clients with the official SDK:
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { createAgentTools, runTool, toMcpTools } from 'prismbi/ai';
+import { createAgentTools, runTool, toMcpTools } from '@prismbi/prismbi/ai';
 
 const tools = createAgentTools({ model, allowWrites: false });
-const server = new Server({ name: 'prismbi', version: '1.0.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: '@prismbi/prismbi', version: '1.0.0' }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toMcpTools(tools) }));
 server.setRequestHandler(CallToolRequestSchema, async (req) => ({
   content: [{ type: 'text', text: JSON.stringify(await runTool(tools, req.params.name, req.params.arguments)) }],
@@ -186,4 +186,4 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => ({
 await server.connect(new StdioServerTransport());
 ```
 
-The model engine has no DOM dependency, so this runs on Node. Load data with `prismbi/connectors`.
+The model engine has no DOM dependency, so this runs on Node. Load data with `@prismbi/prismbi/connectors`.

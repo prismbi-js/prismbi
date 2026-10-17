@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createLocalEngine, createWorkerEngine, serveModel, type PortLike } from 'prismbi/worker';
+import { createLocalEngine, createWorkerEngine, serveModel, type PortLike } from '@prismbi/prismbi/worker';
 import { buildModel } from '../examples/model';
 
 /** A DOM-style message port (node's global MessagePort supports addEventListener; messages are structured-cloned). */

@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-npm install prismbi
+npm install @prismbi/prismbi
 # React bindings are included; React is an optional peer dependency
 ```
 
@@ -14,7 +14,7 @@ PrismBI ships as ES modules and CommonJS, with full type declarations. It has no
 Any array of plain objects works. Types are inferred (number, string, boolean, date), and ISO date strings become dates.
 
 ```ts
-import { DataModel } from 'prismbi';
+import { DataModel } from '@prismbi/prismbi';
 
 const model = new DataModel()
   .addTable('Sales', await (await fetch('/api/sales')).json(), {
@@ -53,7 +53,7 @@ model.evaluate('[Total Sales]', [{ target: 'Products[Category]', op: 'eq', value
 Each visual has a `type`, a grid `layout` (12 columns by default, 44 px rows), `fields` bound to its data roles, and optional `format` options.
 
 ```ts
-import { Report } from 'prismbi';
+import { Report } from '@prismbi/prismbi';
 
 const report = new Report(document.getElementById('app')!, {
   model,

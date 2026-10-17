@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { serveModel } from 'prismbi/worker';
+import { serveModel } from '@prismbi/prismbi/worker';
 import { buildModel } from './perf-data';
 
 // build the model once the page says how many rows, then answer engine calls

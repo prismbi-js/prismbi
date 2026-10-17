@@ -15,7 +15,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈60 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈76 KB**, everything (34 visuals) is **≈93 KB**, and the full studio app (`prismbi/studio`) is **≈96 KB**. Connectors (≈3 KB) and the worker engine (≈1.3 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈60 KB min+gzip**. A typical dashboard that registers five visuals from `@prismbi/prismbi/visuals` is **≈76 KB**, everything (34 visuals) is **≈93 KB**, and the full studio app (`@prismbi/prismbi/studio`) is **≈96 KB**. Connectors (≈3 KB) and the worker engine (≈1.3 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -109,7 +109,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 ### Output & persistence
 - [x] Export each visual as **PNG or SVG**. Export pages as a **PDF** with a built-in, dependency-free writer that is loaded lazily
 - [x] **Persisted visual state** (`spec.state`): table sorting, matrix expansion and decomposition splits are saved in the report JSON
-- [x] **Lean entry points**: `prismbi/core` plus `prismbi/visuals` for tree-shaken builds, and one registry shared across entries
+- [x] **Lean entry points**: `@prismbi/prismbi/core` plus `@prismbi/prismbi/visuals` for tree-shaken builds, and one registry shared across entries
 - [x] 101 tests in total
 
 ### Moved to later phases
@@ -158,7 +158,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 **Goal:** end users build reports in the browser, the way they do in Power BI Desktop.
 
-- [x] `prismbi/studio` (+ `<PrismStudio>`): edit-mode canvas with select, drag, 8-way resize and grid snapping, plus keyboard nudges, duplicate, copy/paste, delete and front/back
+- [x] `@prismbi/prismbi/studio` (+ `<PrismStudio>`): edit-mode canvas with select, drag, 8-way resize and grid snapping, plus keyboard nudges, duplicate, copy/paste, delete and front/back
 - [x] **Fields pane** (search, folders, hidden toggle, drag and drop, click to add, measure and column actions), **Build pane** (visual picker that keeps fields, wells with reorder, remove and aggregation)
 - [x] **Format pane generated from a format schema** (common sections plus visual-specific ones), page settings, report name and a **theme designer**
 - [x] **Filters pane** (visual, page, report), **page management** (add, rename, duplicate, hide, reorder, delete)
@@ -181,10 +181,10 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 - [x] **Vectorised aggregations** for `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT(A)`, `DISTINCTCOUNT`
 - [x] **Single-pass grouped queries.** Simple measures (those aggregations, `COUNTROWS`, `+ - * /`, `DIVIDE`, measure references) are answered in one pass over the fact rows instead of once per group, with automatic fallback to the general engine. A 16k-group query at 200k rows went from 10 s to 57 ms.
 - [x] Cheaper filter cache keys
-- [x] **Worker engine** (`prismbi/worker`): `serveModel` / `createWorkerEngine` with an async query, evaluate and mutate API, `AbortSignal` cancellation, and `createLocalEngine` for the same API in-process
+- [x] **Worker engine** (`@prismbi/prismbi/worker`): `serveModel` / `createWorkerEngine` with an async query, evaluate and mutate API, `AbortSignal` cancellation, and `createLocalEngine` for the same API in-process
 - [x] **`model.appendRows(table, rows, { maxRows })`:** incremental calculated columns and a sliding window
 
-### Connectors (`prismbi/connectors`)
+### Connectors (`@prismbi/prismbi/connectors`)
 - [x] CSV (RFC 4180, delimiter detection, per-column typing), Google Sheets CSV URLs
 - [x] JSON, REST with page, offset, cursor and Link-header pagination, GraphQL
 - [x] Apache Arrow tables (duck-typed, no dependency). Parquet via DuckDB-Wasm or any Arrow producer
@@ -221,17 +221,17 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 ## Phase 6: Beyond Power BI (in progress)
 
 **Done:**
-- [x] **`prismbi/ai`:**
+- [x] **`@prismbi/prismbi/ai`:**
   - `ask`: plain-language questions become visuals, offline, with an optional LLM hook.
   - `explain`: change and composition drivers, plus "Explain this" on right-click.
   - `findInsights`: anomalies, trends, movers, concentration, outliers.
   - The `qna` and `insights` visuals.
   - Agent context (`getAIContext`, `contextToPrompt`) and provider-agnostic tools (`createAgentTools`) for Claude, OpenAI and MCP.
-- [x] **`prismbi/elements`:** `<prism-report>` and `<prism-visual>` web components, plus Svelte actions. Vue and Angular use them directly.
-- [x] **`prismbi/files`:** split, join and diff of report files, plus the `prismbi` CLI.
+- [x] **`@prismbi/prismbi/elements`:** `<prism-report>` and `<prism-visual>` web components, plus Svelte actions. Vue and Angular use them directly.
+- [x] **`@prismbi/prismbi/files`:** split, join and diff of report files, plus the `@prismbi/prismbi` CLI.
 
 **Remaining:**
-- Headless rendering, scheduled sends and measure alerts (`prismbi/server`)
+- Headless rendering, scheduled sends and measure alerts (`@prismbi/prismbi/server`)
 - Real-time co-editing, comments and shared bookmarks
 - Signed plugins and the marketplace
 

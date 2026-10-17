@@ -1,6 +1,6 @@
-import { DataModel, Report } from 'prismbi';
-import { streamInto, type MessageSourceLike, type StreamHandle } from 'prismbi/connectors';
-import { createWorkerEngine, type Engine } from 'prismbi/worker';
+import { DataModel, Report } from '@prismbi/prismbi';
+import { streamInto, type MessageSourceLike, type StreamHandle } from '@prismbi/prismbi/connectors';
+import { createWorkerEngine, type Engine } from '@prismbi/prismbi/worker';
 import { CUSTOMERS, buildModel, makeRows } from './perf-data';
 
 // ---------------------------------------------------------------- report

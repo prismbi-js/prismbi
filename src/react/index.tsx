@@ -1,9 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Report, createVisual } from 'prismbi';
-import type { DataModel, DeepPartial, FilterSpec, ReportChrome, ReportDefinition, ReportEvents, Theme, VisualSpec } from 'prismbi';
-import { Studio } from 'prismbi/studio';
-import type { StudioDocument } from 'prismbi/studio';
+import { Report, createVisual } from '@prismbi/prismbi';
+import type { DataModel, DeepPartial, FilterSpec, ReportChrome, ReportDefinition, ReportEvents, Theme, VisualSpec } from '@prismbi/prismbi';
+import { Studio } from '@prismbi/prismbi/studio';
+import type { StudioDocument } from '@prismbi/prismbi/studio';
 
 type ThemeProp = string | Theme | DeepPartial<Theme>;
 

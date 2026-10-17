@@ -1,7 +1,7 @@
-import { Report } from 'prismbi';
+import { Report } from '@prismbi/prismbi';
 // registers the Q&A and Insights visuals and "Explain this" on right-click
-import 'prismbi/ai';
-import type { Bookmark } from 'prismbi';
+import '@prismbi/prismbi/ai';
+import type { Bookmark } from '@prismbi/prismbi';
 import { makeSales } from './data';
 import { buildModel } from './model';
 import { mountDaxConsole } from './console';

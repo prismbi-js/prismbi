@@ -1,5 +1,5 @@
-import { formatValue } from 'prismbi';
-import type { CellValue, DataModel, FieldSpec, FilterSpec, VisualSpec } from 'prismbi';
+import { formatValue } from '@prismbi/prismbi';
+import type { CellValue, DataModel, FieldSpec, FilterSpec, VisualSpec } from '@prismbi/prismbi';
 
 const KEYISH = /(^|[a-z])(key|id|guid|code)$/i;
 const refOf = (table: string, column: string) => `${/^[A-Za-z_][A-Za-z0-9_]*$/.test(table) ? table : `'${table}'`}[${column}]`;

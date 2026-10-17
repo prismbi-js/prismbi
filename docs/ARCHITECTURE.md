@@ -44,8 +44,8 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | `src/report/styles.ts` | The single injected stylesheet, driven by CSS variables |
 | `src/report/editing.ts` | Edit mode: selection overlays, drag and resize with grid snapping, free-spot finder |
 | `src/report/migrate.ts` | Report schema version and migrations |
-| `src/connectors/*` | `prismbi/connectors`: CSV, HTTP (JSON, REST pagination, GraphQL), Arrow, SQL adapters, streaming and scheduled refresh. Imports only types from the core |
-| `src/worker.ts` | `prismbi/worker`: message protocol between `serveModel` (in a worker) and `createWorkerEngine`, plus `createLocalEngine` |
+| `src/connectors/*` | `@prismbi/prismbi/connectors`: CSV, HTTP (JSON, REST pagination, GraphQL), Arrow, SQL adapters, streaming and scheduled refresh. Imports only types from the core |
+| `src/worker.ts` | `@prismbi/prismbi/worker`: message protocol between `serveModel` (in a worker) and `createWorkerEngine`, plus `createLocalEngine` |
 | `src/render/lttb.ts` | Largest-Triangle-Three-Buckets downsampling for dense series |
 | `src/studio/*` | Studio: shell and history (`studio.ts`), field assignment (`assign.ts`), panes (`panes.ts`, `formatPane.ts`), format schema, dialogs and expression editor, data and model views (`views.ts`), auto report |
 

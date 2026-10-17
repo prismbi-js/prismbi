@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Report } from '../src/index';
-import { createLocalEngine } from 'prismbi/worker';
+import { createLocalEngine } from '@prismbi/prismbi/worker';
 import { makeModel } from './fixtures';
 
 describe('reports on an engine', () => {

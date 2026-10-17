@@ -3,7 +3,7 @@
  *
  * ```ts
  * // model.worker.ts
- * import { serveModel } from 'prismbi/worker';
+ * import { serveModel } from '@prismbi/prismbi/worker';
  * serveModel(buildModel());
  *
  * // main thread

@@ -1,5 +1,5 @@
-import { createVisual, defineVisual, getVisual, registerMenuItems, registerVisual } from 'prismbi';
-import type { FieldSpec, FilterSpec, MenuContext, Report, RenderContext, VisualSpec } from 'prismbi';
+import { createVisual, defineVisual, getVisual, registerMenuItems, registerVisual } from '@prismbi/prismbi';
+import type { FieldSpec, FilterSpec, MenuContext, Report, RenderContext, VisualSpec } from '@prismbi/prismbi';
 import { askSync, suggestQuestions, type AskOptions } from './ask';
 import { explain, type Explanation } from './explain';
 import { findInsights, type Insight } from './insights';
@@ -257,7 +257,7 @@ export function renderExplanation(x: Explanation, theme?: { model: RenderContext
 
 let unregisterExplain: (() => void) | null = null;
 
-/** Add "Explain this" to every data point's context menu (on by default when importing `prismbi/ai`). */
+/** Add "Explain this" to every data point's context menu (on by default when importing `@prismbi/prismbi/ai`). */
 export function enableExplain(enabled = true): void {
   unregisterExplain?.();
   unregisterExplain = null;

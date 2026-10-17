@@ -1,7 +1,7 @@
 # React
 
 ```tsx
-import { PrismReport, PrismVisual, usePrismReport } from 'prismbi/react';
+import { PrismReport, PrismVisual, usePrismReport } from '@prismbi/prismbi/react';
 ```
 
 React 17+ is an optional peer dependency. The bindings are about 1 KB, and the core does the work.

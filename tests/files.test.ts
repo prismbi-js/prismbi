@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffReports, formatDiff, joinReport, splitReport, stableStringify } from 'prismbi/files';
+import { diffReports, formatDiff, joinReport, splitReport, stableStringify } from '@prismbi/prismbi/files';
 import type { ReportDefinition } from '../src/index';
 
 const report = (): ReportDefinition => ({

@@ -1,6 +1,6 @@
 # Report files and version control
 
-A report is one JSON document. That's convenient to load, but every change touches the same big file. `prismbi/files` stores it as a folder of small, stable files instead, so reviews show exactly what changed and branches merge cleanly.
+A report is one JSON document. That's convenient to load, but every change touches the same big file. `@prismbi/prismbi/files` stores it as a folder of small, stable files instead, so reviews show exactly what changed and branches merge cleanly.
 
 ```
 report.json                          name, version, report filters, page and bookmark order
@@ -13,7 +13,7 @@ bookmarks/bikes-only.json            one file per bookmark
 ## API
 
 ```ts
-import { splitReport, joinReport, diffReports, formatDiff, stableStringify } from 'prismbi/files';
+import { splitReport, joinReport, diffReports, formatDiff, stableStringify } from '@prismbi/prismbi/files';
 
 const files = splitReport(report.toJSON());   // { 'report.json': '…', 'pages/overview/page.json': '…', … }
 const def = joinReport(files);                // back to a ReportDefinition (migrated to the current schema)
@@ -42,12 +42,12 @@ console.log(formatDiff(diffReports(before, after)));
 
 ## Command line
 
-The package installs a `prismbi` command:
+The package installs a `@prismbi/prismbi` command:
 
 ```bash
-npx prismbi split report.json reports/sales      # write the folder
-npx prismbi join reports/sales report.json       # rebuild one file (stdout without a file name)
-npx prismbi diff old.json reports/sales          # either side may be a JSON file or a split folder
+npx @prismbi/prismbi split report.json reports/sales      # write the folder
+npx @prismbi/prismbi join reports/sales report.json       # rebuild one file (stdout without a file name)
+npx @prismbi/prismbi diff old.json reports/sales          # either side may be a JSON file or a split folder
 ```
 
 `diff` exits with code 1 when there are changes and 0 when there are none, so it fits in CI checks and pre-commit hooks.

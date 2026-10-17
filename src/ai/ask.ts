@@ -1,4 +1,4 @@
-import type { CellValue, DataModel, FieldSpec, FilterSpec, VisualSpec } from 'prismbi';
+import type { CellValue, DataModel, FieldSpec, FilterSpec, VisualSpec } from '@prismbi/prismbi';
 import { buildVocabulary, isAggWord, isStop, key, labelColumn, words, type Entity, type Vocabulary } from './vocab';
 
 type Column = Extract<Entity, { kind: 'column' }>;

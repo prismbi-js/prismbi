@@ -1,4 +1,4 @@
-import type { CellValue, DataModel } from 'prismbi';
+import type { CellValue, DataModel } from '@prismbi/prismbi';
 
 /** Something in the model a phrase can refer to. */
 export type Entity =

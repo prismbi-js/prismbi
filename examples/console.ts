@@ -1,5 +1,5 @@
-import { DaxLanguageService, formatValue } from 'prismbi';
-import type { DataModel, DaxCompletion } from 'prismbi';
+import { DaxLanguageService, formatValue } from '@prismbi/prismbi';
+import type { DataModel, DaxCompletion } from '@prismbi/prismbi';
 
 /** A small DAX console: completion (Ctrl+Space / typing), live diagnostics, formatting and results. */
 export function mountDaxConsole(model: DataModel, button: HTMLButtonElement): void {

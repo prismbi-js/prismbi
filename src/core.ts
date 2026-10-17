@@ -1,6 +1,6 @@
 /**
  * PrismBI core: model, DAX engine, query engine, report runtime and helpers, with no visuals registered.
- * Register only the visuals you use from `prismbi/visuals` for the smallest bundle.
+ * Register only the visuals you use from `@prismbi/prismbi/visuals` for the smallest bundle.
  * @packageDocumentation
  */
 // data & model

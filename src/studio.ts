@@ -3,7 +3,7 @@
  * format / filters panes, measure & column editors, data and model views, undo/redo, autosave).
  *
  * ```ts
- * import { Studio } from 'prismbi/studio';
+ * import { Studio } from '@prismbi/prismbi/studio';
  * new Studio(document.getElementById('app')!, { model, storageKey: 'my-report' });
  * ```
  * @packageDocumentation

@@ -1,10 +1,10 @@
 # Connectors and live data
 
-`prismbi/connectors` loads data into a `DataModel` and keeps it fresh. It is about 3 KB min+gzip and has no dependencies. Every loader returns plain rows, so you can transform them before calling `addTable`.
+`@prismbi/prismbi/connectors` loads data into a `DataModel` and keeps it fresh. It is about 3 KB min+gzip and has no dependencies. Every loader returns plain rows, so you can transform them before calling `addTable`.
 
 ```ts
-import { DataModel } from 'prismbi';
-import { loadCsv, loadRest, scheduleRefresh, streamInto } from 'prismbi/connectors';
+import { DataModel } from '@prismbi/prismbi';
+import { loadCsv, loadRest, scheduleRefresh, streamInto } from '@prismbi/prismbi/connectors';
 
 const model = new DataModel()
   .addTable('Sales', await loadCsv('/data/sales.csv'))

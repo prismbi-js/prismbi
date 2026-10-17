@@ -1,4 +1,4 @@
-import type { CellValue, DataModel, FieldSpec, FilterSpec, VisualSpec } from 'prismbi';
+import type { CellValue, DataModel, FieldSpec, FilterSpec, VisualSpec } from '@prismbi/prismbi';
 import { candidateDimensions, formatter, measureName } from './explain';
 
 export interface Insight {

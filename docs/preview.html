@@ -148,7 +148,7 @@ svg text { font-family: var(--ui); }
         <button role="tab" id="tab-react" aria-selected="false" data-pane="react">App.tsx</button>
         <button role="tab" id="tab-events" aria-selected="false" data-pane="events">events.ts</button>
       </div>
-<pre id="pane-model"><span class="k">import</span> { DataModel } <span class="k">from</span> <span class="s">'prismbi'</span>;
+<pre id="pane-model"><span class="k">import</span> { DataModel } <span class="k">from</span> <span class="s">'@prismbi/prismbi'</span>;
 
 <span class="k">export const</span> model = <span class="k">new</span> <span class="f">DataModel</span>()
   .<span class="f">addTable</span>(<span class="s">'Sales'</span>, salesRows)      <span class="c">// any JSON array / CSV</span>
@@ -173,7 +173,7 @@ svg text { font-family: var(--ui); }
 
 <span class="c">// ad-hoc evaluation, handy in tests and APIs</span>
 model.<span class="f">evaluate</span>(<span class="s">'[Total Sales]'</span>, [{ target: <span class="s">'Region[Name]'</span>, op: <span class="s">'eq'</span>, value: <span class="s">'West'</span> }]);</pre>
-<pre id="pane-report" hidden><span class="k">import</span> { Report } <span class="k">from</span> <span class="s">'prismbi'</span>;
+<pre id="pane-report" hidden><span class="k">import</span> { Report } <span class="k">from</span> <span class="s">'@prismbi/prismbi'</span>;
 <span class="k">import</span> { model } <span class="k">from</span> <span class="s">'./model'</span>;
 
 <span class="k">const</span> report = <span class="k">new</span> <span class="f">Report</span>(document.<span class="f">getElementById</span>(<span class="s">'app'</span>)!, {
@@ -208,7 +208,7 @@ model.<span class="f">evaluate</span>(<span class="s">'[Total Sales]'</span>, [{
     ],
   }],
 });</pre>
-<pre id="pane-react" hidden><span class="k">import</span> { PrismReport, PrismVisual } <span class="k">from</span> <span class="s">'prismbi/react'</span>;
+<pre id="pane-react" hidden><span class="k">import</span> { PrismReport, PrismVisual } <span class="k">from</span> <span class="s">'@prismbi/prismbi/react'</span>;
 <span class="k">import</span> { model } <span class="k">from</span> <span class="s">'./model'</span>;
 <span class="k">import</span> definition <span class="k">from</span> <span class="s">'./overview.report.json'</span>; <span class="c">// same JSON as report.ts</span>
 

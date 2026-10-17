@@ -1,6 +1,6 @@
 # Web components, Vue, Svelte and Angular
 
-`prismbi/elements` defines two custom elements when imported: `<prism-report>` and `<prism-visual>`. Frameworks set DOM properties and listen to DOM events natively, so the same elements work in plain HTML, Vue, Svelte, Angular, Solid and Lit. React users can also use [`prismbi/react`](react.md).
+`@prismbi/prismbi/elements` defines two custom elements when imported: `<prism-report>` and `<prism-visual>`. Frameworks set DOM properties and listen to DOM events natively, so the same elements work in plain HTML, Vue, Svelte, Angular, Solid and Lit. React users can also use [`@prismbi/prismbi/react`](react.md).
 
 Elements render into the light DOM, so the report stylesheet and your CSS variables apply as usual. Give them a height.
 
@@ -31,7 +31,7 @@ One visual for your own layout:
 <prism-report model="sales" src="/reports/sales.json" style="height: 720px"></prism-report>
 
 <script type="module">
-  import { registerModel } from 'prismbi/elements';
+  import { registerModel } from '@prismbi/prismbi/elements';
   registerModel('sales', buildModel()); // every element naming "sales" mounts now
 </script>
 ```
@@ -49,7 +49,7 @@ vue({ template: { compilerOptions: { isCustomElement: (tag) => tag.startsWith('p
 
 ```vue
 <script setup lang="ts">
-import 'prismbi/elements';
+import '@prismbi/prismbi/elements';
 const model = buildModel();
 const definition = { pages: [/* … */] };
 </script>
@@ -66,8 +66,8 @@ Vue passes objects to custom elements as properties automatically. Use `.prop` i
 
 ```svelte
 <script>
-  import 'prismbi/elements';
-  import { prismReport } from 'prismbi/elements';
+  import '@prismbi/prismbi/elements';
+  import { prismReport } from '@prismbi/prismbi/elements';
   const model = buildModel();
 </script>
 
@@ -94,7 +94,7 @@ export class DashboardComponent {
   definition = salesReport;
 }
 // main.ts
-import 'prismbi/elements';
+import '@prismbi/prismbi/elements';
 ```
 
 ## Custom tag names

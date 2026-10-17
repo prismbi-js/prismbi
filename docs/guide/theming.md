@@ -12,7 +12,7 @@ report.setTheme('light');
 ## Custom themes
 
 ```ts
-import { createTheme, registerTheme } from 'prismbi';
+import { createTheme, registerTheme } from '@prismbi/prismbi';
 
 const brand = createTheme({
   name: 'acme',
@@ -39,7 +39,7 @@ Theme tokens: `dataColors`, `otherColor`, `background` (page), `surface` (visual
 ## Power BI theme JSON
 
 ```ts
-import { fromPowerBITheme } from 'prismbi';
+import { fromPowerBITheme } from '@prismbi/prismbi';
 report.setTheme(fromPowerBITheme(await (await fetch('/themes/corporate.json')).json()));
 ```
 
@@ -95,6 +95,6 @@ Format strings apply to columns (`schema.format`), measures (`{ format }`), fiel
 **Locale:** output defaults to `en-US`, so it's identical on every machine and on the server. Set `new Report(el, { locale: 'de-DE' })`, or call `setDefaultLocale('default')` to use the browser's locale.
 
 ```ts
-import { formatValue } from 'prismbi';
+import { formatValue } from '@prismbi/prismbi';
 formatValue(1500000, '$#,0', { displayUnits: 'auto' }); // "$1.5M"
 ```

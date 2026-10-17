@@ -3,7 +3,7 @@
  * bookmark) for version control and code review, and diff two report versions in plain language.
  *
  * ```ts
- * import { splitReport, joinReport, diffReports, formatDiff } from 'prismbi/files';
+ * import { splitReport, joinReport, diffReports, formatDiff } from '@prismbi/prismbi/files';
  * const files = splitReport(report.toJSON());     // { 'report.json': '…', 'pages/overview/page.json': '…', … }
  * const def = joinReport(files);
  * console.log(formatDiff(diffReports(before, after)));

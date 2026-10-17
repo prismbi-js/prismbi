@@ -9,7 +9,7 @@ import type { MenuItem } from './contextMenu';
 import type { QueryResult, QuerySpec } from '../data/query';
 
 /**
- * Where visual queries run when not on the report's own model – e.g. a worker engine from `prismbi/worker`.
+ * Where visual queries run when not on the report's own model – e.g. a worker engine from `@prismbi/prismbi/worker`.
  * Results may carry filter specs instead of compiled filters in `baseFilters`.
  */
 export interface QueryEngine {

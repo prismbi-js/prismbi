@@ -7,13 +7,13 @@ Last updated 2026-10-17. Branch `phase-5`; local `master` fast-forwarded to the 
 - **Phases 1–5 are done.** Phase 6 is half done: 3 of 6 items.
 - **Tests:** 253 pass (`npm test`).
 - **Checks:** `npm run typecheck` and `npm run build` are clean. `npm run bench` gives the 200k / 1M-row timings.
-- **Entries:** `prismbi`, `/core`, `/visuals`, `/studio`, `/react`, `/connectors`, `/worker`, `/files`, `/elements`, `/ai`.
+- **Entries:** `@prismbi/prismbi`, `/core`, `/visuals`, `/studio`, `/react`, `/connectors`, `/worker`, `/files`, `/elements`, `/ai`.
 - **CLI:** `bin/prismbi.mjs`.
 - **Demo pages** (`npm run dev`, then http://localhost:5173): `/`, `/studio.html`, `/perf.html`, `/elements.html`.
 
 ## Remaining Phase 6 items (do in this order)
 
-### 1. `prismbi/server`: headless rendering, scheduled sends, measure alerts
+### 1. `@prismbi/prismbi/server`: headless rendering, scheduled sends, measure alerts
 
 Create `src/server.ts` as a new entry. Register it in all of these:
 - `tsup.config.ts`
@@ -35,7 +35,7 @@ Contents:
 - **Tests:** run with `// @vitest-environment node` plus `new JSDOM()`. `measureText` already falls back to an estimate under jsdom.
 - **Docs:** `docs/guide/server.md`.
 
-### 2. Collaboration: `prismbi/collab`
+### 2. Collaboration: `@prismbi/prismbi/collab`
 
 - **Document:** an operation-based document over report JSON. Visuals and pages are keyed by id, and properties use last-writer-wins with Lamport clocks and a site id.
   - Hook into the Studio history snapshots (`src/studio/history.ts`) and `Report.load` / `definitionChanged`.
@@ -44,7 +44,7 @@ Contents:
 - **Shared bookmarks:** stored in the document.
 - **Demo:** open `/studio.html` in two tabs. Test with two in-memory peers.
 
-### 3. Plugins: `prismbi/plugins`
+### 3. Plugins: `@prismbi/prismbi/plugins`
 
 - **Manifest:** `{ name, version, kind: 'visual' | 'connector' | 'theme', entry, integrity: 'sha256-…', signature }`.
 - **`loadPlugin(url, { trustedKeys })`:**

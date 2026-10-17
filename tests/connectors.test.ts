@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DataModel } from 'prismbi/core';
+import { DataModel } from '@prismbi/prismbi/core';
 import {
   addArrowTable,
   detectDelimiter,
@@ -13,7 +13,7 @@ import {
   scheduleRefresh,
   streamInto,
   type MessageSourceLike,
-} from 'prismbi/connectors';
+} from '@prismbi/prismbi/connectors';
 
 /** fetch stub answering from a url → body map (functions get the parsed URL / init). */
 function fakeFetch(routes: (url: URL, init?: RequestInit) => { body: unknown; headers?: Record<string, string> } | undefined) {

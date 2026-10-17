@@ -2,8 +2,8 @@
  * Individually importable built-in visuals. Register just what you need:
  *
  * ```ts
- * import { Report, registerVisual } from 'prismbi/core';
- * import { clusteredColumn, card, slicer } from 'prismbi/visuals';
+ * import { Report, registerVisual } from '@prismbi/prismbi/core';
+ * import { clusteredColumn, card, slicer } from '@prismbi/prismbi/visuals';
  * [clusteredColumn, card, slicer].forEach((v) => registerVisual(v));
  * ```
  * @packageDocumentation

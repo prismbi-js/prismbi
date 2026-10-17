@@ -1,5 +1,5 @@
-import { DataModel } from 'prismbi/core';
-import type { Row } from 'prismbi/core';
+import { DataModel } from '@prismbi/prismbi/core';
+import type { Row } from '@prismbi/prismbi/core';
 
 /** Synthetic star schema shared by the scale demo page and its worker. */
 let seed = 42;

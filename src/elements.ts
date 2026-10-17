@@ -6,13 +6,13 @@
  * ```html
  * <prism-report src="/reports/sales.json" model="sales" theme="dark" style="height: 720px"></prism-report>
  * <script type="module">
- *   import { registerModel } from 'prismbi/elements';
+ *   import { registerModel } from '@prismbi/prismbi/elements';
  *   registerModel('sales', buildModel());
  * </script>
  * ```
  */
-import { Report, createVisual } from 'prismbi';
-import type { DataModel, DeepPartial, FilterSpec, ReportChrome, ReportDefinition, ReportEvents, Theme, VisualSpec } from 'prismbi';
+import { Report, createVisual } from '@prismbi/prismbi';
+import type { DataModel, DeepPartial, FilterSpec, ReportChrome, ReportDefinition, ReportEvents, Theme, VisualSpec } from '@prismbi/prismbi';
 
 type ThemeValue = string | Theme | DeepPartial<Theme>;
 

@@ -1,4 +1,4 @@
-import { Studio } from 'prismbi/studio';
+import { Studio } from '@prismbi/prismbi/studio';
 import { buildModel } from './model';
 
 const model = buildModel();

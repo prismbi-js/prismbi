@@ -2,13 +2,13 @@
 
 ## 0.6.0 (2026-10-17): Phase 6, in progress
 
-- **`prismbi/ai`:**
+- **`@prismbi/prismbi/ai`:**
   - `ask` / `askSync`, with an optional `llm` hook.
   - `explain`, `findInsights`, `suggestQuestions`.
   - The `qna` and `insights` visuals and "Explain this" in context menus.
   - Agent support: `getAIContext`, `contextToPrompt`, `createAgentTools`, `runTool`, `toAnthropicTools`, `toOpenAITools`, `toMcpTools`.
-- **`prismbi/elements`:** web components `<prism-report>` and `<prism-visual>`, `registerModel`, and the Svelte actions `prismReport` / `prismVisual`.
-- **`prismbi/files`:** `splitReport`, `joinReport`, `diffReports`, `formatDiff`, and the `prismbi split|join|diff` CLI.
+- **`@prismbi/prismbi/elements`:** web components `<prism-report>` and `<prism-visual>`, `registerModel`, and the Svelte actions `prismReport` / `prismVisual`.
+- **`@prismbi/prismbi/files`:** `splitReport`, `joinReport`, `diffReports`, `formatDiff`, and the `prismbi split|join|diff` CLI.
 - **Core:** `registerMenuItems` (context-menu plugins), plus `Report.reportFilterList` and `Report.currentSelection`.
 
 
@@ -20,12 +20,12 @@
   - A single-pass grouped query path for simple measures, with automatic fallback (`setFastQuery('auto' | 'always' | 'off')`).
   - Cheaper filter cache keys.
 - **Streaming data:** `model.appendRows(table, rows, { maxRows })` with incremental calculated columns and a sliding window.
-- **`prismbi/connectors`:**
+- **`@prismbi/prismbi/connectors`:**
   - `parseCsv` / `loadCsv`, `googleSheetCsvUrl`
   - `loadJson`, `loadRest` (page, offset, cursor and link pagination), `loadGraphQL`
   - `addArrowTable`, `loadSqlTables` (`SqlAdapter`)
   - `streamInto` (WebSocket, EventSource, ports) and `scheduleRefresh`
-- **`prismbi/worker`:** `serveModel`, `createWorkerEngine` and `createLocalEngine`. The model runs off the main thread, with cancellation.
+- **`@prismbi/prismbi/worker`:** `serveModel`, `createWorkerEngine` and `createLocalEngine`. The model runs off the main thread, with cancellation.
 - **Rendering at scale:**
   - LTTB downsampling for dense lines and areas
   - canvas scatter above 3,000 points, with hit-testing
@@ -43,7 +43,7 @@
 
 ## 0.4.0 (unreleased): Phase 4, the studio
 
-- **`prismbi/studio`** and **`<PrismStudio>`**: a drag-and-drop report editor. Canvas edit mode (select, move, resize, grid snap, keyboard), Fields, Build, Format and Filters panes, page management, measure and column editors, data and model views (relationship diagram), theme designer, Auto page, preview, export and import.
+- **`@prismbi/prismbi/studio`** and **`<PrismStudio>`**: a drag-and-drop report editor. Canvas edit mode (select, move, resize, grid snap, keyboard), Fields, Build, Format and Filters panes, page management, measure and column editors, data and model views (relationship diagram), theme designer, Auto page, preview, export and import.
 - **Undo/redo** across report and model edits, **autosave** (`storageKey`), and a studio document that stores model changes as a diff.
 - **Report edit-mode APIs:** `setEditMode`, `selectedVisual`, `visualFormat`, `updatePage`, `movePage`, `duplicatePage`, `pageDefinition`, `duplicateVisual`, `arrange`, `findFreeSpot`, `load`, plus the events `definitionChanged` and `visualSelected`.
 - **Versioned report JSON:** `REPORT_SCHEMA_VERSION` and `migrateReport`.
@@ -71,7 +71,7 @@
 - **PDF export** (`report.exportPdf()`, toolbar button) with a lazily loaded, dependency-free writer.
 - **Persisted visual state** (`spec.state`): table sort, matrix expansion and decomposition splits are saved with the report.
 - **New visuals:** histogram, box plot, bullet, radar, sankey, ribbon, bubble map, filled map.
-- **Lean builds:** `prismbi/core` and `prismbi/visuals` entry points with pure annotations, so unused visuals are tree-shaken. The registry is shared across entries.
+- **Lean builds:** `@prismbi/prismbi/core` and `@prismbi/prismbi/visuals` entry points with pure annotations, so unused visuals are tree-shaken. The registry is shared across entries.
 - **Fixes:** scatter bubbles no longer spill over the axes, and the legend follows colour order. Zero shows as "$0" rather than "$0M". The date-range slider thumbs sit on the track and the selected span is highlighted. Map SVGs clip to their box. Ribbon slivers never vanish.
 - The repo now enforces LF line endings (`.gitattributes`).
 
