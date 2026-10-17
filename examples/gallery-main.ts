@@ -30,6 +30,7 @@ export const GALLERY: Spec[] = [
   { type: 'radar', fields: { category: 'Sales[Channel]', legend: 'Product[Category]', values: 'Total Sales' } },
   { type: 'sankey', fields: { source: 'Sales[Channel]', target: 'Product[Category]', values: 'Total Sales' } },
   { type: 'heatmap', fields: { rows: 'Region[Region]', columns: 'Date[MonthShort]', values: 'Total Sales' } },
+  { type: 'calendar', fields: { date: 'Date[Date]', values: 'Total Sales' }, filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }] },
   { type: 'map', fields: { location: 'Region[Region]', legend: 'Region[Group]', latitude: 'Region[Lat]', longitude: 'Region[Lon]', size: 'Total Sales' } },
   { type: 'decompositionTree', fields: { values: 'Total Sales', explainBy: ['Product[Category]', 'Region[Group]', 'Sales[Channel]'] } },
   { type: 'card', fields: { value: 'Total Sales', delta: 'YoY %' } },

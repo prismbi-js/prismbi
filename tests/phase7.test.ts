@@ -385,3 +385,26 @@ describe('error bars', () => {
     }
   });
 });
+
+describe('calendar heatmap', () => {
+  it('draws one square per day across years and selects a day on click', async () => {
+    const { createVisual } = await import('../src/index');
+    const el = document.createElement('div');
+    el.style.height = '400px';
+    document.body.append(el);
+    const r = createVisual(el, { model: buildModel(), type: 'calendar', fields: { date: 'Date[Date]', values: 'Total Sales' } });
+    r.flush();
+    expect(el.querySelector('.pbi-error')).toBeNull();
+    const rects = el.querySelectorAll('rect');
+    expect(rects.length).toBe(366 + 365); // every day of 2024 (leap year) and 2025
+    const marks = el.querySelectorAll('rect.pbi-mark');
+    expect(marks.length).toBeGreaterThan(600); // days with sales
+    expect(el.textContent).toContain('2024');
+    expect(el.textContent).toContain('Jul');
+    (marks[10] as SVGElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    r.flush();
+    expect(el.querySelectorAll('rect.pbi-mark[opacity="0.25"], rect.pbi-mark[opacity="0.3"], rect.pbi-mark[opacity="0.35"]').length).toBeGreaterThan(100);
+    r.destroy();
+    el.remove();
+  });
+});

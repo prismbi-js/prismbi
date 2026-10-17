@@ -9,6 +9,7 @@ import { slicer } from './slicer';
 import { textBox } from './text';
 import { waterfall } from './waterfall';
 import { heatmap } from './heatmap';
+import { calendarHeatmap } from './calendar';
 import { decompositionTree } from './decomposition';
 import { boxPlot, histogram } from './distribution';
 import { bullet, radar, ribbon, sankey } from './more';
@@ -40,6 +41,7 @@ export const builtinVisuals = {
   textBox,
   waterfall,
   heatmap,
+  calendarHeatmap,
   decompositionTree,
   histogram,
   boxPlot,
@@ -80,6 +82,7 @@ export function registerBuiltinVisuals(): void {
   registerVisual(textBox, ['textbox']);
   registerVisual(waterfall);
   registerVisual(heatmap);
+  registerVisual(calendarHeatmap);
   registerVisual(decompositionTree, ['decomp']);
   registerVisual(histogram);
   registerVisual(boxPlot, ['boxAndWhisker']);

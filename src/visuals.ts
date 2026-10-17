@@ -18,6 +18,7 @@ export { slicer } from './visuals/slicer';
 export { textBox } from './visuals/text';
 export { waterfall } from './visuals/waterfall';
 export { heatmap } from './visuals/heatmap';
+export { calendarHeatmap } from './visuals/calendar';
 export { decompositionTree } from './visuals/decomposition';
 export { boxPlot, histogram } from './visuals/distribution';
 export { bullet, radar, ribbon, sankey } from './visuals/more';
