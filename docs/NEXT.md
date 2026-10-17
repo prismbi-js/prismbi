@@ -36,6 +36,60 @@ Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forw
   - SQLite is slow on non-contiguous date contexts (no subquery decorrelation); DuckDB and Postgres are fine.
 - **Playground:** add more ```` ```js playground ```` examples to the guides; each one is tested automatically.
 
+## Planned next (approved by the owner, not started)
+
+Agreed on 2026-10-17 to be done later, in this order. Before starting, check with any other session working in the repo and claim files (two sessions edited the same tree on 2026-10-17).
+
+### 1. Docs site and playground on GitHub Pages
+
+- **Build:** add multi-page inputs to `examples/vite.config.ts` (`index`, `studio`, `perf`, `elements`, `gallery`, `playground`), and set `base: '/PrismBI/'` only for the Pages build (an env flag), so `npm run dev` keeps `/`.
+- **Docs:** run `scripts/build-docs.mjs` first, so `examples/docs/` (with `docs/images`) goes into the build.
+- **Publish without CI** (the owner wants no workflow): a new `scripts/deploy-pages.mjs` builds into a temp folder, commits it to an orphan `gh-pages` branch through a git worktree, and pushes.
+- **Turn Pages on once:** Settings › Pages › branch `gh-pages`. The GitHub CLI isn't installed here, so the owner does this in the browser.
+- **Check:** links in the generated docs are relative; the playground loads `docs/guide/*.md` through `import.meta.glob` (bundled at build time); the perf page's 1M-row option still works.
+- **Outward-facing:** confirm with the owner before the first push.
+
+### 2. Real-world validation
+
+- **Inputs:** ask the owner for a real `.pbip` project or dataset. Otherwise use a public sample, verified, never invented: a Power BI sample saved as `.pbip`, or a public CSV/Parquet of a few million rows loaded through `@prismbi/prismbi/connectors`.
+- **Run it end to end:**
+  - `importPowerBI`, then compare its warnings with what Power BI shows;
+  - render the report and spot-check measures against Power BI's values;
+  - open it in the Studio;
+  - run `sqlEngine` against DuckDB (or SQLite) and diff the results with the in-memory engine;
+  - time page loads.
+- **Output:** a list of breakages and gaps, fixed one by one, each with a test.
+
+### 3. Performance
+
+- **Time intelligence in the single-pass path** (`src/data/fastQuery.ts`):
+  - `SAMEPERIODLASTYEAR` / `DATEADD` / `DATESYTD` / `TOTALYTD` when the visual groups by date-table columns.
+  - Map each fact row to the group(s) its shifted date belongs to, using the in-memory engine's month-end rule. YTD rows feed every later group of the same year (a prefix sum over date-ordered groups).
+  - Today about 190 ms at 1M rows through partial aggregates. Gate it with an equivalence test (fast vs off), like `tests/fastcalc.test.ts`.
+- **Dictionary-encoded text columns at load** (`src/data/table.ts`):
+  - Store text columns as an `Int32Array` of codes plus a dictionary, and decode lazily in `values` / `toRows`.
+  - Expect about 3–5× less memory on large tables, and faster filters and group-bys.
+  - Watch out for the incremental append caches added on 2026-10-17 (streaming); appends must extend the dictionary.
+- **Zero-copy worker transfer** (`src/worker.ts`):
+  - When `crossOriginIsolated` is true, share numeric columns as `SharedArrayBuffer`; otherwise transfer `ArrayBuffer`s instead of structured-cloning arrays.
+  - Measure worker start and memory on `/perf.html` at 1M rows.
+- **SQL totals in one round trip** (`src/sql.ts`):
+  - In aggregate mode, use `GROUPING SETS ((g…), ())` (DuckDB, Postgres) so totals come back with the rows; keep two statements for SQLite.
+  - Add an optional result cache in `sqlEngine`, keyed by SQL text plus model version.
+
+### 4. Polish
+
+- **Canvas heatmaps and calendars** (`src/visuals/heatmap.ts`, `calendar.ts`):
+  - Above about 3,000 cells, paint on a canvas with a grid hit-test, like `scatter.ts` `paintCanvas` / `overlay`.
+  - Keep the SVG path for small grids and for exports.
+- **Virtualized matrix** (`src/visuals/table.ts`):
+  - Window rows the way the table already does (`format.table.virtualize`), keeping expand/collapse state.
+  - Subtotal rows count as rows.
+- **Lighter Studio undo** (`src/studio/history.ts`):
+  - Store JSON patches (or structural diffs) between documents instead of full snapshots, with a snapshot every N steps.
+  - Keep the 200-step limit.
+- **Perf budgets:** `npm run size` exists (added by the other session). Extend `npm run bench` with per-query time budgets that fail when exceeded (some cases already carry budgets in `bench/scale.test.ts`).
+
 ## Publishing (deferred by the owner: "we will deploy later")
 
 - **Package:** `@prismbi/prismbi@0.6.0` is ready. npm rejected the unscoped name `prismbi` as too close to `prisma` and `prismjs`.
