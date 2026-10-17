@@ -2,6 +2,7 @@
 
 ## Unreleased: Phases 8 and 9
 
+- **Size check:** `npm run size` (also run by `prepublishOnly`) bundles each entry from `dist` like an app would and fails over budget (`scripts/size.mjs`). Size figures in the README, roadmap and contributing guide are corrected: the core is about 75 KB min+gzip, not 60 KB.
 - **Streaming refresh:** `appendRows` and `maxRows` windows extend or shift the table caches (numeric views, dictionaries, indexes, bitmaps) instead of rebuilding them. `model.onChange` listeners receive a `ModelChange` (`{ tables }`) for data-only changes, and reports re-query only the visuals whose fields, filters, format or measures can reach those tables. Row-local calculated columns compute appended rows with the row-expression compiler, and the visible-rows cache is bounded by total row indices as well as entries.
 - **Numeric group keys:** multi-column fast-path groupings use mixed-radix numeric keys (dense table up to 4M combinations) instead of per-row strings.
 - **Lazy rendering:** scheduled re-renders skip visuals more than 300 px outside the viewport until they scroll into view; `report.flush()` and exports still render everything.
