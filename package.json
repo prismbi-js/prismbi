@@ -19,6 +19,8 @@
   "author": "Santhoshkumar Hariharan",
   "type": "module",
   "sideEffects": [
+    "./dist/ai.js",
+    "./dist/ai.cjs",
     "./dist/elements.js",
     "./dist/elements.cjs",
     "./dist/index.js",
@@ -71,6 +73,11 @@
       "types": "./dist/elements.d.ts",
       "import": "./dist/elements.js",
       "require": "./dist/elements.cjs"
+    },
+    "./ai": {
+      "types": "./dist/ai.d.ts",
+      "import": "./dist/ai.js",
+      "require": "./dist/ai.cjs"
     },
     "./react": {
       "types": "./dist/react.d.ts",

@@ -143,6 +143,28 @@ export function reviveDates(_k: string, v: unknown): unknown {
   return v;
 }
 
+/** Context for menu items contributed by plugins (see {@link registerMenuItems}). */
+export interface MenuContext {
+  report: Report;
+  visualId: string;
+  spec: VisualSpec;
+  identity: DataPointIdentity;
+  /** Filters in effect for the visual (report, page, slicers, other visuals' selections, its own). */
+  filters: FilterSpec[];
+  event: MouseEvent;
+}
+
+export type MenuProvider = (ctx: MenuContext) => MenuItem[];
+
+const MENU_KEY = Symbol.for('prismbi.menuProviders');
+const menuProviders = (): Set<MenuProvider> => ((globalThis as Record<symbol, Set<MenuProvider>>)[MENU_KEY] ??= new Set());
+
+/** Add items to every data point's context menu (e.g. "Explain this"). Returns an unregister function. */
+export function registerMenuItems(provider: MenuProvider): () => void {
+  menuProviders().add(provider);
+  return () => menuProviders().delete(provider);
+}
+
 const raf: (cb: () => void) => void = typeof requestAnimationFrame === 'function' ? (cb) => requestAnimationFrame(cb) : (cb) => setTimeout(cb, 0);
 
 /**
@@ -491,6 +513,15 @@ export class Report implements ReportRuntime {
     }
     const targets = this.pages.filter((p) => p !== found.page && p.def.drillthrough?.fields.some((f) => identity.columns.some((c) => sameRef(c, f))));
     targets.forEach((p, i) => items.push({ label: `Drill through: ${p.def.name}`, separator: i === 0 && items.length > 0, onClick: () => this.drillThrough(p.def.id!, identity, visualId) }));
+    for (const provider of menuProviders()) {
+      let extra: MenuItem[] = [];
+      try {
+        extra = provider({ report: this, visualId, spec: found.spec, identity, filters: this.filtersFor(visualId), event: evt });
+      } catch (error) {
+        this.emit('error', { visualId, error: error as Error });
+      }
+      extra.forEach((it, i) => items.push(i === 0 && items.length ? { ...it, separator: true } : it));
+    }
     if (found.page.selection) items.push({ label: 'Clear selection', separator: true, onClick: () => this.clearSelection() });
     if (found.spec.filters?.length) items.push({ label: 'Clear visual filters', onClick: () => this.setVisualFilters(visualId, []) });
     this.menu(evt.clientX, evt.clientY, items);
@@ -795,6 +826,16 @@ export class Report implements ReportRuntime {
 
   get currentPage(): { id: string; name: string } {
     return { id: this.page.def.id!, name: this.page.def.name };
+  }
+
+  /** Report-level filters (a copy). */
+  get reportFilterList(): FilterSpec[] {
+    return [...this.reportFilters];
+  }
+
+  /** The cross-filter selection on the current page, if any. */
+  get currentSelection(): { visualId: string; identities: DataPointIdentity[] } | null {
+    return this.page.selection ? { visualId: this.page.selection.visualId, identities: [...this.page.selection.identities] } : null;
   }
 
   /** The definition object of a page (current page by default). Change it through updatePage(). */

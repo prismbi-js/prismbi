@@ -1,4 +1,6 @@
 import { Report } from 'prismbi';
+// registers the Q&A and Insights visuals and "Explain this" on right-click
+import 'prismbi/ai';
 import type { Bookmark } from 'prismbi';
 import { makeSales } from './data';
 import { buildModel } from './model';
@@ -117,6 +119,15 @@ const report = new Report(document.getElementById('app')!, {
         { id: 'i-wf', type: 'waterfall', title: 'Change vs last year by category', layout: { x: 0, y: 9, w: 5, h: 7 }, fields: { category: 'Product[Category]', values: 'Sales Change' } },
         { id: 'i-heat', type: 'heatmap', title: 'Sales by region and month', layout: { x: 5, y: 9, w: 7, h: 7 }, fields: { rows: 'Region[Region]', columns: 'Date[MonthShort]', values: 'Total Sales' }, format: { dataLabels: { show: false } } },
         { id: 'i-sm', type: 'line', title: 'Monthly sales by region group', layout: { x: 0, y: 16, w: 12, h: 6 }, fields: { category: 'Date[MonthShort]', values: 'Total Sales', smallMultiples: 'Region[Group]' } },
+        {
+          id: 'i-qna',
+          type: 'qna',
+          title: 'Ask a question',
+          layout: { x: 0, y: 22, w: 7, h: 9 },
+          fields: {},
+          format: { title: { subtitle: 'Try "top 5 products by profit", "sales trend by month" or "share of sales by channel in Canada"' }, qna: { synonyms: { 'Total Sales': ['revenue', 'turnover'] } } },
+        },
+        { id: 'i-auto', type: 'insights', title: 'Insights', layout: { x: 7, y: 22, w: 5, h: 9 }, fields: { values: 'Total Sales' }, format: { title: { subtitle: 'Found automatically · click one to see it · right-click any data point for "Explain this"' } } },
       ],
     },
     {
