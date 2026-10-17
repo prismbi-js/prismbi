@@ -69,6 +69,7 @@ export type { ConditionalFormat, ConditionalRule } from './visuals/table';
 export { squarify } from './visuals/parts';
 export { wQuantile } from './visuals/distribution';
 export type { GeoFeature, GeoFeatureCollection, MapFormat } from './visuals/map';
+export { registerBoundaries, getBoundaries, featureCentroid, clusterPoints, quantileBreaks } from './visuals/map';
 export { referenceValue, linearFit } from './visuals/analytics';
 export { timeScale, logScale } from './render/scales';
 export { buildPdf } from './report/pdf';

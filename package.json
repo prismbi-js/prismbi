@@ -29,6 +29,8 @@
   "author": "Santhoshkumar Hariharan",
   "type": "module",
   "sideEffects": [
+    "./dist/geo.js",
+    "./dist/geo.cjs",
     "./dist/visuals/*.js",
     "./dist/visuals/*.cjs",
     "./dist/ai.js",
@@ -101,6 +103,11 @@
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js",
       "require": "./dist/server.cjs"
+    },
+    "./geo": {
+      "types": "./dist/geo.d.ts",
+      "import": "./dist/geo.js",
+      "require": "./dist/geo.cjs"
     },
     "./sql": {
       "types": "./dist/sql.d.ts",

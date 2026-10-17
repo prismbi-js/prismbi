@@ -1424,6 +1424,56 @@ export class Evaluator {
         const keys = new Set(b.tuples.map((t) => this.tupleKey(t)));
         return { ...a, clearTable: undefined, tuples: a.tuples.filter((t) => keys.has(this.tupleKey(t)) === (name === 'INTERSECT')) };
       }
+      case 'NATURALINNERJOIN':
+      case 'NATURALLEFTOUTERJOIN': {
+        // join on the columns both tables share (same table and column, or same name for computed columns)
+        const a = this.toTuples(this.evalTable(args[0], ctx));
+        const b = this.toTuples(this.evalTable(args[1], ctx));
+        const same = (x: ColumnRef, y: ColumnRef) => x.column === y.column && (x.table === y.table || !x.table || !y.table);
+        const pairs = a.columns.map((c, i) => [i, b.columns.findIndex((d) => same(c, d))] as const).filter(([, j]) => j >= 0);
+        if (!pairs.length) throw new DaxError(`${name}: the tables have no common columns to join on`);
+        const joinB = new Set(pairs.map(([, j]) => j));
+        const restB = b.columns.map((_, j) => j).filter((j) => !joinB.has(j));
+        const index = new Map<string, CellValue[][]>();
+        for (const t of b.tuples) {
+          const k = this.tupleKey(pairs.map(([, j]) => t[j]));
+          const list = index.get(k);
+          if (list) list.push(t);
+          else index.set(k, [t]);
+        }
+        const tuples: CellValue[][] = [];
+        for (const t of a.tuples) {
+          const matches = index.get(this.tupleKey(pairs.map(([i]) => t[i])));
+          if (matches) for (const m of matches) tuples.push([...t, ...restB.map((j) => m[j])]);
+          else if (name === 'NATURALLEFTOUTERJOIN') tuples.push([...t, ...restB.map(() => null)]);
+        }
+        return { kind: 'tuples', columns: [...a.columns, ...restB.map((j) => b.columns[j])], tuples };
+      }
+      case 'SAMPLE': {
+        // N rows spread evenly over the table sorted by the order expressions, first and last included
+        const n = Math.max(0, Math.floor(num(s(0))));
+        const t = this.evalTable(args[1], ctx);
+        const binds = this.bindings(t);
+        const keys: { values: CellValue[]; desc: boolean }[] = [];
+        for (let i = 2; i < args.length; i++) {
+          const next = args[i + 1];
+          const dirArg = next && ((next.type === 'table' && /^(ASC|DESC)$/i.test(next.name)) || next.type === 'number');
+          const desc = !!dirArg && ((next.type === 'table' && next.name.toUpperCase() === 'DESC') || (next.type === 'number' && next.value === 0));
+          keys.push({ values: binds.map((b) => this.evalScalar(args[i], { ...ctx, rows: [...(ctx.rows ?? []), b] })), desc });
+          if (dirArg) i++;
+        }
+        const order = binds.map((_, i) => i).sort((x, y) => {
+          for (const k of keys) {
+            const c = compareValues(k.values[x], k.values[y]);
+            if (c) return k.desc ? -c : c;
+          }
+          return x - y;
+        });
+        const pick = n >= order.length ? order : n === 0 ? [] : n === 1 ? [order[0]] : Array.from({ length: n }, (_, k) => order[Math.round((k * (order.length - 1)) / (n - 1))]);
+        const keep = new Set(pick);
+        if (t.kind === 'rows') return { kind: 'rows', table: t.table, rows: t.rows.filter((_, i) => keep.has(i)) };
+        return { ...t, tuples: t.tuples.filter((_, i) => keep.has(i)) };
+      }
       case 'GENERATE': {
         const t1 = this.evalTable(args[0], ctx);
         const left = this.toTuples(t1);

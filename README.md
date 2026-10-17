@@ -63,6 +63,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | `@prismbi/prismbi/elements` | `<prism-report>`, `<prism-visual>` web components (Vue, Svelte, Angular, plain HTML) |
 | `@prismbi/prismbi/connectors` | CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh |
 | `@prismbi/prismbi/worker` | Run the model in a Web Worker |
+| `@prismbi/prismbi/geo` | World countries and US states for maps (optional data) |
 | `@prismbi/prismbi/sql` | Push visual queries down to DuckDB, Postgres or SQLite |
 | `@prismbi/prismbi/ai` | Ask, explain, insights, and agent context and tools (Claude, OpenAI, MCP) |
 | `@prismbi/prismbi/plugins` | Signed plugins, catalogs and an install gallery |

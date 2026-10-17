@@ -1,6 +1,7 @@
 // Every built-in visual on one page, for screenshot (visual regression) tests: /gallery.html?theme=dark
 import { createVisual, listVisuals } from '@prismbi/prismbi';
 import type { VisualSpec } from '@prismbi/prismbi';
+import '@prismbi/prismbi/geo';
 import { buildModel } from './model';
 
 type Spec = Omit<VisualSpec, 'layout'> & { key?: string };
@@ -33,6 +34,9 @@ export const GALLERY: Spec[] = [
   { type: 'heatmap', fields: { rows: 'Region[Region]', columns: 'Date[MonthShort]', values: 'Total Sales' } },
   { type: 'calendar', fields: { date: 'Date[Date]', values: 'Total Sales' }, filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }] },
   { type: 'map', fields: { location: 'Region[Region]', legend: 'Region[Group]', latitude: 'Region[Lat]', longitude: 'Region[Lon]', size: 'Total Sales' } },
+  { key: 'filled-map-world', type: 'filledMap', fields: { location: 'Region[Country]', values: 'Total Sales' }, format: { map: { boundaries: 'world', legend: 'classes', classes: 3 } } },
+  { key: 'map-countries', type: 'map', fields: { location: 'Region[Country]', size: 'Total Sales' }, format: { map: { boundaries: 'world' } } },
+  { key: 'map-cluster', type: 'map', fields: { location: 'Region[Region]', latitude: 'Region[Lat]', longitude: 'Region[Lon]', size: 'Total Sales' }, format: { map: { cluster: { radius: 120 } } } },
   { type: 'decompositionTree', fields: { values: 'Total Sales', explainBy: ['Product[Category]', 'Region[Group]', 'Sales[Channel]'] } },
   { type: 'card', fields: { value: 'Total Sales', delta: 'YoY %' } },
   { type: 'multiRowCard', fields: { category: 'Region[Group]', values: ['Total Sales', 'Orders'] } },

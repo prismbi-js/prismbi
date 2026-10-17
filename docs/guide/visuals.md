@@ -49,8 +49,8 @@ A `FieldSpec` is one of:
 | `radar` | `category`* (spokes, 3 or more) · `legend` · `values`* | One polygon per series on a shared radial scale |
 | `sankey` | `source`* · `target`* · `values`* | Multi-stage flows (a target that is also a source becomes a middle column) |
 | `ribbon` | `category`* · `legend`* · `values`* | Stacked by rank in each column, with ribbons showing rank changes |
-| `map` (`bubbleMap`) | `location`* · `legend` · `latitude`* · `longitude`* · `size` | Columns are averaged per location. Your own GeoJSON or tiles via `format.map` |
-| `filledMap` (`choropleth`) | `location`* · `values`* | Needs `format.map.geojson`. Matches `featureKey` (default `name`) case-insensitively |
+| `map` (`bubbleMap`) | `location`* · `legend` · `latitude` · `longitude` · `size` | Columns are averaged per location. Without latitude and longitude, bubbles sit at the centre of their region (`format.map.boundaries` or `geojson`). Optional clustering |
+| `filledMap` (`choropleth`) | `location`* · `values`* | Built-in `boundaries` (`@prismbi/prismbi/geo`) or your `geojson`. Gradient or classed legend |
 | `card` | `value`* · `delta` | Auto-sized callout value, signed delta with good/bad colour |
 | `multiRowCard` | `category` · `values`* | One card per group |
 | `kpi` | `trend` · `value`* · `target` | Headline is the last trend point. Shows % vs goal and a sparkline |
@@ -149,8 +149,11 @@ format: { bullet: { bands: [0.6, 0.85, 1], sharedScale: true } }
 
 // maps (bubble and filled)
 format: { map: {
-  geojson: featureCollection,              // outlines (required for filledMap)
-  featureKey: 'name',                      // property matched against the location field
+  boundaries: 'world',                     // or 'usStates': built-in outlines, after import '@prismbi/prismbi/geo'
+  geojson: featureCollection,              // or your own outlines
+  featureKey: 'name',                      // property (or list) matched against the location field
+  legend: 'classes', classes: 5,           // filled maps: quantile classes instead of a gradient
+  cluster: { radius: 40 },                 // bubble maps: group nearby bubbles; click or Enter zooms in
   tiles: 'https://tiles.example.com/{z}/{x}/{y}.png', attribution: '© provider',   // optional raster basemap
   maxRadius: 28, zoom: true, graticule: true,
 } }
@@ -199,6 +202,26 @@ Clustered column and bar charts with a single series accept two optional measure
 - **Drawing:** each bar gets a whisker with caps between the two bounds. With only one bound, the whisker runs from the bar's value to that bound.
 - **Axis:** the value axis grows to include the bounds.
 - **Tooltip:** shows the range.
+
+## Maps and built-in boundaries
+
+`@prismbi/prismbi/geo` adds world countries and US states (Natural Earth 1:110m, public domain) as an optional entry. The data is about 60 KB gzipped, and you only pay for it when you import it:
+
+```ts
+import '@prismbi/prismbi/geo';
+
+{ type: 'filledMap', fields: { location: 'Region[Country]', values: 'Total Sales' }, format: { map: { boundaries: 'world', legend: 'classes' } } }
+{ type: 'map', fields: { location: 'Region[Country]', size: 'Total Sales' }, format: { map: { boundaries: 'world' } } }   // bubbles at country centres
+{ type: 'filledMap', fields: { location: 'Store[State]', values: 'Orders' }, format: { map: { boundaries: 'usStates' } } }
+```
+
+- **Matching:**
+  - Countries match on name, long name, or ISO alpha-2 or alpha-3 code (`France`, `FR`, `FRA`). Common variants like `USA`, `UK` and `Czech Republic` work too.
+  - States match on name, postal code or ISO 3166-2 code (`Texas`, `TX`, `US-TX`).
+  - Locations that don't match are left out.
+- **Framing:** filled maps with built-in boundaries zoom to the regions that have data.
+- **Your own regions:** `registerBoundaries(name, featureCollection, { keys })` adds your own collection under a name. `worldCountries`, `usStates`, `featureCentroid`, `clusterPoints` and `quantileBreaks` are exported for your own geo work.
+- **Clustering:** clusters are recomputed as you zoom. Each cluster shows its count, and its tooltip lists the total and some of its locations. Click a cluster, or press Enter on it, to zoom in.
 
 ## Calendar heatmap
 

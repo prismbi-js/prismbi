@@ -7,6 +7,11 @@
 - **Localization:** `ReportDefinition.translations`, `ReportOptions.direction`, `report.setLocale()`, `report.translate()`.
 - **Lineage:** `lineage`, `impactOf`, `expressionRefs`, `renameInExpression`, `renameModelField`, `model.renameColumn`, `DataTable.renameColumn`. The Studio measure and column renames now update dependent DAX (previously only visual fields).
 
+- **Geo:** new entry `@prismbi/prismbi/geo` (`worldCountries`, `usStates`); `format.map.boundaries`, `featureKey` lists, `legend: 'classes'`, `cluster`; bubble maps without latitude/longitude; `registerBoundaries`, `getBoundaries`, `featureCentroid`, `clusterPoints`, `quantileBreaks`.
+- **Animated transitions:** data points tween from their previous geometry when data changes (identity-keyed; respects reduced motion).
+- **Keyboard:** roving data-point focus with arrows/Home/End, Shift+F10 menus with focus return, page-tab arrows, edit-mode arrow moves and Shift+arrow resizes; walkthrough tests.
+- **DAX:** `NATURALINNERJOIN`, `NATURALLEFTOUTERJOIN`, `SAMPLE`.
+- **Calculation-item formats:** `format` and `formatExpression` on calculation items, `SELECTEDMEASUREFORMATSTRING()`, `QueryRow.formats`.
 - **Docs site and playground:** `npm run docs` / `docs:build` (generated from `docs/guide`, with search), `/playground.html` with editable examples from the guides; every playground example is run by the tests.
 - **Per-visual entry points:** `@prismbi/prismbi/visuals/bar`, `…/line`, `…/waterfall` and 19 more; each registers its visuals on import.
 - **Incremental refresh:** `model.setRefreshPolicy`, `refreshPolicyOf`, `incrementalRefresh`; `applyRefreshPolicy` and `periodStart`; `scheduleRefresh` `mode: 'incremental'`; `toJSON().refreshPolicies`.

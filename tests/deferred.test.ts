@@ -206,3 +206,111 @@ describe('animated transitions', () => {
     el.remove();
   });
 });
+
+describe('geo upgrades', () => {
+  const geoModel = async () => {
+    const { DataModel } = await import('../src/index');
+    return new DataModel()
+      .addTable('Sales', [
+        { Country: 'France', City: 'Paris', Lat: 48.86, Lon: 2.35, Amount: 500 },
+        { Country: 'Germany', City: 'Berlin', Lat: 52.52, Lon: 13.4, Amount: 300 },
+        { Country: 'USA', City: 'New York', Lat: 40.71, Lon: -74.0, Amount: 900 },
+        { Country: 'BR', City: 'São Paulo', Lat: -23.55, Lon: -46.63, Amount: 150 },
+        { Country: 'Belgium', City: 'Brussels', Lat: 50.85, Lon: 4.35, Amount: 120 },
+        { Country: 'Netherlands', City: 'Amsterdam', Lat: 52.37, Lon: 4.9, Amount: 80 },
+        { Country: 'Atlantis', City: 'Nowhere', Lat: 0, Lon: 0, Amount: 1 },
+      ])
+      .addMeasure('Total', 'SUM(Sales[Amount])');
+  };
+  const host = () => {
+    const el = document.createElement('div');
+    el.style.cssText = 'width:900px;height:500px';
+    document.body.append(el);
+    return el;
+  };
+
+  it('registers world countries and US states', async () => {
+    const { worldCountries, usStates } = await import('@prismbi/prismbi/geo');
+    const { getBoundaries, featureCentroid } = await import('../src/index');
+    expect(worldCountries.features.length).toBeGreaterThan(170);
+    expect(usStates.features).toHaveLength(51);
+    expect(getBoundaries('world')).toBe(worldCountries);
+    const france = worldCountries.features.find((f) => f.properties?.iso_a3 === 'FRA')!;
+    const [lon, lat] = featureCentroid(france)!;
+    expect(Math.abs(lon - 2.5)).toBeLessThan(2);
+    expect(Math.abs(lat - 46.6)).toBeLessThan(2);
+  });
+
+  it('filled maps use built-in boundaries, match names, codes and aliases, and show classed legends', async () => {
+    await import('@prismbi/prismbi/geo');
+    const el = host();
+    const v = createVisual(el, { model: await geoModel(), type: 'filledMap', fields: { location: 'Sales[Country]', values: 'Total' }, format: { map: { boundaries: 'world', legend: 'classes', classes: 3 } } } as never);
+    v.flush();
+    // France, Germany, USA (alias), BR (ISO code), Belgium, Netherlands match; Atlantis doesn't
+    expect(el.querySelectorAll('path.pbi-mark')).toHaveLength(6);
+    const legend = [...el.querySelectorAll('.pbi-map-legend text')].map((t) => t.textContent);
+    expect(legend).toHaveLength(3);
+    expect(legend[0]).toMatch(/^up to /);
+    v.destroy();
+    el.remove();
+  });
+
+  it('bubble maps place bubbles at region centres and cluster nearby ones', async () => {
+    await import('@prismbi/prismbi/geo');
+    const el = host();
+    const model = await geoModel();
+    const byCountry = createVisual(el, { model, type: 'map', fields: { location: 'Sales[Country]', size: 'Total' }, format: { map: { boundaries: 'world' } } } as never);
+    byCountry.flush();
+    expect(el.querySelectorAll('circle.pbi-mark')).toHaveLength(6);
+    byCountry.destroy();
+    const clustered = createVisual(el, { model, type: 'map', fields: { location: 'Sales[City]', latitude: 'Sales[Lat]', longitude: 'Sales[Lon]', size: 'Total' }, format: { map: { cluster: { radius: 80 } } } } as never);
+    clustered.flush();
+    const cluster = el.querySelector<SVGGElement>('.pbi-cluster')!;
+    expect(cluster).toBeTruthy();
+    const count = Number(cluster.querySelector('text')!.textContent);
+    expect(count).toBeGreaterThanOrEqual(3); // Paris, Brussels, Amsterdam (and Berlin) sit close together
+    expect(cluster.getAttribute('aria-label')).toMatch(/locations: .*Press Enter to zoom in/);
+    const before = el.querySelectorAll('.pbi-cluster').length + el.querySelectorAll('circle.pbi-mark').length;
+    // each Enter zooms in 2.5x around the cluster; keep zooming until it splits
+    for (let i = 0; i < 4 && el.querySelector('.pbi-cluster'); i++) {
+      el.querySelector('.pbi-cluster')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      clustered.flush();
+    }
+    const after = el.querySelectorAll('.pbi-cluster').length + el.querySelectorAll('circle.pbi-mark').length;
+    expect(after).toBeGreaterThan(before); // zooming in splits the cluster
+    clustered.destroy();
+    el.remove();
+  });
+
+  it('quantile breaks and clustering helpers', async () => {
+    const { quantileBreaks, clusterPoints } = await import('../src/index');
+    expect(quantileBreaks([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5)).toEqual([2, 4, 6, 8, 10]);
+    expect(quantileBreaks([5, 5, 5], 4)).toEqual([5]);
+    const groups = clusterPoints([{ i: 0, x: 0, y: 0, size: 5 }, { i: 1, x: 10, y: 0, size: 1 }, { i: 2, x: 100, y: 0, size: 2 }], 20);
+    expect(groups.map((g) => g.map((p) => p.i))).toEqual([[0, 1], [2]]);
+  });
+});
+
+describe('NATURALINNERJOIN, NATURALLEFTOUTERJOIN and SAMPLE', () => {
+  const m = makeModel();
+  it('joins on common columns', () => {
+    const inner = m.evaluateTable('NATURALINNERJOIN(SUMMARIZE(Sales, Products[Category], "Sales", [Total Sales]), DATATABLE("Category", STRING, "Target", INTEGER, {{"Bikes", 100}, {"Nope", 1}}))');
+    expect(inner.columns).toEqual(['Category', 'Sales', 'Target']);
+    expect(inner.rows).toHaveLength(1);
+    expect(inner.rows[0][0]).toBe('Bikes');
+    expect(inner.rows[0][2]).toBe(100);
+    const left = m.evaluateTable('NATURALLEFTOUTERJOIN(VALUES(Products[Category]), DATATABLE("Category", STRING, "Target", INTEGER, {{"Bikes", 100}}))');
+    expect(left.rows.length).toBe(m.table('Products').distinct('Category').length);
+    expect(left.rows.filter((r) => r[1] === null).length).toBe(left.rows.length - 1);
+    expect(() => m.evaluateTable('NATURALINNERJOIN(VALUES(Products[Category]), VALUES(Region[Name]))')).toThrow(/no common columns/);
+  });
+
+  it('samples evenly with first and last rows', () => {
+    const all = m.evaluateTable('VALUES(Sales[OrderId])').rows.length;
+    const s = m.evaluateTable('SAMPLE(3, VALUES(Sales[OrderId]), Sales[OrderId], ASC)');
+    expect(s.rows.map((r) => r[0])).toEqual([1, Math.round((all - 1) / 2) + 1, all]);
+    expect(m.evaluateTable('SAMPLE(100, VALUES(Sales[OrderId]), Sales[OrderId])').rows).toHaveLength(all);
+    expect(m.evaluateTable('SAMPLE(0, VALUES(Sales[OrderId]), Sales[OrderId])').rows).toHaveLength(0);
+    expect(m.evaluate('COUNTROWS(SAMPLE(2, Sales, Sales[Amount], DESC))')).toBe(2);
+  });
+});

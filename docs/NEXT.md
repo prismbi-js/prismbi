@@ -4,7 +4,7 @@ Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forw
 
 ## State
 
-- **Phases 1–9 are done**, except the deferred items listed under "What's left".
+- **Phases 1–9 are done**, including the items deferred along the way.
 - **Tests:** 350+ pass (`npm test`). `npm run test:visual` covers 78 screenshot baselines. `npm run typecheck` and `npm run build` are clean.
 - **Entries:**
   - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (22).
@@ -17,11 +17,19 @@ Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forw
 
 ## What's left
 
-- **Deferred:**
-  - Phase 7: animated transitions, keyboard walkthrough tests, calculation-item format strings.
-  - Phase 8: geo upgrades (built-in boundaries, clustering).
-- **SQL pushdown gaps:** time intelligence, `ALL` / `ALLSELECTED`, and `CALCULATE` overriding a column the query also uses. These throw `SqlUnsupportedError`; set `fallback: 'model'` to answer them in memory.
-- **Playground:** add more `js playground` examples to the guides; each one is tested automatically.
+- **Nothing from the roadmap.** The last deferred items landed on 2026-10-17:
+  - animated transitions;
+  - keyboard walkthrough tests;
+  - calculation-item formats;
+  - `NATURALINNERJOIN` / `NATURALLEFTOUTERJOIN` / `SAMPLE`;
+  - geo upgrades (`@prismbi/prismbi/geo`, clustering, classed legends).
+
+  Their tests are in `tests/deferred.test.ts`.
+- **Known gaps:**
+  - SQL pushdown doesn't translate time intelligence, `ALL` / `ALLSELECTED`, or `CALCULATE` overriding a column the query also uses. These throw `SqlUnsupportedError`; set `fallback: 'model'` to answer them in memory.
+  - The Power BI importer skips calculation groups.
+  - Bitmap indexes and WebGL rendering remain ideas.
+- **Playground:** add more ```` ```js playground ```` examples to the guides; each one is tested automatically.
 
 ## Publishing (deferred by the owner: "we will deploy later")
 

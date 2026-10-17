@@ -54,7 +54,7 @@ Used inside `CALCULATE`, these clear the other filters on the date table (Power 
 `USERELATIONSHIP` · `CROSSFILTER` · `TREATAS(table, col…)` · `LOOKUPVALUE(result, searchCol, value, …, [alternate])` · `CONTAINS(table, col, value, …)`
 
 ### Table functions
-`SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · `GENERATESERIES` · `CALENDAR` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
+`SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `NATURALINNERJOIN` · `NATURALLEFTOUTERJOIN` · `SAMPLE(n, table, orderBy, [ASC|DESC]…)` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · `GENERATESERIES` · `CALENDAR` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
 
 ### Statistical
 `STDEV.S` · `STDEV.P` · `VAR.S` · `VAR.P` · `STDEVX.S` · `STDEVX.P` · `VARX.S` · `VARX.P` · `PERCENTILE.INC` · `PERCENTILE.EXC` · `PERCENTILEX.INC` · `PERCENTILEX.EXC` · `GEOMEAN` · `GEOMEANX` · `AVERAGEA` · `MAXA` · `MINA`
