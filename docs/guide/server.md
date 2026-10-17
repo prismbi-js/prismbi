@@ -53,3 +53,24 @@ scheduleReport({
 - **Overlapping runs are skipped.**
 - **Delivery is yours:** use nodemailer, Slack webhooks, object storage, or anything else.
 - **`msUntilDaily('08:00')`** tells you when the next daily run is due.
+
+## Subscriptions and alerts from the report
+
+Authors define scheduled sends and alerts in the Studio (**⏰ Schedules**), or in the report definition:
+
+```ts
+{ pages: [/* … */],
+  subscriptions: [{ id: 's1', name: 'Daily summary', page: 'overview', schedule: 'daily@08:00', recipients: ['team@example.com'] }],
+  alerts: [{ id: 'a1', name: 'Sales drop', measure: 'Total Sales', when: { below: 1_000_000 }, recipients: ['ops@example.com'] }] }
+```
+
+Run them on a server with your delivery code:
+
+```ts
+const stopSends = runSubscriptions(model, report, { window, send: (sub, html) => mailer.sendMail({ to: sub.recipients, subject: sub.name, html }) });
+const stopAlerts = watchAlerts(model, report, (alert, e) => notifyChannel(alert.recipients, `${alert.name}: ${e.value}`));
+```
+
+- **Disabled entries:** `enabled: false` skips a subscription or alert.
+- **Live data:** alerts re-evaluate on every model change.
+- **Studio preview:** alerts fire as notifications while editing, so authors can check their thresholds.

@@ -86,6 +86,33 @@ export interface ReportDefinition {
    * (axis titles, legends, tooltips). The report's `locale` picks one, falling back from `fr-CA` to `fr`.
    */
   translations?: Record<string, ReportTranslation>;
+  /** Scheduled sends of a page (run by `runSubscriptions` from `@prismbi/prismbi/server`). */
+  subscriptions?: ReportSubscription[];
+  /** Measure alerts (run by `watchAlerts` from `@prismbi/prismbi/server`; works in browsers too). */
+  alerts?: ReportAlert[];
+}
+
+export interface ReportSubscription {
+  id: string;
+  name: string;
+  /** Page id or name to send. */
+  page: string;
+  /** `'daily@08:00'` (local time) or an interval in ms. */
+  schedule: string | number;
+  /** Who receives it (email addresses, channel ids…; interpreted by your sender). */
+  recipients: string[];
+  enabled?: boolean;
+}
+
+export interface ReportAlert {
+  id: string;
+  name: string;
+  /** Measure name. */
+  measure: string;
+  filters?: FilterSpec[];
+  when: { above: number } | { below: number } | { changeBy: number };
+  recipients?: string[];
+  enabled?: boolean;
 }
 
 export interface ReportTranslation {
@@ -287,6 +314,8 @@ export class Report implements ReportRuntime {
     this.mobileBreakpoint = opts.mobileBreakpoint ?? 640;
     this.locale = opts.locale;
     this.translations = opts.translations ?? {};
+    this.subscriptions = opts.subscriptions ?? [];
+    this.alerts = opts.alerts ?? [];
     this.direction = opts.direction ?? 'auto';
     this.name = opts.name ?? 'Report';
     this._theme = getTheme(opts.theme);
@@ -343,6 +372,30 @@ export class Report implements ReportRuntime {
   readonly engine?: QueryEngine;
   readonly measure?: (visualId: string) => { width: number; height: number } | undefined;
   private translations: Record<string, ReportTranslation> = {};
+  private subscriptions: ReportSubscription[] = [];
+  private alerts: ReportAlert[] = [];
+
+  /** Scheduled page sends defined on this report. */
+  get subscriptionList(): ReportSubscription[] {
+    return this.subscriptions.map((s) => ({ ...s, recipients: [...s.recipients] }));
+  }
+
+  /** Measure alerts defined on this report. */
+  get alertList(): ReportAlert[] {
+    return this.alerts.map((a) => ({ ...a }));
+  }
+
+  /** Replace the subscriptions (one undoable edit). */
+  setSubscriptions(list: ReportSubscription[]): void {
+    this.subscriptions = list.map((s) => ({ ...s, recipients: [...s.recipients] }));
+    this.changedDefinition('subscriptions');
+  }
+
+  /** Replace the alerts (one undoable edit). */
+  setAlerts(list: ReportAlert[]): void {
+    this.alerts = list.map((a) => ({ ...a }));
+    this.changedDefinition('alerts');
+  }
   private direction: 'ltr' | 'rtl' | 'auto' = 'auto';
 
   /** The translation for the current locale (exact, then language only), if any. */
@@ -1130,6 +1183,8 @@ export class Report implements ReportRuntime {
     this.reportFilters = def.filters ?? [];
     this.bookmarks = def.bookmarks ?? [];
     if (def.translations) this.translations = def.translations;
+    this.subscriptions = def.subscriptions ?? [];
+    this.alerts = def.alerts ?? [];
     for (const p of def.pages) this.addPage(p, false);
     if (!this.pages.length) this.addPage({ name: 'Page 1', visuals: [] }, false);
     const idx = keepPage ? this.pageIndex(keepPage) : -1;
@@ -1527,7 +1582,7 @@ export class Report implements ReportRuntime {
 
   /** Serialisable report definition (pages, visuals, filters, bookmarks). Dates are tagged and revived by {@link Report.parse}. */
   toJSON(): ReportDefinition {
-    return toPlain({ version: REPORT_SCHEMA_VERSION, name: this.name, pages: this.pages.map((p) => p.def), filters: this.reportFilters, bookmarks: this.bookmarks, ...(Object.keys(this.translations).length ? { translations: this.translations } : {}) }) as ReportDefinition;
+    return toPlain({ version: REPORT_SCHEMA_VERSION, name: this.name, pages: this.pages.map((p) => p.def), filters: this.reportFilters, bookmarks: this.bookmarks, ...(Object.keys(this.translations).length ? { translations: this.translations } : {}), ...(this.subscriptions.length ? { subscriptions: this.subscriptions } : {}), ...(this.alerts.length ? { alerts: this.alerts } : {}) }) as ReportDefinition;
   }
 
   /** Parse a JSON string produced from {@link Report.toJSON}. */

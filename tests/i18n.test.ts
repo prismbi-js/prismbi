@@ -52,3 +52,21 @@ describe('localization', () => {
     el.remove();
   });
 });
+
+describe('schedules in the report definition', () => {
+  it('keeps subscriptions and alerts through toJSON and load', () => {
+    const el = document.createElement('div');
+    document.body.append(el);
+    const r = new Report(el, { model: makeModel(), pages: [{ id: 'p', name: 'P', visuals: [] }] });
+    r.setSubscriptions([{ id: 's', name: 'Daily', page: 'p', schedule: 'daily@08:00', recipients: ['a@b.c'] }]);
+    r.setAlerts([{ id: 'a', name: 'High', measure: 'Total Sales', when: { above: 100 } }]);
+    const json = r.toJSON();
+    expect(json.subscriptions?.[0].schedule).toBe('daily@08:00');
+    r.load({ pages: [{ id: 'p', name: 'P', visuals: [] }] });
+    expect(r.subscriptionList).toEqual([]);
+    r.load(json);
+    expect(r.alertList[0].name).toBe('High');
+    r.destroy();
+    el.remove();
+  });
+});

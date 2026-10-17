@@ -220,6 +220,40 @@ export function watchMeasure(model: DataModel, opts: WatchOptions): () => void {
   };
 }
 
+// ---------------------------------------------------------------- report subscriptions & alerts
+
+export interface SubscriptionRunOptions extends RenderOptions {
+  /** Deliver a rendered page (email, Slack, storage…). */
+  send: (subscription: import('@prismbi/prismbi').ReportSubscription, html: string) => unknown | Promise<unknown>;
+  onError?: (error: unknown, subscription: import('@prismbi/prismbi').ReportSubscription) => void;
+  width?: number;
+}
+
+/** Schedule every enabled subscription of a report definition. Returns a stop function. */
+export function runSubscriptions(model: DataModel, def: ReportDefinition, opts: SubscriptionRunOptions): () => void {
+  const stops = (def.subscriptions ?? [])
+    .filter((s) => s.enabled !== false)
+    .map((s) =>
+      scheduleReport({
+        every: (typeof s.schedule === 'number' ? s.schedule : s.schedule) as ScheduleOptions['every'],
+        run: async () => {
+          const html = renderReportHtml(model, def, { window: opts.window, theme: opts.theme, locale: opts.locale, page: s.page, width: opts.width, title: `${def.name ?? 'Report'} · ${s.name}` });
+          await opts.send(s, html);
+        },
+        onError: (e) => opts.onError?.(e, s),
+      }),
+    );
+  return () => stops.forEach((stop) => stop());
+}
+
+/** Watch every enabled alert of a report definition (works in browsers too). Returns a stop function. */
+export function watchAlerts(model: DataModel, def: ReportDefinition, notify: (alert: import('@prismbi/prismbi').ReportAlert, event: AlertEvent) => void, opts: { debounceMs?: number } = {}): () => void {
+  const stops = (def.alerts ?? [])
+    .filter((a) => a.enabled !== false)
+    .map((a) => watchMeasure(model, { measure: a.measure, filters: a.filters, when: a.when, debounceMs: opts.debounceMs, onAlert: (e) => notify(a, { ...e, measure: a.name || a.measure }) }));
+  return () => stops.forEach((stop) => stop());
+}
+
 // ---------------------------------------------------------------- scheduling
 
 export interface ScheduleOptions {

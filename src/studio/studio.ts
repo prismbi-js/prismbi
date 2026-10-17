@@ -1,4 +1,5 @@
 import type { DataModel } from '../data/model';
+import { schedulesDialog } from './schedules';
 import { impactOf, renameModelField } from '../data/lineage';
 import { transformDialog } from './transforms';
 import type { TransformStep } from '../data/transform';
@@ -318,6 +319,7 @@ export class Studio implements StudioContext {
   }
 
   destroy(): void {
+    this.stopAlerts?.();
     this.flushCommit();
     for (const off of this.offs) off();
     if (this.saveTimer) clearTimeout(this.saveTimer);
@@ -370,6 +372,42 @@ export class Studio implements StudioContext {
         this.toast(`Transform failed: ${(e as Error).message}`);
       }
     });
+  }
+
+  /** Edit scheduled sends and measure alerts. */
+  editSchedules(): void {
+    schedulesDialog(this.root, this.model, this.report, (subs, alerts) => {
+      this.report.setSubscriptions(subs);
+      this.report.setAlerts(alerts);
+      this.commit();
+      this.watchAlertsLive();
+      this.toast(`Saved ${subs.length} subscription(s) and ${alerts.length} alert(s)`);
+    });
+  }
+
+  private stopAlerts?: () => void;
+
+  /** Alerts fire as toasts while editing, so authors can check their thresholds. */
+  private watchAlertsLive(): void {
+    this.stopAlerts?.();
+    const alerts = this.report.alertList.filter((a) => a.enabled !== false);
+    const offs = alerts.map((a) => {
+      const read = () => {
+        const v = this.model.query({ values: [a.measure], filters: a.filters ?? [] }).rows[0]?.values[0];
+        return typeof v === 'number' ? v : null;
+      };
+      let last = read();
+      const over = (v: number | null, prev: number | null) => v !== null && ('above' in a.when ? v > a.when.above : 'below' in a.when ? v < a.when.below : prev !== null && prev !== 0 && Math.abs((v - prev) / prev) >= a.when.changeBy);
+      let active = !('changeBy' in a.when) && over(last, null);
+      return this.model.onChange(() => {
+        const v = read();
+        const hit = over(v, last);
+        if (hit && (!active || 'changeBy' in a.when)) this.toast(`🔔 ${a.name}: ${a.measure} is ${v}`);
+        active = hit;
+        last = v;
+      });
+    });
+    this.stopAlerts = () => offs.forEach((off) => off());
   }
 
   /** Run an Arrange menu action on the selected visuals. */
@@ -543,6 +581,7 @@ export class Studio implements StudioContext {
       this.applying = false;
     }
     this.refreshAll();
+    this.watchAlertsLive();
   }
 
   private captureBaseline() {
@@ -702,6 +741,7 @@ export class Studio implements StudioContext {
       arrange.value = '';
       if (v) this.arrangeSelection(v);
     });
+    const schedBtn = btn('⏰ Schedules', () => this.editSchedules(), { title: 'Scheduled sends and measure alerts' });
     const layersBtn = btn('Layers', () => this.toggleLayers(), { title: 'All visuals on this page, front to back', 'aria-expanded': 'false' });
     const phoneBtn = btn('📱 Phone', () => this.setPhoneLayout(!this.phone), { 'aria-pressed': 'false', title: 'Edit the phone layout of this page' });
     const phoneReset = btn('Reset phone layout', () => {
@@ -756,6 +796,7 @@ export class Studio implements StudioContext {
       fileInput,
       h('span', { class: 'pbs-spacer' }),
       status,
+      schedBtn,
       arrange,
       layersBtn,
       phoneReset,

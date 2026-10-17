@@ -99,6 +99,12 @@ export const STUDIO_CSS = /* css */ `
 .pbs-canvas{flex:1;min-height:0;position:relative}
 .pbs-canvas>.pbi-report{height:100%}
 .pbs-arrange{max-width:120px}
+.pbs-sched h4{margin:12px 0 6px;font-size:12px;color:var(--pbi-fg-2)}
+.pbs-sched-list{margin:0 0 8px;padding:0;list-style:none;display:grid;gap:4px}
+.pbs-sched-list li{display:flex;gap:6px;align-items:center}
+.pbs-sched-list li>span{flex:1}
+.pbs-sched-list .pbs-empty{color:var(--pbi-fg-3)}
+.pbs-note{font-size:11px;color:var(--pbi-fg-3);margin:10px 0 0}
 .pbs-layers{position:absolute;top:52px;right:330px;z-index:50;width:240px;max-height:60vh;overflow:auto;margin:0;padding:6px;list-style:none;display:grid;gap:2px;background:var(--pbs-pane);border:1px solid var(--pbs-line);border-radius:10px;box-shadow:0 12px 32px rgb(0 0 0/.18)}
 .pbs-layers li{display:flex;gap:4px;align-items:center}
 .pbs-layer-name{flex:1;min-width:0;text-align:left;font:inherit;font-size:12px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -297,6 +297,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 **Done:**
 - [x] **Accessibility:** automatic chart narration (`aria-description` and screen-reader text, `describe()`, `narrate()`), a high-contrast theme, and accessibility tests across chart types
+- [x] **Subscriptions and alerts:** `subscriptions` / `alerts` on report definitions, a Studio **Schedules** dialog with live alert notifications, and the `runSubscriptions` / `watchAlerts` server runners
 - [x] **Localization:** `translations` per locale (pages, titles, text, field names) with language fallback, `setLocale` at runtime, and automatic right-to-left for RTL languages
 - [x] **Lineage and impact analysis:** `lineage`, `impactOf`, token-safe `renameModelField` and `model.renameColumn`. The Studio rewrites dependents on rename and shows the impact before a delete.
 
