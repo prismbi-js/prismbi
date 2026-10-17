@@ -6,6 +6,15 @@ import type { DataModel } from './model';
 import type { QueryRow } from './query';
 import { compileRowExpr, type RowFn, type RowPlan } from '../dax/rowCompile';
 
+/** A CALCULATE column filter: the column's values that pass (by dictionary code; slot 0 is BLANK). */
+interface Pred {
+  table: string;
+  column: string;
+  allowed: Uint8Array;
+  /** Identity for de-duplicating aggregations. */
+  key: string;
+}
+
 /** A leaf aggregation computed in one pass over the fact table. */
 interface Agg {
   kind: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'distinct' | 'rows' | 'sumx' | 'avgx';
@@ -13,6 +22,14 @@ interface Agg {
   isDate?: boolean;
   /** SUMX / AVERAGEX row expression. */
   row?: RowPlan;
+  /** CALCULATE filters every counted row must pass. */
+  preds?: Pred[];
+}
+
+/** Columns the query itself groups or filters by: a CALCULATE filter on them replaces the query's, so no single pass. */
+interface CompileEnv {
+  touched: Set<string>;
+  touchedTables: Set<string>;
 }
 
 type Tree =
@@ -27,14 +44,66 @@ interface Plan {
   table: string | null;
   aggs: Agg[];
   keys: Map<string, number>;
+  env?: CompileEnv;
+}
+
+const refKey = (table: string, column: string) => `${table}[${column}]`;
+
+/** The single column a CALCULATE boolean filter reads, or null. */
+function onlyColumn(e: Expr, out = new Set<string>(), refs: { table: string; column: string }[] = []): { table: string; column: string } | null {
+  const walk = (x: Expr): boolean => {
+    switch (x.type) {
+      case 'column':
+        if (!out.has(refKey(x.table, x.column))) (out.add(refKey(x.table, x.column)), refs.push({ table: x.table, column: x.column }));
+        return true;
+      case 'number':
+      case 'string':
+      case 'boolean':
+        return true;
+      case 'unary':
+        return walk(x.operand);
+      case 'binary':
+        return walk(x.left) && walk(x.right);
+      case 'list':
+        return x.items.every(walk);
+      case 'call':
+        // only deterministic scalar functions; aggregates or measures would need the full engine
+        return ['BLANK', 'TRUE', 'FALSE', 'DATE', 'NOT', 'AND', 'OR', 'ISBLANK', 'LEFT', 'RIGHT', 'UPPER', 'LOWER', 'YEAR', 'MONTH', 'CONTAINSSTRING', 'SEARCH', 'LEN'].includes(x.name.toUpperCase()) && x.args.every(walk);
+      default:
+        return false;
+    }
+  };
+  return walk(e) && refs.length === 1 ? refs[0] : null;
+}
+
+/**
+ * The values of one column that pass a CALCULATE filter, computed once with the general engine as
+ * `FILTER(ALL(col), filter)` (exact DAX semantics), as a lookup over the column's dictionary codes.
+ */
+function predFor(model: DataModel, ref: { table: string; column: string }, filter: Expr): Pred | null {
+  const t = model.table(ref.table);
+  if (t.column(ref.column).expression) return null;
+  let rows: CellValue[][];
+  try {
+    rows = model.evaluator.evalTableToRows({ type: 'call', name: 'FILTER', args: [{ type: 'call', name: 'ALL', args: [{ type: 'column', table: ref.table, column: ref.column }] }, filter] }, { filters: [] }).rows;
+  } catch {
+    return null;
+  }
+  const pass = new Set(rows.map((r) => valueKey(r[0])));
+  const { dict } = t.codes(ref.column);
+  const allowed = new Uint8Array(dict.length + 1);
+  allowed[0] = pass.has(valueKey(null)) ? 1 : 0;
+  for (let k = 0; k < dict.length; k++) allowed[k + 1] = pass.has(valueKey(dict[k])) ? 1 : 0;
+  return { table: ref.table, column: ref.column, allowed, key: `${refKey(ref.table, ref.column)}=${[...pass].sort().join('\u0001')}` };
 }
 
 /** Compile a value expression into a tree of single-pass aggregations, or null when it needs the full engine. */
-function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>): Tree | null {
+function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds: Pred[] = []): Tree | null {
   const leaf = (table: string, agg: Agg): Tree | null => {
     if (plan.table === null) plan.table = table;
     if (plan.table !== table) return null; // one fact table per plan
-    const k = `${agg.kind}|${agg.column ?? ''}`;
+    if (preds.length) agg.preds = preds;
+    const k = `${agg.kind}|${agg.column ?? ''}|${preds.map((p) => p.key).join('&')}`;
     let i = plan.keys.get(k);
     if (i === undefined) {
       i = plan.aggs.length;
@@ -49,24 +118,24 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>): Tree
     case 'bracket': {
       if (!model.hasMeasure(e.name) || seen.has(e.name)) return null;
       seen.add(e.name);
-      const r = compile(model, model.measure(e.name).ast, plan, seen);
+      const r = compile(model, model.measure(e.name).ast, plan, seen, preds);
       seen.delete(e.name);
       return r;
     }
     case 'unary':
       if (e.op !== '-') return null;
-      return ((x) => (x ? { t: 'bin', op: '*', l: { t: 'num', v: -1 }, r: x } : null))(compile(model, e.operand, plan, seen));
+      return ((x) => (x ? { t: 'bin', op: '*', l: { t: 'num', v: -1 }, r: x } : null))(compile(model, e.operand, plan, seen, preds));
     case 'binary': {
       if (!['+', '-', '*', '/'].includes(e.op)) return null;
-      const l = compile(model, e.left, plan, seen);
-      const r = l && compile(model, e.right, plan, seen);
+      const l = compile(model, e.left, plan, seen, preds);
+      const r = l && compile(model, e.right, plan, seen, preds);
       return l && r ? { t: 'bin', op: e.op as '+', l, r } : null;
     }
     case 'call': {
       if (e.name === 'DIVIDE' && (e.args.length === 2 || e.args.length === 3)) {
-        const a = compile(model, e.args[0], plan, seen);
-        const b = a && compile(model, e.args[1], plan, seen);
-        const alt = e.args[2] ? compile(model, e.args[2], plan, seen) : undefined;
+        const a = compile(model, e.args[0], plan, seen, preds);
+        const b = a && compile(model, e.args[1], plan, seen, preds);
+        const alt = e.args[2] ? compile(model, e.args[2], plan, seen, preds) : undefined;
         return a && b && alt !== null ? { t: 'div', a, b, alt } : null;
       }
       if ((e.name === 'SUMX' || e.name === 'AVERAGEX') && e.args.length === 2 && e.args[0].type === 'table') {
@@ -77,8 +146,26 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>): Tree
         if (!row) return null;
         if (plan.table === null) plan.table = table;
         if (plan.table !== table) return null;
-        plan.aggs.push({ kind: e.name === 'SUMX' ? 'sumx' : 'avgx', row });
+        plan.aggs.push({ kind: e.name === 'SUMX' ? 'sumx' : 'avgx', row, ...(preds.length ? { preds } : {}) });
         return { t: 'agg', i: plan.aggs.length - 1 };
+      }
+      if (e.name === 'CALCULATE' && e.args.length >= 1) {
+        // column filters become row predicates; one on a column the query groups or filters by would replace the
+        // query's filter, which a single pass over the query's rows can't do
+        let next = preds;
+        for (const f of e.args.slice(1)) {
+          const keep = f.type === 'call' && f.name.toUpperCase() === 'KEEPFILTERS';
+          const cond = keep ? (f as { args: Expr[] }).args[0] : f;
+          const ref = cond && onlyColumn(cond);
+          if (!ref || !model.hasTable(ref.table) || !model.table(ref.table).hasColumn(ref.column)) return null;
+          const env = plan.env;
+          if (!keep && env && (env.touched.has(refKey(ref.table, ref.column)) || env.touchedTables.has(ref.table))) return null;
+          const p = predFor(model, ref, cond);
+          if (!p) return null;
+          // a nested filter on the same column replaces the outer one (KEEPFILTERS intersects)
+          next = keep ? [...next, p] : [...next.filter((q) => q.table !== p.table || q.column !== p.column), p];
+        }
+        return compile(model, e.args[0], plan, seen, next);
       }
       if (e.name === 'COUNTROWS' && e.args.length === 1 && e.args[0].type === 'table') {
         if (!model.hasTable(e.args[0].name)) return null;
@@ -165,7 +252,7 @@ class Acc {
     return aggs.map((a, i) => {
       switch (a.kind) {
         case 'rows':
-          return this.rows || null;
+          return this.cnt[i] || null;
         case 'sum':
         case 'sumx':
           return this.cnt[i] ? this.sum[i] : null;
@@ -244,7 +331,14 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   const touchesCg = (fs: Filter[] | undefined) => (fs ?? []).some((f) => (f.kind === 'rows' ? cgTables.has(f.table) : f.kind === 'columns' && f.columns.some((c) => cgTables.has(c.table))));
   if (cgTables.size && (groupCols.some((c) => cgTables.has(c.table)) || touchesCg(base) || touchesCg(highlight))) return null;
 
-  const plan: Plan = { table: null, aggs: [], keys: new Map() };
+  // columns the query groups or filters by (CALCULATE filters on them need the full engine)
+  const touched = new Set<string>(groupCols.map((c) => refKey(c.table, c.column)));
+  const touchedTables = new Set<string>();
+  for (const f of [...base, ...(highlight ?? [])]) {
+    if (f.kind === 'columns') for (const c of f.columns) touched.add(refKey(c.table, c.column));
+    else if (f.kind === 'rows') touchedTables.add(f.table);
+  }
+  const plan: Plan = { table: null, aggs: [], keys: new Map(), env: { touched, touchedTables } };
   const trees: Tree[] = [];
   for (const v of values) {
     const t = compile(model, v, plan, new Set());
@@ -262,12 +356,36 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   const nums = plan.aggs.map((a) => (a.column && a.kind !== 'count' && a.kind !== 'distinct' ? ft.numeric(a.column) : null));
   const codes = plan.aggs.map((a) => (a.column && a.kind === 'distinct' ? ft.codes(a.column).codes : null));
   const rowFns: (RowFn | null)[] = plan.aggs.map((a) => (a.row ? a.row.bind() : null));
+  // CALCULATE predicates: the filtered column's code for each fact row (through the relationship for dimensions)
+  const predTests = plan.aggs.map((a) => {
+    if (!a.preds?.length) return null;
+    const tests = a.preds.map((p) => {
+      const codes = model.table(p.table).codes(p.column).codes;
+      if (p.table === fact) return (r: number) => p.allowed[codes[r] + 1] === 1;
+      const map = model.relatedRows(fact, p.table);
+      if (!map) return null;
+      // a fact row without a related row sees the dimension's BLANK row
+      return (r: number) => {
+        const t = map[r];
+        return p.allowed[t < 0 ? 0 : codes[t] + 1] === 1;
+      };
+    });
+    if (tests.some((t) => !t)) return undefined;
+    const ts = tests as ((r: number) => boolean)[];
+    return ts.length === 1 ? ts[0] : (r: number) => ts.every((t) => t(r));
+  });
+  if (predTests.some((t) => t === undefined)) return null;
 
   const feed = (acc: Acc, r: number) => {
     acc.rows++;
     for (let i = 0; i < plan.aggs.length; i++) {
       const a = plan.aggs[i];
-      if (a.kind === 'rows') continue;
+      const pt = predTests[i];
+      if (pt && !pt(r)) continue;
+      if (a.kind === 'rows') {
+        acc.cnt[i]++;
+        continue;
+      }
       if (a.kind === 'count') {
         const v = cols[i]![r];
         if (v !== null && v !== '') acc.cnt[i]++;

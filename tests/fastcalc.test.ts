@@ -1,0 +1,58 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { setFastQuery } from '../src/index';
+import type { QuerySpec } from '../src/index';
+import { buildModel } from '../examples/model';
+
+const model = buildModel()
+  .addMeasure('Bike Sales', 'CALCULATE([Total Sales], Product[Category] = "Bikes")')
+  .addMeasure('Online Units', 'CALCULATE([Units], Sales[Channel] = "Online")')
+  .addMeasure('Big Line Sales', 'CALCULATE([Total Sales], Sales[SalesAmount] > 1000)')
+  .addMeasure('Bike Share', 'DIVIDE([Bike Sales], [Total Sales])')
+  .addMeasure('Two Regions', 'CALCULATE([Orders], Region[Country] IN {"Canada", "Germany"})')
+  .addMeasure('Nested', 'CALCULATE(CALCULATE([Total Sales], Product[Category] = "Accessories"), Product[Category] = "Bikes")')
+  .addMeasure('Kept', 'CALCULATE(CALCULATE([Total Sales], KEEPFILTERS(Product[Category] = "Accessories")), Product[Category] IN {"Bikes", "Accessories"})')
+  .addMeasure('Bike Rows', 'CALCULATE(COUNTROWS(Sales), Product[Category] = "Bikes", Sales[Channel] <> "Store")')
+  .addMeasure('Bike Profit X', 'CALCULATE(SUMX(Sales, Sales[SalesAmount] - Sales[TotalCost]), Product[Category] = "Bikes")');
+
+const run = (spec: QuerySpec, mode: 'always' | 'off') => {
+  setFastQuery(mode);
+  model.evaluator.clearCache?.();
+  return model.query(spec);
+};
+
+afterEach(() => setFastQuery('auto'));
+
+const MEASURES = ['Total Sales', 'Bike Sales', 'Online Units', 'Big Line Sales', 'Bike Share', 'Two Regions', 'Nested', 'Kept', 'Bike Rows', 'Bike Profit X'];
+
+describe('CALCULATE in the single-pass grouped path', () => {
+  const cases: [string, QuerySpec][] = [
+    ['two dimensions', { groupBy: ['Region[Country]', 'Date[Year]'], values: MEASURES, totals: true }],
+    ['with query filters on other columns', { groupBy: ['Product[Subcategory]', 'Sales[Channel]'], values: ['Bike Sales', 'Two Regions', 'Bike Share'], filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }, { target: 'Region[Group]', op: 'in', values: ['Europe', 'Pacific'] }], totals: true }],
+    ['with highlights', { groupBy: ['Region[Country]', 'Date[Quarter]'], values: ['Bike Sales', 'Online Units'], highlight: [{ target: 'Sales[Channel]', op: 'eq', value: 'Reseller' }] }],
+  ];
+  for (const [name, spec] of cases) {
+    it(`matches the general engine: ${name}`, () => {
+      const fast = run(spec, 'always');
+      const slow = run(spec, 'off');
+      expect(fast.rows.length).toBe(slow.rows.length);
+      const byKey = new Map(slow.rows.map((r) => [JSON.stringify(r.keys), r]));
+      for (const r of fast.rows) {
+        const s = byKey.get(JSON.stringify(r.keys))!;
+        expect(s).toBeDefined();
+        r.values.forEach((v, i) => (typeof v === 'number' ? expect(v).toBeCloseTo(s.values[i] as number, 6) : expect(v).toBe(s.values[i])));
+        r.highlights?.forEach((v, i) => (typeof v === 'number' ? expect(v).toBeCloseTo(s.highlights![i] as number, 6) : expect(v).toBe(s.highlights![i])));
+      }
+      fast.totals?.forEach((v, i) => (typeof v === 'number' ? expect(v).toBeCloseTo(slow.totals![i] as number, 6) : expect(v).toBe(slow.totals![i])));
+    });
+  }
+
+  it('steps aside when CALCULATE replaces a filter the query uses', () => {
+    // grouped by the filtered column: every category shows the Bikes value, which one pass over the rows can't produce
+    const spec: QuerySpec = { groupBy: ['Product[Category]', 'Date[Year]'], values: ['Bike Sales'] };
+    const fast = run(spec, 'always');
+    const slow = run(spec, 'off');
+    expect(fast.rows.map((r) => r.keys)).toEqual(slow.rows.map((r) => r.keys));
+    fast.rows.forEach((r, i) => expect(r.values[0] as number).toBeCloseTo(slow.rows[i].values[0] as number, 4));
+    expect(new Set(fast.rows.filter((r) => r.keys[1] === 2025).map((r) => Math.round(r.values[0] as number))).size).toBe(1);
+  });
+});

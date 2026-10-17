@@ -32,7 +32,8 @@ function generate(n: number): DataModel {
     .addMeasure('Total Sales', 'SUM(Sales[SalesAmount])')
     .addMeasure('Orders', 'DISTINCTCOUNT(Sales[OrderNumber])')
     .addMeasure('AOV', 'DIVIDE([Total Sales], [Orders])')
-    .addMeasure('YTD', 'TOTALYTD([Total Sales], Date[Date])');
+    .addMeasure('YTD', 'TOTALYTD([Total Sales], Date[Date])')
+    .addMeasure('C1 Sales', 'CALCULATE([Total Sales], Product[Category] = "C1")');
 }
 
 const year = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
@@ -41,6 +42,7 @@ const QUERIES: [string, QuerySpec, number][] = [
   ['category × sales, AOV', { groupBy: ['Product[Category]'], values: ['Total Sales', 'AOV'], filters: year, totals: true }, 1500],
   ['product × region (16k groups)', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['Total Sales'], filters: year }, 1500],
   ['day × sales (365 groups)', { groupBy: ['Date[Date]'], values: ['Total Sales'], filters: year }, 800],
+  ['product × region, CALCULATE filter', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['C1 Sales'], filters: year }, 1500],
   ['day × YTD (time intelligence)', { groupBy: ['Date[Date]'], values: ['YTD'], filters: year }, 1500],
 ];
 

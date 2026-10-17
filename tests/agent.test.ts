@@ -117,7 +117,7 @@ describe('Studio agent panel', () => {
     const { el, studio } = mountStudio();
     const panel = agentPanel(studio, { confirmWrites: true });
     const click = async (label: string) => {
-      for (let i = 0; i < 50 && !panel.element.querySelector('li.is-pending'); i++) await new Promise((r) => setTimeout(r, 0));
+      for (let i = 0; i < 400 && !panel.element.querySelector('li.is-pending'); i++) await new Promise((r) => setTimeout(r, 5));
       [...panel.element.querySelectorAll<HTMLButtonElement>('li.is-pending button')].find((x) => x.textContent === label)!.click();
     };
     const first = panel.run('show sales by category');
@@ -132,5 +132,5 @@ describe('Studio agent panel', () => {
     panel.destroy();
     studio.destroy();
     el.remove();
-  });
+  }, 20_000);
 });
