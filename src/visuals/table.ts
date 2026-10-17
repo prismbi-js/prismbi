@@ -185,7 +185,9 @@ export const table = /* @__PURE__ */ defineVisual({
       cols.forEach((c, ci) => {
         const v = c.kind === 'group' ? r.keys[c.i] : r.values[c.i];
         const td = h('td', { class: c.kind === 'value' ? 'is-num' : '' });
-        const text = ctx.fmt(c.field, v);
+        // a calculation item in this row may bring its own format (e.g. YoY % as a percentage)
+        const rf = c.kind === 'value' ? r.formats?.[c.i] : undefined;
+        const text = ctx.fmt(rf ? { ...c.field, format: rf } : c.field, v);
         if (c.kind === 'value') decorateCell(ctx, td, tf.conditional?.[c.field.name] ?? tf.conditional?.[c.field.ref], v, stats[ci], text);
         else td.textContent = text;
         tr.append(td);
@@ -331,6 +333,8 @@ export const matrix = /* @__PURE__ */ defineVisual({
     // query each level of the row hierarchy (subtotals are real measure evaluations, not sums)
     type LevelData = Map<string, CellValue[]>; // key: JSON(rowPath + colKey) → values
     const levelCache: LevelData[] = [];
+    // calculation-item formats per cell (same keys as levelCache, across levels)
+    const cellFormats = new Map<string, (string | undefined)[]>();
     const keyOf = (path: CellValue[], col?: CellValue) => JSON.stringify([...path.map(valueKey), col === undefined ? '__total__' : valueKey(col)]);
     const childrenOf = new Map<string, CellValue[][]>();
     for (let lvl = 0; lvl <= rowFields.length; lvl++) {
@@ -340,7 +344,10 @@ export const matrix = /* @__PURE__ */ defineVisual({
         const q = model.query({ groupBy: withCol && colField ? [...groupRefs, colField.ref] : groupRefs, values: valueSpecs, filters });
         for (const r of q.rows) {
           const path = r.keys.slice(0, lvl);
-          m.set(keyOf(path, withCol && colField ? r.keys[lvl] : undefined), r.values);
+          const ck = keyOf(path, withCol && colField ? r.keys[lvl] : undefined);
+          m.set(ck, r.values);
+          const fmts = r.formats ?? (q.values.some((v, k) => v.format !== valueFields[k]?.format) ? q.values.map((v) => v.format) : undefined);
+          if (fmts) cellFormats.set(`${lvl}|${ck}`, fmts);
           if (!withCol && lvl > 0) {
             const parent = JSON.stringify(path.slice(0, -1).map(valueKey));
             const list = childrenOf.get(parent) ?? [];
@@ -391,17 +398,20 @@ export const matrix = /* @__PURE__ */ defineVisual({
 
     const cells = (tr: HTMLElement, lvl: number, path: CellValue[]) => {
       const m = levelCache[lvl];
-      const emit = (vals: CellValue[] | undefined) =>
+      const emit = (key: string) => {
+        const vals = m.get(key);
+        const fmts = cellFormats.get(`${lvl}|${key}`);
         valueFields.forEach((vf, i) => {
           const td = h('td', { class: 'is-num' });
           const v = vals?.[i] ?? null;
-          decorateCell(ctx, td, lvl === rowFields.length ? mf.conditional?.[vf.name] : undefined, v, stats[i], ctx.fmt(vf, v));
+          decorateCell(ctx, td, lvl === rowFields.length ? mf.conditional?.[vf.name] : undefined, v, stats[i], ctx.fmt(fmts?.[i] ? { ...vf, format: fmts[i] } : vf, v));
           tr.append(td);
         });
+      };
       if (colField) {
-        for (const ck of colKeys) emit(m.get(keyOf(path, ck)));
-        if (mf.columnTotals !== false) emit(m.get(keyOf(path)));
-      } else emit(m.get(keyOf(path)));
+        for (const ck of colKeys) emit(keyOf(path, ck));
+        if (mf.columnTotals !== false) emit(keyOf(path));
+      } else emit(keyOf(path));
     };
 
     const addRows = (lvl: number, parent: CellValue[]) => {

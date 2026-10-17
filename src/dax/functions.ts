@@ -214,6 +214,7 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
   ...F('Calculation group', [
     ['SELECTEDMEASURE', 'SELECTEDMEASURE()', 'The measure a calculation item is rewriting.'],
     ['SELECTEDMEASURENAME', 'SELECTEDMEASURENAME()', 'Name of that measure.'],
+    ['SELECTEDMEASUREFORMATSTRING', 'SELECTEDMEASUREFORMATSTRING()', 'Format string of that measure (for calculation-item format expressions).'],
     ['ISSELECTEDMEASURE', 'ISSELECTEDMEASURE(<measure>...)', 'TRUE when the rewritten measure is one of these.'],
   ]),
   ...F('Security', [

@@ -60,6 +60,10 @@ export interface CalculationItemDef {
   /** DAX using SELECTEDMEASURE(), e.g. `CALCULATE(SELECTEDMEASURE(), DATESYTD(Date[Date]))`. */
   expression: string;
   ordinal?: number;
+  /** Format string for values under this item, e.g. `'0.0%'` for a YoY % item. */
+  format?: string;
+  /** Dynamic format: DAX returning a format string; may use SELECTEDMEASUREFORMATSTRING() and SELECTEDMEASURENAME(). */
+  formatExpression?: string;
 }
 
 export interface CalculationGroupDef {
@@ -76,7 +80,7 @@ export interface CalculationGroup {
   table: string;
   column: string;
   precedence: number;
-  items: Map<string, { name: string; ast: Expr }>;
+  items: Map<string, { name: string; ast: Expr; format?: string; formatAst?: Expr }>;
 }
 
 export interface FieldParameterDef {
@@ -516,10 +520,16 @@ export class DataModel {
       table: def.name,
       column,
       precedence: def.precedence ?? 0,
-      items: new Map(items.map((it) => [it.name, { name: it.name, ast: parseDax(it.expression) }])),
+      items: new Map(items.map((it) => [it.name, { name: it.name, ast: parseDax(it.expression), format: it.format, formatAst: it.formatExpression ? parseDax(it.formatExpression) : undefined }])),
     });
     this.changed();
     return this;
+  }
+
+  /** True when some calculation item sets a format (queries then resolve formats per context). */
+  get hasCalculationFormats(): boolean {
+    for (const g of this.calcGroupMap.values()) for (const it of g.items.values()) if (it.format || it.formatAst) return true;
+    return false;
   }
 
   calculationGroups(): CalculationGroup[] {

@@ -315,7 +315,7 @@ export class Evaluator {
   }
 
   /** The calculation item selected (exactly one) for the highest-precedence active calculation group. */
-  private activeCalcItem(filters: readonly Filter[]): { table: string; item: { name: string; ast: Expr }; inner: Filter[] } | null {
+  private activeCalcItem(filters: readonly Filter[]): { table: string; item: { name: string; ast: Expr; format?: string; formatAst?: Expr }; inner: Filter[] } | null {
     const groups = this.model.calculationGroups();
     if (!groups.length) return null;
     for (const g of groups) {
@@ -329,6 +329,20 @@ export class Evaluator {
       return { table: g.table, item, inner: filters.filter((f) => !touches(f)) };
     }
     return null;
+  }
+
+  /**
+   * The format a measure's value takes in a filter context: the active calculation item's format (static or
+   * dynamic), or undefined to keep the measure's own format.
+   */
+  measureFormat(measure: string, filters: readonly Filter[]): string | undefined {
+    const active = this.activeCalcItem(filters);
+    if (!active) return undefined;
+    if (active.item.formatAst) {
+      const v = this.evalScalar(active.item.formatAst, { filters: active.inner, selectedMeasure: measure });
+      return v === null || v === '' ? undefined : String(v);
+    }
+    return active.item.format;
   }
 
   /** Context transition: row context becomes equivalent filter context. */
@@ -1610,6 +1624,8 @@ export class Evaluator {
         return this.callMeasure(ctx.selectedMeasure, { filters: ctx.filters, rows: ctx.rows });
       case 'SELECTEDMEASURENAME':
         return ctx.selectedMeasure ?? null;
+      case 'SELECTEDMEASUREFORMATSTRING':
+        return ctx.selectedMeasure && this.model.hasMeasure(ctx.selectedMeasure) ? (this.model.measure(ctx.selectedMeasure).format ?? '') : null;
       case 'ISSELECTEDMEASURE':
         return args.some((a) => a.type === 'bracket' && a.name === ctx.selectedMeasure);
 

@@ -66,6 +66,8 @@ export interface QueryRow {
   keys: CellValue[];
   values: CellValue[];
   highlights?: CellValue[];
+  /** Per-value formats from calculation items in this row's context (when they differ from the field's). */
+  formats?: (string | undefined)[];
 }
 
 export interface QueryResult {
@@ -228,6 +230,34 @@ function finishVisualCalcs<R extends Omit<QueryResult, 'baseFilters'>>(all: Fiel
 }
 
 function runQueryCore(model: DataModel, spec: QuerySpec): QueryResult {
+  const res = runQueryPlain(model, spec);
+  return model.hasCalculationFormats ? applyCalcFormats(model, spec, res) : res;
+}
+
+/** Calculation-item formats: one item for the whole query overrides the field format; items per row go in `row.formats`. */
+function applyCalcFormats(model: DataModel, spec: QuerySpec, res: QueryResult): QueryResult {
+  const measures = res.values.map((v) => (model.hasMeasure(v.ref) ? v.ref : null));
+  if (!measures.some(Boolean)) return res;
+  const base = res.baseFilters as Filter[];
+  const values = res.values.map((v, k) => {
+    const f = measures[k] ? model.evaluator.measureFormat(measures[k]!, base) : undefined;
+    return f ? { ...v, format: f } : v;
+  });
+  const groups = res.groups as (QueryField & { column?: ColumnRef })[];
+  const calcTables = new Set(model.calculationGroups().map((g) => g.table));
+  const byRow = groups.some((g) => g.column && calcTables.has(g.column.table));
+  const rows = !byRow
+    ? res.rows
+    : res.rows.map((r) => {
+        const ctx = [...base, ...groups.map((g, i) => groupFilter(g.column!, r.keys[i]))];
+        const formats = values.map((_v, k) => (measures[k] ? model.evaluator.measureFormat(measures[k]!, ctx) : undefined));
+        return formats.some((f, k) => f && f !== values[k].format) ? { ...r, formats } : r;
+      });
+  void spec;
+  return { ...res, values, rows };
+}
+
+function runQueryPlain(model: DataModel, spec: QuerySpec): QueryResult {
   const groups = (spec.groupBy ?? []).map((g) => resolveGroupField(model, g));
   const values = (spec.values ?? []).map((v) => resolveValueField(model, v));
   const limit = spec.limit ?? 30_000;
