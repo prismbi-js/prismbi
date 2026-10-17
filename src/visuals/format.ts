@@ -80,6 +80,8 @@ export interface VisualFormat {
     referenceLines: ReferenceLine[];
     /** Linear trend line per series (column, bar, line, area, scatter). */
     trendLine: boolean | { color?: string };
+    /** Forecast on line/area charts with a date or number axis: `{ periods: 6, confidence: 0.95, seasonality: 'auto' }`. */
+    forecast?: false | { periods: number; confidence?: number; seasonality?: number | 'auto' | 'none' };
   };
   bars: { maxThickness: number; radius: number; gap: number; categoryGap: number };
   lines: { width: number; markers: boolean | 'auto'; smooth: boolean; area: boolean; areaOpacity: number; endLabels: boolean };

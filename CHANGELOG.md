@@ -7,6 +7,7 @@
 - **Transforms:** `model.transformTable`, `transformsOf`, `sourceRowsOf`, and `applySteps` / `applyStep` / `describeStep`; 19 step types; a **Transform** editor in the Studio data view, saved in Studio documents.
 - **Phone layouts:** `PageDefinition.mobile`, `ReportOptions.layoutMode` / `mobileBreakpoint`, `report.setLayoutMode`, `autoMobileLayout`, `setMobileVisibility`, `setMobileLayout`, `isMobileLayout`; a Studio **Phone** toggle with **Reset phone layout**.
 - **Multi-select editing:** `selectedVisuals`, `selectVisuals`, `toggleVisualSelection`, `alignVisuals`, `distributeVisuals`, `groupVisuals`, `ungroupVisuals`, `commitLayouts`, and `arrange(…, forward | backward)`; `VisualSpec.group`; a Studio Arrange menu and Layers pane.
+- **Forecast:** `format.analytics.forecast = { periods, confidence?, seasonality? }` on line and area charts with a date or number axis.
 - **Visual regression tests:** `npm run test:visual` (with `--update`), `/gallery.html` with every visual.
 - **Fixes:** combo charts put a line on a different scale (or unit) on a secondary axis; map bubbles stay inside the frame; radar tick labels no longer overlap category labels; the decomposition tree scrolls instead of clipping.
 

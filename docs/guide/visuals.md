@@ -171,3 +171,17 @@ Each of these can be turned off through `format.header`.
 ## Accessibility
 
 Marks are focusable (Tab), and Enter or Space selects one. Tooltips also show on focus. Each chart has an `aria-label` from its title, and tables use real `<table>` markup with `aria-sort`. Animations respect `prefers-reduced-motion`.
+
+## Forecast
+
+Line and area charts with a date or number axis can extend each series (up to three) with a forecast:
+
+```ts
+{ type: 'line', fields: { category: 'Date[Date]', values: 'Total Sales' },
+  format: { analytics: { forecast: { periods: 30, confidence: 0.95, seasonality: 'auto' } } } }
+```
+
+- **Model:** damped additive Holt-Winters. Its parameters are chosen by one-step-ahead error, and the season length is detected by autocorrelation, or given as a number, or turned off with `'none'`.
+- **Display:** the forecast is a dashed line inside a shaded prediction interval that widens with the horizon.
+- **Non-negative series:** a series that has never been negative (sales, counts) is never forecast below zero.
+- **Dates:** future dates follow the calendar for monthly, quarterly and yearly data.

@@ -1,5 +1,6 @@
 import { s, barPath, measureText } from '../render/svg';
 import { downsampleRuns } from '../render/lttb';
+import { forecastSeries, futureKeys, type Forecast } from './forecast';
 import { bandScale, linearScale, logScale, pointScale, timeScale } from '../render/scales';
 import type { RenderContext } from './types';
 import { defineVisual } from './registry';
@@ -84,6 +85,17 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const va = f.valueAxis;
 
   const stacked = kind === 'stackedArea';
+  // forecast: continuous axis, plain lines/areas, at most three series
+  const fcOpt = f.analytics.forecast;
+  const forecasts: { se: Series; fc: Forecast }[] =
+    continuous && fcOpt && fcOpt.periods > 0 && !stacked
+      ? lineSeries.slice(0, 3).flatMap((se) => {
+          const xs = se.values.filter((v): v is number => v !== null);
+          const fc = forecastSeries(xs, fcOpt);
+          return fc ? [{ se, fc }] : [];
+        })
+      : [];
+  const futureNums = forecasts.length ? futureKeys(categories.map((_, i) => keyNum(i)), catType === 'date', fcOpt ? fcOpt.periods : 0) : [];
   let lo = 0;
   let hi = 0;
   categories.forEach((_, ci) => {
@@ -108,6 +120,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     hi = -Infinity;
     for (const se of all) for (const v of [...se.values, ...(se.highlights ?? [])]) if (v !== null) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
   }
+  for (const { fc } of forecasts) for (const v of [...fc.lower, ...fc.upper]) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
   // combo: lines on a very different scale (or a different kind of unit) get their own axis on the right
   const extent = (list: Series[]) => {
     let a = Infinity;
@@ -128,7 +141,8 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const lineField = secondary ? lineSeries[0].field : undefined;
   const makeY2 = (range: [number, number], tickCount: number) => linearScale(Math.min(0, lineMin), Math.max(0, lineMax), range, { includeZero: true, tickCount });
   const valueField = all[0]?.field;
-  const endLabels = f.lines.endLabels && lineSeries.length <= 4 && kind !== 'combo';
+  // end labels would sit on top of a forecast
+  const endLabels = f.lines.endLabels && lineSeries.length <= 4 && kind !== 'combo' && !forecasts.length;
   const labelFmt = labelFormatter(ctx, valueField);
   const fmtOf = (se: Series) => (se.field && se.field !== valueField ? labelFormatter(ctx, se.field) : labelFmt);
   const endW = endLabels ? Math.max(...lineSeries.map((se) => measureText(fmtOf(se)(lastValue(se)), fs, t.fontFamily, 600))) + 12 : 10;
@@ -148,22 +162,25 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   let xAt = (i: number) => (useBand ? xs(i) + xs.bandwidth / 2 : xs(i));
   // continuous x: time or linear scale; points sit at their real positions
   let contTicks: { at: number; label: string }[] = [];
+  let futurePos: ((v: number) => number) | null = null;
   if (continuous) {
     const nums = categories.map((_, i) => keyNum(i));
     const range: [number, number] = [left + 6, width - right - 6];
     const approx = Math.max(2, Math.floor((width - left - right) / 90));
     let pos: (v: number) => number;
     if (catType === 'date') {
-      const ts = timeScale(nums[0], nums[nums.length - 1], range, approx);
+      const ts = timeScale(nums[0], futureNums.length ? futureNums[futureNums.length - 1] : nums[nums.length - 1], range, approx);
       pos = ts;
       contTicks = ts.ticks.map((tk, i) => ({ at: ts(tk), label: ts.tickFormat(tk, i) }));
     } else {
-      const ls = linearScale(nums[0], nums[nums.length - 1], range, { includeZero: false, fixedMin: nums[0], fixedMax: nums[nums.length - 1], tickCount: approx });
+      const end = futureNums.length ? futureNums[futureNums.length - 1] : nums[nums.length - 1];
+      const ls = linearScale(nums[0], end, range, { includeZero: false, fixedMin: nums[0], fixedMax: end, tickCount: approx });
       pos = ls;
       const field = pv.categoryFields[0];
       contTicks = ls.ticks.map((tk) => ({ at: ls(tk), label: ctx.fmt(field, tk) }));
     }
     const px = nums.map(pos);
+    futurePos = pos;
     xAt = (i: number) => px[i];
     const nearest = (x: number) => {
       let lo2 = 0;
@@ -275,6 +292,22 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     if (stacked) se.values.forEach((v, i) => (base[i] += v ?? 0));
   });
 
+  if (futurePos && forecasts.length) {
+    const fx = futureNums.map(futurePos);
+    const conf = Math.round((fcOpt ? (fcOpt.confidence ?? 0.95) : 0.95) * 100);
+    for (const { se, fc } of forecasts) {
+      const li = lastIndex(se);
+      if (li < 0) continue;
+      const start: [number, number] = [xAt(li), lscale(se.values[li]!)];
+      const up = fc.upper.map((v, k) => [fx[k], lscale(v)] as [number, number]);
+      const down = fc.lower.map((v, k) => [fx[k], lscale(v)] as [number, number]).reverse();
+      const band = s('path', { d: `M${[start, ...up].map((p) => p.join(',')).join('L')}L${[...down, start].map((p) => p.join(',')).join('L')}Z`, fill: se.color, 'fill-opacity': 0.14, stroke: 'none', class: 'pbi-forecast-band' });
+      band.append(s('title', {}, `Forecast, ${conf}% interval`));
+      marks.append(band);
+      const mean = [start, ...fc.mean.map((v, k) => [fx[k], lscale(v)] as [number, number])];
+      marks.append(s('path', { d: `M${mean.map((p) => p.join(',')).join('L')}`, fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-dasharray': '5 4', class: 'pbi-forecast', 'pointer-events': 'none' }));
+    }
+  }
   drawReferenceLines(ctx, g, scale, 'y', [left, width - right], (secondary ? colSeries : all).flatMap((se) => se.values.filter((v): v is number => v !== null)), valueField);
   if (!stacked) lineSeries.forEach((se) => drawTrendLine(ctx, g, se.values, xAt, lscale, se.color));
 

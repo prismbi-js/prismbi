@@ -329,3 +329,38 @@ describe('multi-select editing', () => {
     el.remove();
   });
 });
+
+describe('forecast', () => {
+  it('continues trend and seasonality with a widening interval', async () => {
+    const { forecastSeries, detectSeason, futureKeys } = await import('../src/visuals/forecast');
+    const season = [10, 14, 9, 20];
+    const xs = Array.from({ length: 24 }, (_, i) => 100 + i * 2 + season[i % 4]);
+    expect(detectSeason(xs)).toBe(4);
+    const f = forecastSeries(xs, { periods: 8 })!;
+    expect(f.season).toBe(4);
+    const expected = Array.from({ length: 8 }, (_, k) => 100 + (24 + k) * 2 + season[(24 + k) % 4]);
+    f.mean.forEach((v, k) => expect(Math.abs(v - expected[k])).toBeLessThan(6));
+    const widths = f.upper.map((u, k) => u - f.lower[k]);
+    expect(widths[7]).toBeGreaterThan(widths[0]);
+    const trend = forecastSeries([1, 2, 3, 4, 5, 6, 7, 8], { periods: 2, seasonality: 'none' })!;
+    expect(trend.mean[0]).toBeCloseTo(9, 0);
+    expect(forecastSeries([1, 2, 3], { periods: 2 })).toBeNull();
+    // calendar months step by month, not by 30 days
+    const months = [0, 1, 2, 3].map((m) => new Date(2025, m, 1).getTime());
+    expect(futureKeys(months, true, 2).map((t) => new Date(t).getMonth())).toEqual([4, 5]);
+  });
+
+  it('draws a band and a dashed forecast line on continuous axes', async () => {
+    const { createVisual } = await import('../src/index');
+    const el = document.createElement('div');
+    el.style.height = '400px';
+    document.body.append(el);
+    const r = createVisual(el, { model: buildModel(), type: 'line', fields: { category: 'Date[Date]', values: 'Total Sales' }, filters: [{ target: 'Date[Date]', op: 'between', min: new Date(2025, 9, 1), max: new Date(2025, 11, 31) }], format: { analytics: { forecast: { periods: 14 } } } });
+    r.flush();
+    expect(el.querySelector('.pbi-error')).toBeNull();
+    expect(el.querySelectorAll('path.pbi-forecast')).toHaveLength(1);
+    expect(el.querySelector('path.pbi-forecast-band title')?.textContent).toBe('Forecast, 95% interval');
+    r.destroy();
+    el.remove();
+  });
+});
