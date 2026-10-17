@@ -15,7 +15,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈59 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈74 KB**, everything (34 visuals) is **≈92 KB**, and the full studio app (`prismbi/studio`) is **≈95 KB**. Connectors (≈3 KB) and the worker engine (≈1.3 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈60 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈76 KB**, everything (34 visuals) is **≈93 KB**, and the full studio app (`prismbi/studio`) is **≈96 KB**. Connectors (≈3 KB) and the worker engine (≈1.3 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -199,16 +199,22 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 ### Tooling
 - [x] `npm run bench` (200k and 1M rows, cold timings with regression ceilings) and the `/perf.html` demo (scale and live stream)
 
-**Acceptance:** 220 tests pass, including equivalence of the fast and general query paths on the demo model and on edge cases (blanks, unmatched keys, dimension nulls). At 1M rows, grouped queries take 11–192 ms cold.
+- [x] **Per-dimension pre-aggregation** for time intelligence and running totals: YTD per day at 1M rows went from 2.8 s to 193 ms
+- [x] **Reports on the worker engine** (`new Report(el, { model, engine })`): asynchronous visuals, loading and busy states, cancellation of superseded queries
 
-**Not met:** cumulative time intelligence per day (`TOTALYTD`) still takes about 2.8 s cold at 1M rows, so the 150 ms target holds for simple measures only. The 60 fps interaction budget needs the live-browser review.
+**Acceptance:** 227 tests pass, including equivalence of the fast and scan paths on the demo model, time-intelligence measures, row-level security and edge cases (blanks, unmatched keys, dimension nulls). At 1M rows every benchmark query takes 13–204 ms cold.
+
+A live-browser review in headless Chrome covered every demo page, the studio, dark mode, canvas hit-testing, table scrolling, the live stream and worker mode. It found and fixed four defects:
+- Lines were invisible with reduced motion enabled.
+- `pos;neg;zero` format sections weren't supported.
+- Treemap tiles past the palette were grey.
+- The slider slicer was clipped in two-row cells.
 
 **Deferred:**
 - Per-visual entry points
 - Bitmap or roaring indexes
 - DuckDB pushdown (DAX → SQL)
 - WebGL rendering
-- Running the `Report` runtime itself on the worker engine
 - A Node server runtime with scheduled refresh
 - Performance budgets in CI
 

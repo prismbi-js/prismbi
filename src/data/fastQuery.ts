@@ -332,6 +332,11 @@ export function setFastQuery(m: FastQueryMode | boolean): void {
   mode = m === true ? 'always' : m === false ? 'off' : m;
 }
 
+/** False only in `'off'` mode: also gates the evaluator's per-dimension partial aggregates. */
+export function fastPathsEnabled(): boolean {
+  return mode !== 'off';
+}
+
 /** Should `runQuery` try the single-pass path for these group columns? */
 export function useFastQuery(model: DataModel, groupCols: ColumnRef[]): boolean {
   if (mode !== 'auto') return mode === 'always';

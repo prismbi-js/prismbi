@@ -1,51 +1,28 @@
 import { DataModel, Report } from 'prismbi';
-import type { Row } from 'prismbi';
 import { streamInto, type MessageSourceLike, type StreamHandle } from 'prismbi/connectors';
-
-// ---------------------------------------------------------------- synthetic data
-let seed = 42;
-const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-const CATEGORIES = ['Bikes', 'Components', 'Clothing', 'Accessories', 'Services', 'Parts'];
-const COUNTRIES = ['USA', 'Canada', 'Germany', 'France', 'UK', 'Australia'];
-const SEGMENTS = ['Consumer', 'Small business', 'Enterprise'];
-const CUSTOMERS = 8000;
-
-const products = Array.from({ length: 300 }, (_, i) => ({ ProductKey: i, Product: `P-${String(i).padStart(3, '0')}`, Category: CATEGORIES[i % CATEGORIES.length], Price: 5 + Math.round(rnd() * 1500) }));
-const customers = Array.from({ length: CUSTOMERS }, (_, i) => ({ CustomerKey: i, Customer: `C-${String(i).padStart(5, '0')}`, Country: COUNTRIES[Math.floor(rnd() * COUNTRIES.length)], Segment: SEGMENTS[Math.floor(rnd() ** 1.6 * SEGMENTS.length)] }));
-
-let tick = 0;
-function makeRows(n: number): Row[] {
-  const out: Row[] = new Array(n);
-  for (let i = 0; i < n; i++) {
-    const p = products[Math.floor(rnd() * products.length)];
-    const c = Math.floor(rnd() ** 1.3 * CUSTOMERS);
-    const qty = 1 + Math.floor(rnd() * 4);
-    // a seasonal wave plus noise, so the dense line has visible shape
-    const t = tick++;
-    const wave = 1 + 0.35 * Math.sin(t / 4000) + 0.15 * Math.sin(t / 650);
-    out[i] = { Tick: Math.floor(t / 50), OrderId: Math.floor(t / 3), ProductKey: p.ProductKey, CustomerKey: c, Quantity: qty, Amount: Math.round(p.Price * qty * wave * (0.8 + rnd() * 0.4) * 100) / 100 };
-  }
-  return out;
-}
-
-function buildModel(n: number): DataModel {
-  tick = 0;
-  return new DataModel()
-    .addTable('Sales', makeRows(n), { Amount: { format: '$#,0.00' }, ProductKey: { hidden: true }, CustomerKey: { hidden: true } })
-    .addTable('Product', products, { ProductKey: { hidden: true }, Price: { format: '$#,0' } })
-    .addTable('Customer', customers, { CustomerKey: { hidden: true } })
-    .addRelationship({ from: 'Sales[ProductKey]', to: 'Product[ProductKey]' })
-    .addRelationship({ from: 'Sales[CustomerKey]', to: 'Customer[CustomerKey]' })
-    .addMeasure('Sales', 'SUM(Sales[Amount])', { format: '$#,0' })
-    .addMeasure('Orders', 'DISTINCTCOUNT(Sales[OrderId])', { format: '#,0' })
-    .addMeasure('Rows', 'COUNTROWS(Sales)', { format: '#,0' })
-    .addMeasure('Avg Order', 'DIVIDE([Sales], [Orders])', { format: '$#,0.00' });
-}
+import { createWorkerEngine, type Engine } from 'prismbi/worker';
+import { CUSTOMERS, buildModel, makeRows } from './perf-data';
 
 // ---------------------------------------------------------------- report
 const statsEl = document.getElementById('stats')!;
 const rowsSel = document.getElementById('rows') as HTMLSelectElement;
 const liveBtn = document.getElementById('live') as HTMLButtonElement;
+const workerBox = document.getElementById('worker') as HTMLInputElement;
+let engine: Engine | undefined;
+
+/** Start a worker that builds the same model and serves it. */
+function startWorker(rows: number): Promise<Engine> {
+  const worker = new Worker(new URL('./perf-worker.ts', import.meta.url), { type: 'module' });
+  return new Promise((resolve) => {
+    const ready = (e: MessageEvent) => {
+      if (e.data?.type !== 'ready') return;
+      worker.removeEventListener('message', ready);
+      resolve(createWorkerEngine(worker));
+    };
+    worker.addEventListener('message', ready);
+    worker.postMessage({ type: 'init', rows });
+  });
+}
 const dark = matchMedia('(prefers-color-scheme: dark)').matches;
 let report: Report | undefined;
 let model: DataModel;
@@ -72,15 +49,22 @@ function build(): void {
   const n = Number(rowsSel.value);
   statsEl.textContent = `Generating ${n.toLocaleString('en-US')} rows…`;
   // let the message paint before the heavy work
-  setTimeout(() => {
+  engine?.dispose();
+  engine = undefined;
+  setTimeout(async () => {
+    if (workerBox.checked) {
+      statsEl.textContent = `Generating ${n.toLocaleString('en-US')} rows in a worker and on the page…`;
+      engine = await startWorker(n);
+    }
     const t0 = performance.now();
     model = buildModel(n);
     const loadMs = performance.now() - t0;
-    loadInfo = `${n.toLocaleString('en-US')} rows · load + model ${loadMs.toFixed(0)} ms\nqueries (cold): ${timings(model)}`;
+    loadInfo = `${n.toLocaleString('en-US')} rows · load + model ${loadMs.toFixed(0)} ms · visual queries run ${engine ? 'in a Web Worker' : 'on the main thread'}\nqueries (cold, main thread): ${timings(model)}`;
     const t1 = performance.now();
     report?.destroy();
     report = new Report(document.getElementById('app')!, {
       model,
+      engine,
       theme: dark ? 'dark' : 'light',
       name: 'Scale',
       chrome: { filterPane: 'closed' },
@@ -95,7 +79,7 @@ function build(): void {
             { id: 'k-sales', type: 'card', title: 'Sales', layout: { x: 0, y: 2, w: 3, h: 3 }, fields: { value: 'Sales' } },
             { id: 'k-orders', type: 'card', title: 'Orders', layout: { x: 3, y: 2, w: 3, h: 3 }, fields: { value: 'Orders' } },
             { id: 'k-aov', type: 'card', title: 'Avg order', layout: { x: 6, y: 2, w: 3, h: 3 }, fields: { value: 'Avg Order' } },
-            { id: 'k-rows', type: 'card', title: 'Rows in model', layout: { x: 9, y: 2, w: 3, h: 3 }, fields: { value: 'Rows' } },
+            { id: 'k-rows', type: 'card', title: 'Rows in view', layout: { x: 9, y: 2, w: 3, h: 3 }, fields: { value: 'Rows' } },
             {
               id: 'line',
               type: 'line',
@@ -118,7 +102,7 @@ function build(): void {
       ],
     });
     requestAnimationFrame(() => {
-      loadInfo += `\nfirst render ${(performance.now() - t1).toFixed(0)} ms`;
+      loadInfo += engine ? `\nfirst paint ${(performance.now() - t1).toFixed(0)} ms (results arrive from the worker)` : `\nfirst render ${(performance.now() - t1).toFixed(0)} ms`;
       statsEl.textContent = loadInfo;
     });
   }, 30);
@@ -149,6 +133,8 @@ function startLive(): void {
     intervalMs: 500,
     onBatch: (rows) => {
       received += rows.length;
+      // keep the worker's copy in step
+      void engine?.appendRows('Sales', rows, { maxRows: max });
       const secs = (performance.now() - started) / 1000;
       statsEl.textContent = `${loadInfo}\nlive: ${received.toLocaleString('en-US')} rows received (${Math.round(received / secs).toLocaleString('en-US')}/s) · window ${max.toLocaleString('en-US')} rows`;
     },
@@ -170,4 +156,5 @@ function stopLive(): void {
 liveBtn.addEventListener('click', () => (stream ? stopLive() : startLive()));
 document.getElementById('rebuild')!.addEventListener('click', build);
 rowsSel.addEventListener('change', build);
+workerBox.addEventListener('change', build);
 build();

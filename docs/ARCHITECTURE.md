@@ -81,6 +81,22 @@ Each group column is resolved to a per-fact-row dictionary code. Each many-to-on
 
 BLANK arithmetic mirrors the evaluator's exactly. Fact rows whose key has no dimension row count in totals but in no group, as in the general path. Calculation groups in play, `USERELATIONSHIP`/`CROSSFILTER` filters and `includeEmpty` fall back to the general path.
 
+### Per-dimension partial aggregates
+
+`src/data/partials.ts` speeds up repeated aggregations whose filters differ only on one dimension. YTD per day is the typical case. For `SUM`/`AVERAGE`/`MIN`/`MAX`/`COUNT(A)` over a fact column, the evaluator splits the context into two parts:
+
+- **Dimension filters:** filters that reach the fact only through one directly related dimension.
+- **The rest:** everything else.
+
+The second time the same (column, dimension, rest) triple appears, one scan of `rowsOf(fact, rest)` builds per-dimension-row partials (sum, count, min, max). Later evaluations combine the partials of `rowsOf(dimension, dimension filters)`.
+
+The path is skipped in these cases:
+- Relationship modifiers (`USERELATIONSHIP`/`CROSSFILTER`) are in the context.
+- Bidirectional relationships touch the fact or the dimension.
+- The dimension filters leave fewer than 16 rows visible, where index lookups are cheaper.
+
+`setFastQuery('off')` disables it together with the grouped fast path.
+
 ## Evaluation model
 
 - **Filter context** is an array of compiled filters. `CALCULATE` builds a new context in this order: row context becomes filters (context transition), then removals (`ALL`, `REMOVEFILTERS`, `ALLEXCEPT`, `ALLSELECTED`) apply, then new filters override existing filters on the same columns, then `KEEPFILTERS` filters intersect.

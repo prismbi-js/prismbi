@@ -19,6 +19,13 @@
   - canvas scatter above 3,000 points, with hit-testing
   - virtualized tables above 500 rows (`format.table.virtualize`)
 - **Tooling:** `npm run bench` and the `/perf.html` demo page (100k–1M rows, live stream).
+- **Per-dimension pre-aggregation:** YTD and running totals per day over 1M rows take about 0.2 s instead of 2.8 s.
+- **Reports on a query engine:** `new Report(el, { model, engine })` runs visual queries in a worker. Visuals load asynchronously, with loading and busy states and cancellation.
+- **Fixes from the live-browser review:**
+  - Line and area strokes no longer disappear when the OS asks for reduced motion.
+  - Format strings support `positive;negative;zero` sections (also in `FORMAT`).
+  - Treemaps cycle the palette instead of greying out tiles.
+  - The slider slicer fits a two-row cell.
 - **Internal:** the model clears the evaluator's measure cache directly (`Evaluator.clearCache`) instead of through a change listener.
 
 

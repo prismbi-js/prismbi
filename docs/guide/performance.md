@@ -12,6 +12,7 @@ Try it with `npm run dev`, then open `/perf.html`. That page generates 100k to 1
   - **Fallback:** anything else (time intelligence, `CALCULATE`, iterators, calculation groups in play, `USERELATIONSHIP`, `includeEmpty`) uses the general engine, so results never change.
   - **When it applies:** in `'auto'` mode it is used for multi-column groupings and for single columns with more than 1,000 values. Below that, indexed per-group evaluation is already faster.
   - **Toggle:** use `setFastQuery('always' | 'off' | 'auto')` to compare the two paths.
+- **Per-dimension pre-aggregation.** Time intelligence and running totals evaluate the same measure once per day or period, each time with a different set of dates but otherwise identical filters. After a filter split repeats, the engine sums the fact column once per dimension row (per date, per product…). Each evaluation then adds up the visible rows' partials instead of scanning the fact table. This applies to `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT` and `COUNTA` through a direct many-to-one relationship with no bidirectional filtering, and only when the dimension filters leave at least 16 rows visible.
 - **Hash indexes and caches.** `eq`/`in` filters use column indexes. Visible row sets are cached per filter context and measure results per (measure, context). Visuals re-query only when their own filters change.
 
 ## Numbers
@@ -23,11 +24,11 @@ Try it with `npm run dev`, then open `/perf.html`. That page generates 100k to 1
 | Category × sales and average order value (12 groups) | 42 ms | 192 ms |
 | Product × region, 16k groups | 57 ms (per-group engine: 10.1 s) | 156 ms |
 | Day × sales, 365 groups | 8 ms | 11 ms |
-| Day × YTD (time intelligence, general engine) | 0.6 s | 2.8 s |
+| Day × YTD (time intelligence) | 121 ms (scan path: 0.65 s) | 193 ms (scan path: 2.8 s) |
 
 Generating and loading 1M rows takes about 0.75 s. Warm queries (same filters again) come from the caches in well under a millisecond.
 
-**Known slow spot:** cumulative time intelligence per day (`TOTALYTD`, running totals) over very large fact tables still evaluates each day separately. Prefer monthly granularity for those measures above a few hundred thousand rows.
+Pre-aggregated results can differ from a row-by-row scan in the last floating-point digits, because the same values are added in a different order. Displayed values are unaffected.
 
 ## Rendering at scale
 
@@ -75,7 +76,19 @@ Filters must be filter specs (`{ target, op, value }`), because compiled filters
 
 `createLocalEngine(model)` has the same API on the current thread, for tests, server rendering or small models.
 
-The `Report` runtime still renders from a model on the main thread. Use the worker engine for heavy or custom queries: exports, headless dashboards, or your own visuals fed from `engine.query`.
+### Reports on the worker
+
+Pass the engine to a report and every visual query runs in the worker:
+
+```ts
+const report = new Report(el, { model, engine, pages });
+```
+
+Visuals render asynchronously. On first load a visual shows a shimmer. After that, a re-query keeps the previous result on screen, dimmed, until the new one arrives, and superseded queries are cancelled.
+
+Slicers and queries without measures still run on `model` on the page, so slicer tiles appear instantly. The page also uses `model` for metadata: field lists, slicer domains, colours.
+
+Keep the two models in step. Build both from the same code, and apply live rows to both: `model.appendRows(...)` plus `engine.appendRows(...)`. The `/perf.html` demo has a "Queries in a Web Worker" switch that does exactly this.
 
 ## Tips
 

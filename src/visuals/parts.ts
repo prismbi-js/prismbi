@@ -189,8 +189,22 @@ export const treemap = /* @__PURE__ */ defineVisual({
   render(ctx) {
     const { slices: data, field, total } = slices(ctx, 'category', 30);
     if (!data.length) return emptyState(ctx);
-    // treemaps colour by entity but have many tiles: tiles beyond the palette use the "other" colour
     const t = ctx.theme;
+    // treemaps have many tiles: past the palette, cycle it by domain position (stable under filtering) instead of
+    // greying out what may be the largest tiles
+    const gi = ctx.role('category').indices[0];
+    const gField = gi !== undefined ? ctx.data.groups[gi] : undefined;
+    if (gField?.column) {
+      const pal = ctx.format.colors.palette ?? t.dataColors;
+      const domain = ctx.model.table(gField.column.table).distinct(gField.column.column);
+      const pos = new Map(domain.map((v, i) => [v instanceof Date ? v.getTime() : v, i]));
+      for (const d of data) {
+        if (d.color !== t.otherColor || !d.keys.length) continue;
+        const k = d.keys[0];
+        const i = pos.get(k instanceof Date ? k.getTime() : k);
+        if (i !== undefined) d.color = pal[i % pal.length];
+      }
+    }
     ctx.root.replaceChildren();
     const svg = s('svg', { width: ctx.width, height: ctx.height, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Treemap' });
     ctx.root.append(svg);

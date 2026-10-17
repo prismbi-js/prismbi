@@ -9,7 +9,13 @@ import { baseFormat } from '../visuals/format';
 import type { VisualFormat } from '../visuals/format';
 import { getVisual } from '../visuals/registry';
 import type { DataPointIdentity, RenderContext, RoleBinding, VisualDefinition, VisualHostApi, VisualSpec } from '../visuals/types';
-import type { ReportRuntime } from './runtime';
+import type { QueryEngine, ReportRuntime } from './runtime';
+
+/** Engines receive filter specs; compiled filters (functions, row sets) stay on this thread. */
+function portable(spec: QuerySpec): boolean {
+  const ok = (fs: unknown[] | undefined) => !fs || fs.every((f) => !(f && typeof f === 'object' && 'kind' in f) || ((f as { kind: string }).kind === 'columns' && !!(f as { spec?: unknown }).spec));
+  return ok(spec.filters) && ok(spec.highlight);
+}
 import { download, elementToSvg, svgToCanvas } from './snapshot';
 
 const asArray = (f: FieldSpec | FieldSpec[] | undefined): FieldSpec[] => (f === undefined ? [] : Array.isArray(f) ? f : [f]);
@@ -57,6 +63,8 @@ export class VisualHost {
   private localState: Record<string, unknown>;
   private size = { w: 0, h: 0 };
   private destroyed = false;
+  /** In-flight engine query (async mode). */
+  private pending?: { key: string; ctrl: AbortController };
 
   constructor(
     private rt: ReportRuntime,
@@ -233,6 +241,14 @@ export class VisualHost {
       } else {
         const key = JSON.stringify(built.query, (_k, v) => (v instanceof Date ? `D${v.getTime()}` : v instanceof Set ? [...v] : v)) + this.rt.modelVersion;
         if (key !== this.dataKey || !this.data) {
+          const engine = this.rt.engine;
+          if (engine && !this.def.isSlicer && built.query.values?.length && portable(built.query)) {
+            this.request(engine, built.query, key);
+            if (!this.data) return this.renderLoading();
+            // keep the previous result on screen, dimmed, until the new one arrives
+            this.el.classList.add('is-busy');
+            return;
+          }
           this.data = this.rt.model.query(built.query);
           this.dataKey = key;
         }
@@ -281,6 +297,37 @@ export class VisualHost {
       return;
     }
     this.rt.emit('rendered', { visualId: this.id, ms: performance.now() - t0 });
+  }
+
+  private request(engine: QueryEngine, spec: QuerySpec, key: string): void {
+    if (this.pending?.key === key) return;
+    this.pending?.ctrl.abort();
+    const ctrl = new AbortController();
+    this.pending = { key, ctrl };
+    engine.query(spec, ctrl.signal).then(
+      (res) => {
+        if (this.pending?.ctrl !== ctrl || this.destroyed) return;
+        this.pending = undefined;
+        this.data = res as QueryResult;
+        this.dataKey = key;
+        this.el.classList.remove('is-busy');
+        this.render();
+      },
+      (err: Error) => {
+        if (this.pending?.ctrl !== ctrl || this.destroyed || err?.name === 'AbortError') return;
+        this.pending = undefined;
+        this.el.classList.remove('is-busy');
+        this.renderError(err);
+      },
+    );
+  }
+
+  private renderLoading(): void {
+    if (typeof this.cleanup === 'function') this.cleanup();
+    this.cleanup = undefined;
+    const el = h('div', { class: 'pbi-loading', role: 'status', 'aria-label': 'Loading' });
+    el.style.cssText = 'flex:1;height:100%;border-radius:6px';
+    this.body.replaceChildren(el);
   }
 
   private palette(f: VisualFormat): string[] {

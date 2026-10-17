@@ -94,8 +94,39 @@ export function setDefaultLocale(locale: string): void {
   defaultLocale = locale;
 }
 
+/** Split `pos;neg;zero` format sections (semicolons inside quotes or after a backslash are literal). */
+function sections(fmt: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < fmt.length; i++) {
+    const ch = fmt[i];
+    if (ch === '\\' && i + 1 < fmt.length) {
+      cur += ch + fmt[++i];
+      continue;
+    }
+    if (ch === '"') quoted = !quoted;
+    if (ch === ';' && !quoted) {
+      out.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
 function formatNumber(n: number, fmt: string | undefined, o: FormatOptions): string {
   if (!Number.isFinite(n)) return Number.isNaN(n) ? 'NaN' : n > 0 ? '∞' : '-∞';
+  const secs = fmt && fmt.includes(';') ? sections(fmt) : null;
+  if (secs && secs.length > 1) {
+    const [pos, neg, zero] = secs;
+    // a section without digit placeholders is plain text, e.g. "#,0;(#,0);"zero""
+    const literal = (sec: string) => (/[0#]/.test(sec.replace(/"[^"]*"/g, '')) ? null : sec.replace(/"([^"]*)"/g, '$1').replace(/\\(.)/g, '$1'));
+    if (n === 0 && zero) return literal(zero) ?? formatNumber(0, zero, o);
+    // the negative section formats the magnitude and supplies its own sign or parentheses
+    if (n < 0 && neg) return formatNumber(-n, neg, o);
+    return formatNumber(n, pos, o);
+  }
   const locale = o.locale ?? (defaultLocale === 'default' ? undefined : defaultLocale);
   const pattern = parseNumberPattern(fmt || (Number.isInteger(n) ? '#,0' : '#,0.##'));
   let value = n / pattern.scale;

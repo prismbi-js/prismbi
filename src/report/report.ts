@@ -15,7 +15,7 @@ import type { DataPointIdentity, VisualSpec } from '../visuals/types';
 import type { VisualFormat } from '../visuals/format';
 import type { ReportEvents } from './events';
 import { FilterPane } from './filterPane';
-import type { ReportRuntime } from './runtime';
+import type { ReportRuntime, QueryEngine } from './runtime';
 import { injectStyles, themeVars } from './styles';
 import { Tooltip } from './tooltip';
 import { ContextMenu } from './contextMenu';
@@ -89,6 +89,11 @@ export interface ReportOptions extends Partial<ReportDefinition> {
   tooltip?: TooltipRenderer;
   /** Called for every event (handy for frameworks). */
   onEvent?: <K extends keyof ReportEvents>(event: K, payload: ReportEvents[K]) => void;
+  /**
+   * Run visual queries on another engine, e.g. `createWorkerEngine(worker)` from `prismbi/worker` serving the same
+   * model. Visuals render asynchronously; slicers and metadata still use `model`.
+   */
+  engine?: QueryEngine;
 }
 
 interface PageState {
@@ -185,6 +190,7 @@ export class Report implements ReportRuntime {
   ) {
     injectStyles(container.ownerDocument);
     this.model = opts.model;
+    this.engine = opts.engine;
     this.locale = opts.locale;
     this.name = opts.name ?? 'Report';
     this._theme = getTheme(opts.theme);
@@ -233,6 +239,9 @@ export class Report implements ReportRuntime {
   get theme(): Theme {
     return this._theme;
   }
+  /** Engine running visual queries (see `ReportOptions.engine`). */
+  readonly engine?: QueryEngine;
+
   get modelVersion(): number {
     return this._modelVersion;
   }

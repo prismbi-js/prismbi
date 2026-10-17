@@ -2,7 +2,7 @@
 
 **Power BI-style data modeling and interactive reports for the web, written in TypeScript.**
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`prismbi/studio`). It has zero dependencies: about 59 KB min+gzip for the core, about 74 KB for a typical dashboard, and about 92 KB with every visual. Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`prismbi/studio`). It has zero dependencies: about 60 KB min+gzip for the core, about 76 KB for a typical dashboard, and about 93 KB with every visual. Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install prismbi
@@ -46,7 +46,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | **Developer tooling** | DAX language service (completion, hover, diagnostics, signature help), formatter, dependency explanation, `evaluateTable()` queries |
 | **Slice and narrow down** | Slicers (list, dropdown, tiles, range, relative date, hierarchy tree, synced across pages), cross-filter and cross-highlight, Ctrl+click multi-select, right-click Include / Exclude, drill down / up / expand all, drill-through pages with Back, a decomposition tree, report, page and visual filters, a filter pane with Basic, Advanced and Top N, bookmarks |
 | **34 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps, decomposition tree, card, multi-row card, KPI, gauge, table, matrix, slicer, text, and small multiples for cartesian charts |
-| **Light and fast** | Zero dependencies. A columnar engine with typed-array views, vectorised aggregations, a single-pass grouped query path, hash indexes and caches. Grouped queries over 1M rows take 11–192 ms cold. LTTB-thinned lines, canvas scatter, virtualized tables, and an optional Web Worker engine |
+| **Light and fast** | Zero dependencies. A columnar engine with typed-array views, vectorised aggregations, a single-pass grouped query path, hash indexes and caches. Queries over 1M rows, including YTD per day, take 13–204 ms cold. LTTB-thinned lines, canvas scatter, virtualized tables, and an optional Web Worker engine |
 | **Live data** | `prismbi/connectors`: CSV, Google Sheets, JSON, paginated REST, GraphQL, Apache Arrow (Parquet via DuckDB-Wasm), SQL adapters, WebSocket and EventSource streaming into sliding windows, scheduled refresh |
 | **Analytics** | Continuous time and number axes, log scales, reference lines (constant, average, median, min, max, percentile), trend lines, rule- and gradient-based colours, report-page tooltips, real totals |
 | **Customizable** | Theme tokens and CSS variables, Power BI theme JSON import, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, PNG/SVG/CSV/PDF export, edit-interactions mode |

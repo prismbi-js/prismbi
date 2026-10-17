@@ -16,7 +16,9 @@ function both(model: DataModel, spec: QuerySpec) {
   return { slow, fast };
 }
 
-const strip = (r: ReturnType<typeof runQuery>) => ({ rows: r.rows, totals: r.totals, truncated: r.truncated });
+/** Numbers rounded to 9 significant digits: the paths may add the same values in a different order. */
+const round = (v: unknown): unknown => (typeof v === 'number' && Number.isFinite(v) && v !== 0 ? Number(v.toPrecision(9)) : Array.isArray(v) ? v.map(round) : v && typeof v === 'object' && !(v instanceof Date) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, round(x)])) : v);
+const strip = (r: ReturnType<typeof runQuery>) => round({ rows: r.rows, totals: r.totals, truncated: r.truncated });
 
 describe('fast grouped query path', () => {
   const model = buildModel();
@@ -72,6 +74,36 @@ describe('fast grouped query path', () => {
 });
 
 afterAll(() => setFastQuery('auto'));
+
+describe('per-dimension partial aggregates (time intelligence)', () => {
+  const model = buildModel()
+    .addMeasure('Running Sales', 'CALCULATE([Total Sales], FILTER(ALL(Date[Date]), Date[Date] <= MAX(Date[Date])))')
+    .addMeasure('Units YTD', 'TOTALYTD(SUM(Sales[Quantity]), Date[Date])')
+    .addMeasure('Lines YTD', 'TOTALYTD(COUNT(Sales[Quantity]), Date[Date])')
+    .addMeasure('Avg Qty QTD', 'TOTALQTD(AVERAGE(Sales[Quantity]), Date[Date])')
+    .addMeasure('Max Price MTD', 'TOTALMTD(MAX(Sales[SalesAmount]), Date[Date])')
+    .addRole('US only', { Region: 'Region[Country] = "USA"' });
+  const values = ['Sales YTD', 'Running Sales', 'Units YTD', 'Lines YTD', 'Avg Qty QTD', 'Max Price MTD', 'Sales LY'];
+  const cases: [string, QuerySpec][] = [
+    ['per day', { groupBy: ['Date[Date]'], values, totals: true }],
+    ['per day, sliced by category', { groupBy: ['Date[Date]'], values, filters: [{ target: 'Product[Category]', op: 'in', values: ['Bikes', 'Clothing'] }] }],
+    ['per month and region', { groupBy: ['Date[Year]', 'Date[Month]', 'Region[Country]'], values: ['Sales YTD', 'Running Sales'] }],
+  ];
+  it.each(cases)('matches the scan path (%s)', (_name, spec) => {
+    const { slow, fast } = both(model, spec);
+    expect(strip(fast)).toEqual(strip(slow));
+  });
+
+  it('respects row-level security', () => {
+    model.setRoles(['US only']);
+    try {
+      const { slow, fast } = both(model, cases[0][1]);
+      expect(strip(fast)).toEqual(strip(slow));
+    } finally {
+      model.setRoles(null);
+    }
+  });
+});
 
 describe('model.appendRows', () => {
   const make = () =>

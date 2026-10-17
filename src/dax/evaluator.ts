@@ -6,6 +6,8 @@ import { compileFilter, contextKey, overrideFilters, relFilter, rowsFilter } fro
 import { groupCombos, groupFilter } from '../data/query';
 import type { DataModel } from '../data/model';
 import { formatValue } from '../format/format';
+import { PartialAggregates, type PartialKind } from '../data/partials';
+import { fastPathsEnabled } from '../data/fastQuery';
 
 export class DaxError extends Error {
   constructor(message: string) {
@@ -114,13 +116,17 @@ function addMonths(d: Date, n: number): Date {
  */
 export class Evaluator {
   private measureCache = new Map<string, CellValue>();
+  private partials: PartialAggregates;
   private stack: string[] = [];
 
-  constructor(private model: DataModel) {}
+  constructor(private model: DataModel) {
+    this.partials = new PartialAggregates(model);
+  }
 
   /** Drop memoised measure results (called by the model whenever data or definitions change). */
   clearCache(): void {
     this.measureCache.clear();
+    this.partials.clear();
   }
 
   // ------------------------------------------------------------ entry points
@@ -626,6 +632,11 @@ export class Evaluator {
     const col = this.colArg(arg, name);
     const t = this.model.table(col.table);
     const c = t.column(col.column);
+    if (name !== 'DISTINCTCOUNT' && fastPathsEnabled()) {
+      const numericOk = name === 'COUNT' || name === 'COUNTA' || c.type === 'number' || ((name === 'MIN' || name === 'MAX') && c.type === 'date');
+      const v = numericOk ? this.partials.evaluate(name as PartialKind, col.table, col.column, ctx.filters) : undefined;
+      if (v !== undefined) return v;
+    }
     const rows = this.model.rowsOf(col.table, ctx.filters);
     switch (name) {
       case 'SUM':

@@ -44,3 +44,31 @@ it('clustered labels use each series format, never overlap, and flag mixed scale
   r.destroy();
   el.remove();
 });
+
+it('lines stay visible when animations are disabled (reduced motion)', async () => {
+  const { DataModel } = await import('../src/index');
+  const el = document.createElement('div');
+  document.body.append(el);
+  const r = createVisual(el, { model: makeModel(), type: 'line', fields: { category: 'Date[Year]', values: 'Total Sales' }, animate: true } as never);
+  r.flush();
+  for (const p of el.querySelectorAll<SVGPathElement>('path.pbi-line')) {
+    // nothing may hide the stroke outside the CSS animation itself
+    expect(p.style.strokeDashoffset).toBe('');
+    expect(p.style.strokeDasharray).toBe('');
+  }
+  r.destroy();
+  el.remove();
+  // treemaps past the palette cycle colours instead of greying out tiles
+  const rows = Array.from({ length: 20 }, (_, i) => ({ k: `K${String(i).padStart(2, '0')}`, v: 100 - i }));
+  const m = new DataModel().addTable('T', rows).addMeasure('V', 'SUM(T[v])');
+  const el2 = document.createElement('div');
+  document.body.append(el2);
+  const t = createVisual(el2, { model: m, type: 'treemap', fields: { category: 'T[k]', values: 'V' } });
+  t.flush();
+  const fills = [...el2.querySelectorAll('rect.pbi-mark')].map((x) => x.getAttribute('fill'));
+  expect(fills).toHaveLength(20);
+  const { lightTheme } = await import('../src/index');
+  expect(fills.filter((f) => f === lightTheme.otherColor)).toHaveLength(0);
+  t.destroy();
+  el2.remove();
+});

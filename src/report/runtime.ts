@@ -6,6 +6,15 @@ import type { DataPointIdentity } from '../visuals/types';
 import type { Tooltip } from './tooltip';
 import type { ReportEvents } from './events';
 import type { MenuItem } from './contextMenu';
+import type { QueryResult, QuerySpec } from '../data/query';
+
+/**
+ * Where visual queries run when not on the report's own model – e.g. a worker engine from `prismbi/worker`.
+ * Results may carry filter specs instead of compiled filters in `baseFilters`.
+ */
+export interface QueryEngine {
+  query(spec: QuerySpec, signal?: AbortSignal): Promise<Omit<QueryResult, 'baseFilters'> & { baseFilters: readonly unknown[] }>;
+}
 
 /** What a VisualHost needs from the report it lives in. */
 export interface ReportRuntime {
@@ -13,6 +22,7 @@ export interface ReportRuntime {
   readonly theme: Theme;
   readonly locale?: string;
   readonly modelVersion: number;
+  readonly engine?: QueryEngine;
   readonly tooltip: Tooltip;
   readonly focused: string | null;
   schedule(visualId?: string): void;

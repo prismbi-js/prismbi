@@ -61,3 +61,15 @@ describe('scales & layout', () => {
     expect(relativeRange('next', 1, 'years', true, today)[1]).toEqual(new Date(2026, 5, 14));
   });
 });
+
+it('honours positive;negative;zero format sections', async () => {
+  const { formatValue } = await import('../src/index');
+  const { makeModel } = await import('./fixtures');
+  expect(formatValue(1.068, '+0.0%;-0.0%')).toBe('+106.8%');
+  expect(formatValue(-0.05, '+0.0%;-0.0%')).toBe('-5.0%');
+  expect(formatValue(-1234, '#,0;(#,0);"zero"')).toBe('(1,234)');
+  expect(formatValue(0, '#,0;(#,0);"zero"')).toBe('zero');
+  expect(formatValue(-3, '0;')).toBe('-3');
+  expect(formatValue(5, '"a;b" 0')).toBe('a;b 5');
+  expect(makeModel().evaluate('FORMAT(0.25, "+0.0%;-0.0%")')).toBe('+25.0%');
+});

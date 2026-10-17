@@ -209,8 +209,9 @@ function renderSlider(ctx: RenderContext, target: string, domain: CellValue[], c
   input.addEventListener('change', () => ctx.host.setFilter([{ target, op: 'eq', value: sorted[Number(input.value)] }]));
   const clear = h('button', { type: 'button', class: 'pbi-link' }, 'Reset');
   clear.addEventListener('click', () => ctx.host.setFilter(null));
-  const ends = h('div', { class: 'pbi-slider-ends' }, h('span', {}, ctx.fmt(field, sorted[0])), h('span', {}, ctx.fmt(field, sorted[sorted.length - 1])));
-  container.append(h('div', { class: 'pbi-slider-wrap' }, h('div', { class: 'pbi-slider-head' }, out, at < 0 ? null : clear), input, ends));
+  // min and max sit beside the track so the slicer fits a two-row cell
+  const row = h('div', { class: 'pbi-slider-row' }, h('span', { class: 'pbi-slider-end' }, ctx.fmt(field, sorted[0])), input, h('span', { class: 'pbi-slider-end' }, ctx.fmt(field, sorted[sorted.length - 1])));
+  container.append(h('div', { class: 'pbi-slider-wrap' }, h('div', { class: 'pbi-slider-head' }, out, at < 0 ? null : clear), row));
 }
 
 function idx2(sorted: CellValue[], v: CellValue): number {

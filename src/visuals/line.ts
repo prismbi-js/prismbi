@@ -225,9 +225,10 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     }
     const path = s('path', { d: linePath(stacked ? pts : thin(pts), f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: se.highlights ? 0.3 : se.identity ? markOpacity(ctx, se.identity) : 1, class: 'pbi-line' });
     if (ctx.animate && f.animation.enabled) {
-      path.style.strokeDasharray = '4000';
-      path.style.strokeDashoffset = '4000';
+      // pathLength=1 makes the dash keyframes length-independent; nothing is hidden outside the animation
+      path.setAttribute('pathLength', '1');
       path.classList.add('pbi-draw');
+      path.addEventListener('animationend', () => (path.classList.remove('pbi-draw'), path.removeAttribute('pathLength')), { once: true });
       path.style.animationDuration = `${f.animation.duration * 2}ms`;
     }
     marks.append(path);
