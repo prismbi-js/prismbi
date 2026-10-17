@@ -11,7 +11,7 @@ import { h } from '../render/svg';
 import type { DeepPartial } from '../utils';
 import { Emitter, uid } from '../utils';
 import { getVisual } from '../visuals/registry';
-import type { DataPointIdentity, VisualSpec } from '../visuals/types';
+import type { DataPointIdentity, VisualLayout, VisualSpec } from '../visuals/types';
 import type { VisualFormat } from '../visuals/format';
 import type { ReportEvents } from './events';
 import { FilterPane } from './filterPane';
@@ -50,6 +50,17 @@ export interface PageDefinition {
   drillthrough?: { fields: string[]; /** Carry the source visual's filters along (default true). */ keepAllFilters?: boolean };
   /** Make this a report-tooltip page: rendered inside the tooltip when a visual sets `format.tooltip.page`. Never shown as a tab. */
   tooltip?: { width?: number; height?: number };
+  /**
+   * Phone layout: which visuals show on narrow screens and where, on its own grid (default 4 columns).
+   * Used below `ReportOptions.mobileBreakpoint`; visuals not listed are hidden on phones.
+   */
+  mobile?: MobileLayout;
+}
+
+export interface MobileLayout {
+  columns?: number;
+  rowHeight?: number;
+  visuals: { id: string; layout: VisualLayout }[];
 }
 
 export interface Bookmark {
@@ -94,6 +105,10 @@ export interface ReportOptions extends Partial<ReportDefinition> {
    * model. Visuals render asynchronously; slicers and metadata still use `model`.
    */
   engine?: QueryEngine;
+  /** `'auto'` (default) uses a page's phone layout below `mobileBreakpoint`; `'desktop'` / `'mobile'` force one. */
+  layoutMode?: 'auto' | 'desktop' | 'mobile';
+  /** Width in px below which phone layouts apply (default 640). */
+  mobileBreakpoint?: number;
   /** Explicit pixel size per visual body, for rendering without layout (e.g. `@prismbi/prismbi/server`). */
   measure?: (visualId: string) => { width: number; height: number } | undefined;
 }
@@ -167,6 +182,38 @@ export function registerMenuItems(provider: MenuProvider): () => void {
   return () => menuProviders().delete(provider);
 }
 
+/** Phone height for a visual: compact for slicers and cards, taller for charts. */
+function phoneHeight(spec: VisualSpec | undefined): number {
+  if (!spec) return 6;
+  if (spec.type === 'slicer') return 2;
+  if (/card|kpi|gauge|text/i.test(spec.type)) return 3;
+  return Math.max(5, Math.min(8, spec.layout?.h ?? 6));
+}
+
+/** Stack a page's visuals full-width in reading order (top to bottom, left to right). */
+export function autoMobileLayout(page: PageDefinition, columns = 4): MobileLayout {
+  const order = [...page.visuals].filter((v) => v.id).sort((a, b) => (a.layout?.y ?? 0) - (b.layout?.y ?? 0) || (a.layout?.x ?? 0) - (b.layout?.x ?? 0));
+  let y = 0;
+  const visuals: MobileLayout['visuals'] = [];
+  for (let i = 0; i < order.length; i++) {
+    const v = order[i];
+    // small neighbours on one row (two cards side by side) share it
+    const next = order[i + 1];
+    const small = (s: VisualSpec) => /card|kpi|gauge/i.test(s.type);
+    if (next && small(v) && small(next) && (next.layout?.y ?? 0) === (v.layout?.y ?? 0)) {
+      const h = phoneHeight(v);
+      visuals.push({ id: v.id!, layout: { x: 0, y, w: columns / 2, h } }, { id: next.id!, layout: { x: columns / 2, y, w: columns / 2, h } });
+      y += h;
+      i++;
+      continue;
+    }
+    const h = phoneHeight(v);
+    visuals.push({ id: v.id!, layout: { x: 0, y, w: columns, h } });
+    y += h;
+  }
+  return { columns, visuals };
+}
+
 const raf: (cb: () => void) => void = typeof requestAnimationFrame === 'function' ? (cb) => requestAnimationFrame(cb) : (cb) => setTimeout(cb, 0);
 
 /**
@@ -216,6 +263,8 @@ export class Report implements ReportRuntime {
     this.model = opts.model;
     this.engine = opts.engine;
     this.measure = opts.measure;
+    this._layoutMode = opts.layoutMode ?? 'auto';
+    this.mobileBreakpoint = opts.mobileBreakpoint ?? 640;
     this.locale = opts.locale;
     this.name = opts.name ?? 'Report';
     this._theme = getTheme(opts.theme);
@@ -243,7 +292,10 @@ export class Report implements ReportRuntime {
         else this.clearSelection();
       }
     });
-    const onResize = () => this._focused && this.layoutFocus();
+    const onResize = () => {
+      this.refreshLayoutMode();
+      if (this._focused) this.layoutFocus();
+    };
     window.addEventListener('resize', onResize);
     this.offResize = () => window.removeEventListener('resize', onResize);
     this.unsubModel = this.model.onChange(() => {
@@ -267,6 +319,84 @@ export class Report implements ReportRuntime {
   /** Engine running visual queries (see `ReportOptions.engine`). */
   readonly engine?: QueryEngine;
   readonly measure?: (visualId: string) => { width: number; height: number } | undefined;
+  private _layoutMode: 'auto' | 'desktop' | 'mobile' = 'auto';
+  private mobileBreakpoint = 640;
+  private phoneActive = false;
+
+  /** Is the current page showing its phone layout? */
+  get isMobileLayout(): boolean {
+    return this.phoneActive;
+  }
+
+  get layoutMode(): 'auto' | 'desktop' | 'mobile' {
+    return this._layoutMode;
+  }
+
+  /** Switch between automatic, desktop and phone layouts (the studio uses `'mobile'` to edit phone layouts). */
+  setLayoutMode(mode: 'auto' | 'desktop' | 'mobile'): void {
+    this._layoutMode = mode;
+    this.refreshLayoutMode(true);
+  }
+
+  private wantsPhone(): boolean {
+    const p = this.page;
+    if (!p) return false;
+    if (this._layoutMode === 'mobile') return true;
+    if (this._layoutMode === 'desktop' || !p.def.mobile) return false;
+    const w = this.root.clientWidth;
+    return w > 0 && w < this.mobileBreakpoint;
+  }
+
+  /** Re-evaluate phone vs desktop layout for the current page; re-lay out visuals when it changes. */
+  private refreshLayoutMode(force = false): void {
+    const p = this.page;
+    if (!p?.el) return;
+    const phone = this.wantsPhone();
+    if (phone === this.phoneActive && !force) return;
+    this.phoneActive = phone;
+    if (phone && !p.def.mobile) p.def.mobile = autoMobileLayout(p.def);
+    this.applyPageLayout(p);
+    for (const host of p.hosts.values()) host.relayout();
+    if (this.editor) {
+      for (const host of p.hosts.values()) this.editor.decorate(host.id, host.el);
+      this.editor.paintGrid();
+    }
+    this.schedule();
+  }
+
+  /** Phone position of a visual on the current page (`null` = hidden on phones), or undefined for desktop. */
+  layoutFor(visualId: string): VisualLayout | null | undefined {
+    if (!this.phoneActive) return undefined;
+    const m = this.page?.def.mobile;
+    if (!m) return undefined;
+    return m.visuals.find((v) => v.id === visualId)?.layout ?? null;
+  }
+
+  /** Generate (or regenerate) the phone layout of a page from its desktop layout: visuals stacked in reading order. */
+  autoMobileLayout(pageIdOrName?: string): MobileLayout {
+    const p = pageIdOrName ? this.pages[this.pageIndex(pageIdOrName)] : this.page;
+    if (!p) throw new Error(`Page "${pageIdOrName}" not found`);
+    p.def.mobile = autoMobileLayout(p.def);
+    this.refreshLayoutMode(true);
+    this.changedDefinition('mobileLayout');
+    return p.def.mobile;
+  }
+
+  /** Show or hide a visual on phones (it is appended at the bottom when shown). */
+  setMobileVisibility(visualId: string, visible: boolean, pageIdOrName?: string): void {
+    const p = pageIdOrName ? this.pages[this.pageIndex(pageIdOrName)] : this.page;
+    if (!p) return;
+    const m = (p.def.mobile ??= autoMobileLayout(p.def));
+    const i = m.visuals.findIndex((v) => v.id === visualId);
+    if (!visible && i >= 0) m.visuals.splice(i, 1);
+    if (visible && i < 0) {
+      const y = Math.max(0, ...m.visuals.map((v) => v.layout.y + v.layout.h));
+      const spec = p.def.visuals.find((v) => v.id === visualId);
+      m.visuals.push({ id: visualId, layout: { x: 0, y, w: m.columns ?? 4, h: phoneHeight(spec) } });
+    }
+    this.refreshLayoutMode(true);
+    this.changedDefinition('mobileLayout');
+  }
 
   get modelVersion(): number {
     return this._modelVersion;
@@ -405,7 +535,7 @@ export class Report implements ReportRuntime {
         page: () => this.editPageInfo(),
         select: (id) => this.setActiveVisual(id),
         selected: () => this.active,
-        commitLayout: (id, layout) => this.updateVisual(id, { layout }),
+        commitLayout: (id, layout) => (this.phoneActive && this.page.def.mobile ? this.setMobileLayout(id, layout) : this.updateVisual(id, { layout })),
       });
       this.root.classList.add('is-editing');
       for (const p of this.pages) for (const host of p.hosts.values()) this.editor.decorate(host.id, host.el);
@@ -426,6 +556,11 @@ export class Report implements ReportRuntime {
     const p = this.page;
     if (!p?.el) return null;
     const l = p.def.layout ?? {};
+    if (this.phoneActive && p.def.mobile) {
+      const m = p.def.mobile;
+      const specs = m.visuals.map((mv) => ({ ...(p.def.visuals.find((v) => v.id === mv.id) as VisualSpec), layout: mv.layout })).filter((v) => v.type);
+      return { el: p.el, cols: m.columns ?? 4, rowHeight: m.rowHeight ?? l.rowHeight ?? 44, gap: l.gap ?? 12, visuals: new Map([...p.hosts].filter(([id]) => m.visuals.some((v) => v.id === id)).map(([id, hst]) => [id, hst.el])), specs };
+    }
     return { el: p.el, cols: l.columns ?? 12, rowHeight: l.rowHeight ?? 44, gap: l.gap ?? 12, visuals: new Map([...p.hosts].map(([id, hst]) => [id, hst.el])), specs: p.def.visuals };
   }
 
@@ -873,6 +1008,7 @@ export class Report implements ReportRuntime {
     this.renderPane();
     this.schedule();
     if (emit) this.emit('pageChanged', { pageId: p.def.id!, name: p.def.name });
+    this.refreshLayoutMode(true);
   }
 
   private mountPage(p: PageState, parent: HTMLElement): void {
@@ -886,8 +1022,10 @@ export class Report implements ReportRuntime {
 
   private applyPageLayout(p: PageState): void {
     const l = p.def.layout ?? {};
-    p.el!.style.setProperty('--pbi-cols', String(l.columns ?? 12));
-    p.el!.style.setProperty('--pbi-row', `${l.rowHeight ?? 44}px`);
+    const phone = this.phoneActive && p === this.page && !!p.def.mobile;
+    p.el!.classList.toggle('is-mobile', phone);
+    p.el!.style.setProperty('--pbi-cols', String(phone ? (p.def.mobile!.columns ?? 4) : (l.columns ?? 12)));
+    p.el!.style.setProperty('--pbi-row', `${phone ? (p.def.mobile!.rowHeight ?? l.rowHeight ?? 44) : (l.rowHeight ?? 44)}px`);
     p.el!.style.setProperty('--pbi-gap', `${l.gap ?? 12}px`);
     p.el!.style.background = p.def.background ?? '';
   }
@@ -915,6 +1053,22 @@ export class Report implements ReportRuntime {
     }
     this.changedDefinition('addVisual');
     return s.id;
+  }
+
+  /** Move or resize a visual in the current page's phone layout. */
+  setMobileLayout(id: string, layout: VisualLayout): void {
+    const p = this.page;
+    const m = (p.def.mobile ??= autoMobileLayout(p.def));
+    const entry = m.visuals.find((v) => v.id === id);
+    if (entry) entry.layout = { ...layout };
+    else m.visuals.push({ id, layout: { ...layout } });
+    p.hosts.get(id)?.relayout();
+    if (this.editor) {
+      const host = p.hosts.get(id);
+      if (host) this.editor.decorate(id, host.el);
+    }
+    this.schedule();
+    this.changedDefinition('mobileLayout');
   }
 
   updateVisual(id: string, patch: Partial<VisualSpec>): void {

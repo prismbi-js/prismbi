@@ -81,7 +81,7 @@ Contents:
 
 ## After Phase 6
 
-**Phase 7 progress:** visual calculations, DAX window functions and visual regression tests are done (tests/phase7.test.ts, scripts/visual-test.mjs, examples/gallery*.ts, baselines in tests/visual/). Transforms (src/data/transform.ts, src/studio/transforms.ts, docs/guide/transforms.md) are done too. Next in Phase 7: mobile layouts, multi-select in the Studio, and visual polish. Then Power BI import from Phase 9.
+**Phase 7 progress:** visual calculations, DAX window functions and visual regression tests are done (tests/phase7.test.ts, scripts/visual-test.mjs, examples/gallery*.ts, baselines in tests/visual/). Transforms (src/data/transform.ts, src/studio/transforms.ts, docs/guide/transforms.md) are done too. Phone layouts are done too. Next in Phase 7: multi-select in the Studio (align, distribute, group, selection pane), then visual polish (calendar heatmap, forecast band, error bars, axis zoom, animated transitions). Then Power BI import from Phase 9.
 
 Phases 7–9 are planned in `docs/ROADMAP.md`. Next after Phase 6: visual calculations and window functions, visual regression tests, then Power BI import.
 

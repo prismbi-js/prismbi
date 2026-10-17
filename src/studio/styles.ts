@@ -98,6 +98,8 @@ export const STUDIO_CSS = /* css */ `
 .pbs-center{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0}
 .pbs-canvas{flex:1;min-height:0;position:relative}
 .pbs-canvas>.pbi-report{height:100%}
+.is-phone .pbs-canvas{display:flex;justify-content:center;background:color-mix(in srgb,var(--pbi-fg) 4%,transparent)}
+.is-phone .pbs-canvas>.pbi-report{width:390px;max-width:100%;border-inline:1px solid var(--pbs-line);box-shadow:0 0 0 6px color-mix(in srgb,var(--pbi-fg) 6%,transparent)}
 .pbs-canvas.is-drop{outline:2px dashed var(--pbi-accent);outline-offset:-6px}
 .pbs-pages{display:flex;align-items:stretch;gap:2px;padding:0 8px;border-top:1px solid var(--pbs-line);background:var(--pbs-pane);overflow-x:auto;flex-shrink:0;height:36px}
 .pbs-page{display:flex;align-items:center;gap:6px;padding:0 12px;border:0;border-top:2px solid transparent;background:none;cursor:pointer;white-space:nowrap;color:var(--pbi-fg-2)}

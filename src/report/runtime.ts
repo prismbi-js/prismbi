@@ -23,6 +23,8 @@ export interface ReportRuntime {
   readonly locale?: string;
   readonly modelVersion: number;
   readonly engine?: QueryEngine;
+  /** Phone layout position (`null` = hidden on phones), or undefined to use the visual's own layout. */
+  layoutFor?(visualId: string): import('../visuals/types').VisualLayout | null | undefined;
   /** Explicit visual sizes (headless rendering, where layout reports 0). */
   readonly measure?: (visualId: string) => { width: number; height: number } | undefined;
   readonly tooltip: Tooltip;

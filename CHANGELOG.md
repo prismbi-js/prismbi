@@ -5,6 +5,7 @@
 - **Visual calculations:** `{ visualCalc: 'RUNNINGSUM([Total Sales])', reset? }` on value fields, evaluated over the visual's rows after sorting and Top N.
 - **DAX window functions:** `OFFSET`, `INDEX`, `WINDOW`, `RANK`, `ROWNUMBER`, `ORDERBY`, `PARTITIONBY` (also in the DAX catalog and language service).
 - **Transforms:** `model.transformTable`, `transformsOf`, `sourceRowsOf`, and `applySteps` / `applyStep` / `describeStep`; 19 step types; a **Transform** editor in the Studio data view, saved in Studio documents.
+- **Phone layouts:** `PageDefinition.mobile`, `ReportOptions.layoutMode` / `mobileBreakpoint`, `report.setLayoutMode`, `autoMobileLayout`, `setMobileVisibility`, `setMobileLayout`, `isMobileLayout`; a Studio **Phone** toggle with **Reset phone layout**.
 - **Visual regression tests:** `npm run test:visual` (with `--update`), `/gallery.html` with every visual.
 - **Fixes:** combo charts put a line on a different scale (or unit) on a secondary axis; map bubbles stay inside the frame; radar tick labels no longer overlap category labels; the decomposition tree scrolls instead of clipping.
 

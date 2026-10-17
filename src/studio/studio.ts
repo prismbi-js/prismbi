@@ -364,6 +364,20 @@ export class Studio implements StudioContext {
     });
   }
 
+  /** Is the canvas showing (and editing) the phone layout? */
+  private phone = false;
+
+  /** Toggle phone layout editing: a phone-width canvas where moves and resizes edit the page's phone layout. */
+  setPhoneLayout(on: boolean): void {
+    this.phone = on;
+    const els = this.els;
+    els.phoneBtn?.setAttribute('aria-pressed', String(on));
+    if (els.phoneReset) els.phoneReset.hidden = !on;
+    this.root.classList.toggle('is-phone', on);
+    this.report.setLayoutMode(on ? 'mobile' : 'auto');
+    if (on) this.toast('Phone layout: drag and resize to arrange this page for phones');
+  }
+
   editColumn(table?: string, name?: string): void {
     const existing = table && name ? this.studioColumns().find((c) => c.table === table && c.name === name) ?? null : null;
     columnDialog(this.root, this.model, existing, table ?? this.dataState.table, (def, previous) => {
@@ -624,6 +638,13 @@ export class Studio implements StudioContext {
     const undo = btn('↶', () => this.undo(), { title: 'Undo (Ctrl+Z)', 'aria-label': 'Undo', class: 'pbs-btn pbs-icon' });
     const redo = btn('↷', () => this.redo(), { title: 'Redo (Ctrl+Y)', 'aria-label': 'Redo', class: 'pbs-btn pbs-icon' });
     const previewBtn = btn('Preview', () => this.setPreview(!this.preview), { 'aria-pressed': 'false', title: 'Preview the report as a viewer' });
+    const phoneBtn = btn('📱 Phone', () => this.setPhoneLayout(!this.phone), { 'aria-pressed': 'false', title: 'Edit the phone layout of this page' });
+    const phoneReset = btn('Reset phone layout', () => {
+      this.report.autoMobileLayout();
+      this.commit();
+      this.toast('Phone layout regenerated from the desktop layout');
+    }, { title: 'Stack this page’s visuals for phones' });
+    phoneReset.hidden = true;
     const fileInput = h('input', { type: 'file', accept: 'application/json,.json', 'aria-label': 'Import report' }) as HTMLInputElement;
     fileInput.hidden = true;
     fileInput.addEventListener('change', async () => {
@@ -646,6 +667,8 @@ export class Studio implements StudioContext {
     this.els.undo = undo;
     this.els.redo = redo;
     this.els.previewBtn = previewBtn;
+    this.els.phoneBtn = phoneBtn;
+    this.els.phoneReset = phoneReset;
     const top = h(
       'div',
       { class: 'pbs-top', role: 'toolbar', 'aria-label': 'Studio' },
@@ -666,6 +689,8 @@ export class Studio implements StudioContext {
       fileInput,
       h('span', { class: 'pbs-spacer' }),
       status,
+      phoneReset,
+      phoneBtn,
       previewBtn,
     );
     // rail

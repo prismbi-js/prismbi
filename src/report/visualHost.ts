@@ -116,8 +116,14 @@ export class VisualHost {
     return f;
   }
 
+  /** Re-apply grid position (desktop or phone layout). */
+  relayout(): void {
+    this.applySpec();
+  }
+
   private applySpec(): void {
-    const l = this.spec.layout ?? { x: 0, y: 0, w: 4, h: 6 };
+    const phone = this.rt.layoutFor?.(this.id);
+    const l = phone ?? this.spec.layout ?? { x: 0, y: 0, w: 4, h: 6 };
     const st = this.el.style;
     st.setProperty('--x', String(l.x));
     st.setProperty('--y', String(l.y));
@@ -136,6 +142,8 @@ export class VisualHost {
     this.el.classList.toggle('has-shadow', f.shadow.show);
     this.el.hidden = !!this.spec.hidden;
     this.el.className = `pbi-visual${f.shadow.show ? ' has-shadow' : ''}${this.spec.className ? ` ${this.spec.className}` : ''}`;
+    // after className is rebuilt: hidden in the current phone layout
+    this.el.classList.toggle('is-phone-hidden', phone === null);
     if (this.spec.style) this.el.setAttribute('style', `${st.cssText};${this.spec.style}`);
   }
 

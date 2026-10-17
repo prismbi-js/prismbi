@@ -78,3 +78,27 @@ Model changes are stored as a diff against the model the studio was opened with.
 ### Building blocks
 
 `assignField`, `retargetFields`, `autoVisualFor`, `defaultSize`, `fieldKind`, `autoReport`, `History`, `sectionsFor` / `COMMON_SECTIONS` / `TYPE_SECTIONS` (the format schema) and `ExpressionEditor` are all exported. You can build a custom editor shell or add your own sections to the format schema.
+
+## Phone layouts
+
+Press **📱 Phone** in the top bar to arrange the current page for phones:
+- **Canvas:** it narrows to phone width with a 4-column grid.
+- **Editing:** dragging and resizing edit the phone layout only; the desktop layout is untouched.
+- **Starting point:** the first time, the page's visuals are stacked in reading order, with small cards paired side by side. **Reset phone layout** regenerates that arrangement.
+
+Phone layouts are saved on the page as `mobile` and used automatically below 640 px:
+
+```ts
+{ id: 'overview', name: 'Overview', visuals: [/* … */],
+  mobile: { columns: 4, visuals: [{ id: 'k-sales', layout: { x: 0, y: 0, w: 2, h: 3 } }, /* … */] } }
+```
+
+| API | Does |
+|---|---|
+| `report.setLayoutMode('auto' \| 'desktop' \| 'mobile')` | choose the layout; `'auto'` switches at `mobileBreakpoint` (default 640) |
+| `report.autoMobileLayout(page?)` | (re)generate a page's phone layout |
+| `report.setMobileVisibility(id, visible)` | hide a visual on phones, or bring it back at the bottom |
+| `report.setMobileLayout(id, layout)` | move or resize a visual in the phone layout |
+| `report.isMobileLayout` | whether the phone layout is showing |
+
+Visuals not listed in `mobile.visuals` are hidden on phones. Pages without a phone layout keep the automatic behaviour: below 640 px every visual takes the full width, in order.

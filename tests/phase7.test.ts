@@ -197,3 +197,51 @@ describe('studio transforms', () => {
     el2.remove();
   });
 });
+
+describe('phone layouts', () => {
+  it('generates, applies, edits and saves a phone layout', async () => {
+    const { Report, autoMobileLayout } = await import('../src/index');
+    const { makeModel } = await import('./fixtures');
+    const page = {
+      id: 'p',
+      name: 'P',
+      visuals: [
+        { id: 'k1', type: 'card', layout: { x: 0, y: 0, w: 3, h: 3 }, fields: { value: 'Total Sales' } },
+        { id: 'k2', type: 'card', layout: { x: 3, y: 0, w: 3, h: 3 }, fields: { value: 'Orders' } },
+        { id: 'chart', type: 'clusteredColumn', layout: { x: 0, y: 3, w: 12, h: 7 }, fields: { category: 'Products[Category]', values: 'Total Sales' } },
+        { id: 'tbl', type: 'table', layout: { x: 6, y: 0, w: 6, h: 3 }, fields: { columns: ['Products[Category]', 'Total Sales'] } },
+      ],
+    };
+    // reading order, two cards on one row share it
+    const auto = autoMobileLayout(page as never);
+    expect(auto.visuals.map((v) => v.id)).toEqual(['k1', 'k2', 'tbl', 'chart']);
+    expect(auto.visuals[0].layout).toEqual({ x: 0, y: 0, w: 2, h: 3 });
+    expect(auto.visuals[1].layout).toEqual({ x: 2, y: 0, w: 2, h: 3 });
+
+    const el = document.createElement('div');
+    el.style.height = '700px';
+    document.body.append(el);
+    const r = new Report(el, { model: makeModel(), pages: [page as never], layoutMode: 'mobile' });
+    r.flush();
+    const pageEl = el.querySelector('.pbi-page') as HTMLElement;
+    expect(r.isMobileLayout).toBe(true);
+    expect(pageEl.classList.contains('is-mobile')).toBe(true);
+    expect(pageEl.style.getPropertyValue('--pbi-cols')).toBe('4');
+    const chart = el.querySelector('[data-visual-id="chart"]') as HTMLElement;
+    expect(chart.style.getPropertyValue('--w')).toBe('4');
+    // hide the table on phones, move the chart, and check the definition
+    r.setMobileVisibility('tbl', false);
+    expect(el.querySelector('[data-visual-id="tbl"]')!.classList.contains('is-phone-hidden')).toBe(true);
+    r.setMobileLayout('chart', { x: 0, y: 3, w: 4, h: 9 });
+    expect(chart.style.getPropertyValue('--h')).toBe('9');
+    const def = r.toJSON().pages[0];
+    expect(def.mobile?.visuals.map((v) => v.id)).toEqual(['k1', 'k2', 'chart']);
+    // desktop mode keeps the desktop layout
+    r.setLayoutMode('desktop');
+    expect(r.isMobileLayout).toBe(false);
+    expect(chart.style.getPropertyValue('--w')).toBe('12');
+    expect(el.querySelector('[data-visual-id="tbl"]')!.classList.contains('is-phone-hidden')).toBe(false);
+    r.destroy();
+    el.remove();
+  });
+});

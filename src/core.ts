@@ -68,7 +68,8 @@ export { timeScale, logScale } from './render/scales';
 export { buildPdf } from './report/pdf';
 
 // report runtime
-export { Report, reviveDates, registerMenuItems } from './report/report';
+export { Report, reviveDates, registerMenuItems, autoMobileLayout } from './report/report';
+export type { MobileLayout } from './report/report';
 export type { MenuContext, MenuProvider } from './report/report';
 export type { MenuItem } from './report/contextMenu';
 export type { Bookmark, PageDefinition, PageLayout, ReportChrome, ReportDefinition, ReportOptions, VisualHandle } from './report/report';

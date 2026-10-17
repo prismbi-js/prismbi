@@ -41,7 +41,8 @@ export const CSS = /* css */ `
 .pbi-visual{grid-column:calc(var(--x) + 1)/span var(--w);grid-row:calc(var(--y) + 1)/span var(--h);z-index:var(--z,auto);position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--pbi-v-bg,var(--pbi-surface));border:var(--pbi-v-bw,1px) solid var(--pbi-v-bc,var(--pbi-border));border-radius:var(--pbi-v-radius,var(--pbi-radius));padding:var(--pbi-v-pad,12px);transition:box-shadow .15s}
 .pbi-visual.has-shadow{box-shadow:0 1px 2px rgb(0 0 0/.06),0 4px 14px rgb(0 0 0/.06)}
 .pbi-visual.is-active{box-shadow:0 0 0 2px color-mix(in srgb,var(--pbi-accent) 35%,transparent)}
-@container (max-width:640px){.pbi-visual{grid-column:1/-1;grid-row:auto/span var(--h)}}
+@container (max-width:640px){.pbi-page:not(.is-mobile) .pbi-visual{grid-column:1/-1;grid-row:auto/span var(--h)}}
+.pbi-visual.is-phone-hidden{display:none}
 .pbi-vh{display:flex;align-items:flex-start;gap:8px;min-height:0;margin-bottom:6px}
 .pbi-vh-text{flex:1;min-width:0}
 .pbi-title{font-size:var(--pbi-title-size);font-weight:600;line-height:1.25;color:var(--pbi-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
