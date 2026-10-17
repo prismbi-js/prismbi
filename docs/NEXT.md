@@ -73,6 +73,10 @@ Contents:
 - **Review:** run a live headless-Chrome check of the new pages. There's a CDP driver pattern in the session scratchpad (`cdp.mjs`): launch Chrome with `--headless=new --remote-debugging-port`, then use the global `WebSocket`.
 - **Wrap-up:** commit on `phase-5` (or a new `phase-6` branch), then `git checkout master && git merge --ff-only`. Do not push.
 
+## After Phase 6
+
+Phases 7–9 are planned in `docs/ROADMAP.md`. Next after Phase 6: visual calculations and window functions, visual regression tests, then Power BI import.
+
 ## Gotchas learned
 
 - **Escaping:** inline `node - <<'EOF'` scripts with template literals mangle regex backslashes (`\[`, `\/`, `\\`). Use the Edit tool for lines containing regexes, or write a script file.

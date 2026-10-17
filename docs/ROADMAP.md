@@ -12,6 +12,9 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | ✅ Implemented |
 | 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | In progress (4 of 6) |
+| 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | Planned |
+| 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | Planned |
+| 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | Planned |
 
 ## Guiding principles
 
@@ -244,6 +247,91 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - Plugin marketplace for visuals, connectors and themes. Signed plugins.
 - Framework packages: `@prismbi/vue`, `@prismbi/svelte`, `@prismbi/angular`, web components
 - Version-control-friendly report files (one file per page or visual) and diffable reviews
+
+## Phase 7: Analyst essentials (planned)
+
+**Goal:** close the gaps an analyst hits in the first week, and lock in visual quality.
+
+### Calculations
+- **Visual calculations:** running total, moving average, rank, percent of parent or grand total, and difference from previous, all defined on a visual and computed over its result.
+- **DAX window functions:** `WINDOW`, `OFFSET`, `INDEX`, `RANK`, `ROWNUMBER`, with `ORDERBY` and `PARTITIONBY`.
+- Deferred items: `NATURALINNERJOIN`, `SAMPLE`, and calculation-item format strings (dynamic formats per item).
+
+### Data preparation
+- **A Power Query-style transform editor in the Studio.**
+  - **Steps:** filter rows, remove or rename columns, change type, split or merge columns, unpivot or pivot, group by, merge (join) and append queries, fill down, replace values.
+  - **Storage:** steps are kept as a replayable list on the table definition and re-run on refresh and `appendRows`.
+  - **Engine:** a pure-function step engine in the core, so the same steps run on the server and in the worker.
+
+### Layout and visuals
+- **Mobile layouts:** a per-page phone layout, edited in the Studio and chosen automatically below a width breakpoint.
+- **Multi-select in the Studio:** align, distribute, group and ungroup, and a selection pane with z-order.
+- **Visual polish:**
+  - calendar heatmap, forecast band (with a confidence interval), error bars
+  - axis zoom slider
+  - animated transitions between data states (respecting reduced motion)
+
+### Quality
+- **Visual regression tests:** screenshots of every visual in light and dark themes, plus focus and highlight states, through headless Chrome over CDP. A pixel diff with a threshold runs via `npm run test:visual`.
+- **Keyboard-only walkthrough tests** for every interaction.
+
+**Acceptance:**
+- Visual calculations and window functions match Power BI results on a conformance set.
+- A transform pipeline round-trips through the report JSON.
+- Every built-in visual has light and dark baselines.
+
+## Phase 8: Teams (planned)
+
+**Goal:** what an organisation needs to roll PrismBI out.
+
+- **Subscriptions and alerts in the Studio:**
+  - "Email this page daily" and "alert me when [measure] crosses X" dialogs, built on `@prismbi/prismbi/server`.
+  - A pluggable delivery adapter: email, Slack, webhook.
+- **Accessibility certification:**
+  - screen-reader chart narration ("Total Sales rose 12% to $9.3M; Bikes leads")
+  - a sonified line option
+  - high-contrast theme
+  - automated accessibility checks in tests
+  - target WCAG 2.2 AA
+- **Lineage and impact analysis:** which visuals, measures and pages use a column or measure, and a "what breaks if I rename this" check before edits.
+- **Localization:** translatable report text, titles and measure display names per locale; right-to-left layout; locale-aware number and date defaults.
+- **Usage analytics hook:** page and visual views and interactions as events, to sink anywhere.
+- **Conditional visibility:** show or hide visuals by filter state, role or field-parameter selection.
+- **Geo upgrades:** built-in world and country boundaries (optional entry), point clustering, choropleth legends.
+
+**Acceptance:**
+- An alert fires end-to-end from a live stream to a webhook.
+- Screen-reader narration is available on every chart.
+- A rename is blocked with an impact list when it would break visuals.
+
+## Phase 9: Ecosystem (planned)
+
+**Goal:** adoption: bring existing work in, and make PrismBI easy to learn and extend.
+
+- **Power BI import:** read `.pbip` projects (and `.pbix` layout and model where possible).
+  - **What it brings over:** tables, relationships, measures (DAX), pages, visuals and formatting.
+  - **Gaps:** unsupported features are reported with a compatibility list.
+- **Agent panel in the Studio:** "build a page explaining Q3", driven by the existing agent tools and the user's own LLM endpoint, with a preview and undo for each step.
+- **Narrative visual:** an auto-written summary that updates with filters (rule-based, optionally via an LLM).
+- **DAX copilot:** write and explain measures from plain English inside the expression editor, validated before saving.
+- **Anomaly alerts:** `findInsights` combined with `watchMeasure`, for notification of unusual changes.
+- **DuckDB pushdown:** translate a `QuerySpec` to SQL for DuckDB-Wasm or a server database, so very large data stays out of memory.
+- **Incremental refresh policies:** refresh the last N periods and keep history.
+- **Per-visual entry points** (`@prismbi/prismbi/visuals/waterfall`, …) so builds pay only for what they import.
+- **Docs site and live playground:** generated from `docs/guide`, with runnable examples.
+
+**Acceptance:**
+- A sample `.pbip` report imports and renders with measures matching.
+- The agent panel builds a three-visual page from one prompt with undo.
+- The playground runs every guide example.
+
+## Suggested order after Phase 6
+
+1. Finish Phase 6: collaboration, then signed plugins.
+2. Phase 7 first slice: **visual calculations and window functions**, plus **visual regression tests**.
+3. Phase 9 early pick: **Power BI import**, the biggest adoption lever.
+4. The rest of Phase 7, then Phase 8, then the rest of Phase 9.
+
 
 ---
 
