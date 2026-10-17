@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrismBI web components</title>
+    <style>
+      body { margin: 0; padding: 16px; font: 13px system-ui, sans-serif; background: #f9f9f7; color: #0b0b0b; }
+      @media (prefers-color-scheme: dark) { body { background: #0d0d0d; color: #f0efec; color-scheme: dark; } }
+      .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 12px; }
+      prism-visual { height: 260px; border-radius: 10px; }
+      code { font: 12px ui-monospace, Consolas, monospace; }
+      #log { font: 12px ui-monospace, Consolas, monospace; opacity: .75; min-height: 1.4em; }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size: 18px">Web components <a href="./index.html" style="font-size: 13px; color: inherit">← report demo</a></h1>
+    <p>Plain HTML: <code>&lt;prism-visual model="sales" type="…" fields='…'&gt;</code> and <code>&lt;prism-report model="sales"&gt;</code>. No framework.</p>
+    <div class="row">
+      <prism-visual model="sales" type="card" title="Total sales" fields='{"value":"Total Sales"}'></prism-visual>
+      <prism-visual model="sales" type="donut" title="By region group" fields='{"legend":"Region[Group]","values":"Total Sales"}'></prism-visual>
+      <prism-visual model="sales" type="line" title="Monthly sales" fields='{"category":"Date[MonthShort]","values":["Total Sales","Sales LY"]}'></prism-visual>
+    </div>
+    <div id="log">Click a data point in the report below…</div>
+    <prism-report id="report" model="sales" style="height: 620px"></prism-report>
+    <script type="module" src="./elements-main.ts"></script>
+  </body>
+</html>

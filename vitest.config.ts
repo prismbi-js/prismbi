@@ -13,6 +13,7 @@ export default defineConfig({
       { find: /^prismbi\/connectors$/, replacement: src('connectors.ts') },
       { find: /^prismbi\/worker$/, replacement: src('worker.ts') },
       { find: /^prismbi\/files$/, replacement: src('files.ts') },
+      { find: /^prismbi\/elements$/, replacement: src('elements.ts') },
     ],
   },
   test: { environment: 'jsdom', globals: true, include: ['tests/**/*.test.ts'] },
