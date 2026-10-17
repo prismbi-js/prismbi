@@ -185,3 +185,15 @@ Line and area charts with a date or number axis can extend each series (up to th
 - **Display:** the forecast is a dashed line inside a shaded prediction interval that widens with the horizon.
 - **Non-negative series:** a series that has never been negative (sales, counts) is never forecast below zero.
 - **Dates:** future dates follow the calendar for monthly, quarterly and yearly data.
+
+## Error bars
+
+Clustered column and bar charts with a single series accept two optional measure roles, **Error bars: lower** (`errorLower`) and **Error bars: upper** (`errorUpper`):
+
+```ts
+{ type: 'clusteredColumn', fields: { category: 'Product[Category]', values: 'Avg Price', errorLower: 'Price P10', errorUpper: 'Price P90' } }
+```
+
+- **Drawing:** each bar gets a whisker with caps between the two bounds. With only one bound, the whisker runs from the bar's value to that bound.
+- **Axis:** the value axis grows to include the bounds.
+- **Tooltip:** shows the range.

@@ -31,13 +31,40 @@ const ROLES = [
   { name: 'legend', displayName: 'Legend', kind: 'grouping' as const },
   { name: 'values', displayName: 'Values', kind: 'measure' as const, multiple: true, required: true },
   { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const },
+  { name: 'errorLower', displayName: 'Error bars: lower', kind: 'measure' as const },
+  { name: 'errorUpper', displayName: 'Error bars: upper', kind: 'measure' as const },
 ];
+
+/** An error bar: a line between two values with caps, centred on a bar. */
+function drawWhisker(marks: SVGGElement, scale: (v: number) => number, c: number, thick: number, a: number, b: number, horizontal: boolean, color: string): void {
+  const cap = Math.max(4, Math.min(12, thick * 0.4));
+  const p = scale(a);
+  const q = scale(b);
+  const d = horizontal ? `M${p},${c}H${q}M${p},${c - cap / 2}v${cap}M${q},${c - cap / 2}v${cap}` : `M${c},${p}V${q}M${c - cap / 2},${p}h${cap}M${c - cap / 2},${q}h${cap}`;
+  marks.append(s('path', { d, stroke: color, 'stroke-width': 1.5, fill: 'none', opacity: 0.8, class: 'pbi-error-bar', 'pointer-events': 'none' }));
+}
+
+/** Lower/upper error bounds per category (from the error-bar roles), aligned with `categories`. */
+function errorBounds(ctx: RenderContext, categories: { keys: unknown[] }[]): { lo: (number | null)[]; hi: (number | null)[] } | null {
+  const li = ctx.role('errorLower').indices[0];
+  const ui = ctx.role('errorUpper').indices[0];
+  if (li === undefined && ui === undefined) return null;
+  const cat = ctx.role('category').indices;
+  const k = (keys: unknown[]) => JSON.stringify(keys, (_x, v) => (v instanceof Date ? v.getTime() : v));
+  const byKey = new Map(ctx.data.rows.map((r) => [k(cat.map((i) => r.keys[i])), r]));
+  const num = (v: unknown) => (typeof v === 'number' ? v : null);
+  const rows = categories.map((c) => byKey.get(k(c.keys)));
+  return { lo: rows.map((r) => (r && li !== undefined ? num(r.values[li]) : null)), hi: rows.map((r) => (r && ui !== undefined ? num(r.values[ui]) : null)) };
+}
 
 function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
   if (renderSmallMultiples(ctx, (panel) => renderBars(panel, horizontal, mode), mode !== 'clustered')) return;
   const pv = pivot(ctx, 'category', 'legend', 'values', mode !== 'clustered');
   if (!pv.categories.length || !pv.series.length) return emptyState(ctx);
   const { categories, series } = pv;
+  // error bars apply to clustered bars with a single series
+  const err = mode === 'clustered' && series.length === 1 ? errorBounds(ctx, categories) : null;
+  const errorItems = (ci: number) => (err && (err.lo[ci] !== null || err.hi[ci] !== null) ? [{ label: 'Range', value: `${ctx.fmt(series[0].field, err.lo[ci])} – ${ctx.fmt(series[0].field, err.hi[ci])}` }] : []);
   const t = ctx.theme;
   const f = ctx.format;
   const legend = renderLegend(ctx, series.map((se) => ({ name: se.name, color: se.color, identity: se.identity })));
@@ -61,6 +88,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         lo = Math.min(lo, v);
         hi = Math.max(hi, v);
       }
+      if (err) for (const b of [err.lo[ci], err.hi[ci]]) if (b !== null) (lo = Math.min(lo, b)), (hi = Math.max(hi, b));
     } else {
       let pos = 0;
       let neg = 0;
@@ -120,6 +148,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
     const band = bandScale(categories.length, [left, width - right], f.bars.categoryGap, 0.15);
     drawCategoryLabels(ctx, g, labels, (i) => band(i) + band.bandwidth / 2, bottom, catLayout);
     const marks = s('g', { class: 'pbi-marks' });
+    const whisker = (c: number, thick: number, a: number, b: number, horiz: boolean) => drawWhisker(marks, scale, c, thick, a, b, horiz, t.foreground);
     g.append(marks);
     const gap = f.bars.gap;
 
@@ -139,9 +168,10 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           const hl = se.highlights?.[ci];
           const op = markOpacity(ctx, identity);
           const path = s('path', { d: barPath(x, Math.min(y0, y1), thick, Math.abs(y1 - y0), f.bars.radius, v >= 0 ? 'top' : 'bottom'), fill: colorOf(se, v), opacity: se.highlights ? 0.3 : op });
-          interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
+          interactive(ctx, path, identity, () => ({ title: cat.label, items: [...tooltipItems(ctx, cat, series, ci), ...errorItems(ci)] }), cat.keys);
           animateIn(ctx, path, v >= 0 ? 'bottom' : 'top');
           marks.append(path);
+          if (err) whisker(x + thick / 2, thick, err.lo[ci] ?? v, err.hi[ci] ?? v, false);
           if (se.highlights && hl !== null && hl !== undefined) {
             const yh = scale(hl);
             const hp = s('path', { d: barPath(x, Math.min(y0, yh), thick, Math.abs(yh - y0), f.bars.radius, hl >= 0 ? 'top' : 'bottom'), fill: colorOf(se, v), 'pointer-events': 'none' });
@@ -222,6 +252,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
       g.append(s('text', { x: left - 8, y: band(i) + band.bandwidth / 2 + fs / 3, 'text-anchor': 'end', class: 'pbi-tick pbi-cat', fill: t.foregroundSecondary }, fitText(l, catW - 10, fs, t.fontFamily)));
     });
   const marks = s('g', { class: 'pbi-marks' });
+  const whisker = (c: number, thick: number, a: number, b: number, horiz: boolean) => drawWhisker(marks, scale, c, thick, a, b, horiz, t.foreground);
   g.append(marks);
   const gap = f.bars.gap;
   categories.forEach((cat, ci) => {
@@ -239,9 +270,10 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         const identity = mergeIdentity(cat.identity, se.identity);
         const op = markOpacity(ctx, identity);
         const path = s('path', { d: barPath(Math.min(xa, xb), y, Math.abs(xb - xa), thick, f.bars.radius, v >= 0 ? 'right' : 'left'), fill: colorOf(se, v), opacity: se.highlights ? 0.3 : op });
-        interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
+        interactive(ctx, path, identity, () => ({ title: cat.label, items: [...tooltipItems(ctx, cat, series, ci), ...errorItems(ci)] }), cat.keys);
         animateIn(ctx, path, v >= 0 ? 'left' : 'right');
         marks.append(path);
+        if (err) whisker(y + thick / 2, thick, err.lo[ci] ?? v, err.hi[ci] ?? v, true);
         const hl = se.highlights?.[ci];
         if (se.highlights && hl !== null && hl !== undefined) {
           const xh = scale(hl);

@@ -364,3 +364,24 @@ describe('forecast', () => {
     el.remove();
   });
 });
+
+describe('error bars', () => {
+  it('draws whiskers from lower/upper measures and widens the axis', async () => {
+    const { createVisual } = await import('../src/index');
+    const model = buildModel().addMeasure('Sales Low', '[Total Sales] * 0.9').addMeasure('Sales High', '[Total Sales] * 1.25');
+    for (const type of ['clusteredColumn', 'clusteredBar']) {
+      const el = document.createElement('div');
+      el.style.height = '360px';
+      document.body.append(el);
+      const r = createVisual(el, { model, type, fields: { category: 'Product[Category]', values: 'Total Sales', errorLower: 'Sales Low', errorUpper: 'Sales High' } });
+      r.flush();
+      expect(el.querySelector('.pbi-error')).toBeNull();
+      expect(el.querySelectorAll('path.pbi-error-bar'), type).toHaveLength(4);
+      // the top tick covers the highest upper bound (Bikes × 1.25)
+      const ticks = [...el.querySelectorAll('text.pbi-tick')].map((t) => t.textContent ?? '');
+      expect(ticks.length).toBeGreaterThan(2);
+      r.destroy();
+      el.remove();
+    }
+  });
+});

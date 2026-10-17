@@ -6,6 +6,7 @@ import { buildModel } from './model';
 type Spec = Omit<VisualSpec, 'layout'> & { key?: string };
 export const GALLERY: Spec[] = [
   { type: 'clusteredColumn', fields: { category: 'Product[Category]', values: 'Total Sales' }, format: { dataLabels: { show: true } } },
+  { key: 'column-error-bars', type: 'clusteredColumn', fields: { category: 'Product[Category]', values: 'Total Sales', errorLower: 'Sales Low', errorUpper: 'Sales High' } },
   { type: 'stackedColumn', fields: { category: 'Product[Category]', legend: 'Sales[Channel]', values: 'Total Sales' } },
   { type: 'percentStackedColumn', fields: { category: 'Product[Category]', legend: 'Sales[Channel]', values: 'Total Sales' } },
   { type: 'clusteredBar', fields: { category: 'Region[Region]', values: 'Total Sales' } },
@@ -45,7 +46,7 @@ export const GALLERY: Spec[] = [
 
 const dark = new URLSearchParams(location.search).get('theme') === 'dark';
 document.body.classList.toggle('dark', dark);
-const model = buildModel();
+const model = buildModel().addMeasure('Sales Low', '[Total Sales] * 0.85').addMeasure('Sales High', '[Total Sales] * 1.2');
 const grid = document.getElementById('grid')!;
 const known = new Set(listVisuals());
 for (const spec of GALLERY) {

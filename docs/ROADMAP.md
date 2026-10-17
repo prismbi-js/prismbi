@@ -255,6 +255,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **Phone layouts:** `page.mobile` with automatic switching below 640 px; `setLayoutMode`, `autoMobileLayout`, `setMobileVisibility`, `setMobileLayout`; a Studio Phone mode where moves and resizes edit the phone layout
 - [x] **Multi-select in the Studio:** Ctrl/Shift-click selection, multi-drag, align, distribute, group and ungroup, layer order, a Layers pane, and shortcuts (Ctrl+G, Ctrl+Shift+G, Ctrl+A)
 - [x] **Forecast band** on line and area charts (damped Holt-Winters with auto-detected seasonality, a prediction interval, non-negative series stay non-negative, calendar-aware future dates)
+- [x] **Error bars** on clustered column and bar charts (`errorLower` / `errorUpper` roles)
 - [x] **Visual regression tests** (`npm run test:visual`): 35 visuals × light and dark, compared with an in-browser pixel diff. They caught and fixed four defects: combo-chart lines flattened on the primary axis (now a secondary axis), map bubbles clipped, radar labels overlapping, decomposition tree clipped.
 
 **Goal:** close the gaps an analyst hits in the first week, and lock in visual quality.
