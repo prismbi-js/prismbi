@@ -314,3 +314,64 @@ describe('NATURALINNERJOIN, NATURALLEFTOUTERJOIN and SAMPLE', () => {
     expect(m.evaluate('COUNTROWS(SAMPLE(2, Sales, Sales[Amount], DESC))')).toBe(2);
   });
 });
+
+describe('bitmap indexes', () => {
+  it('give the same results as row lists on a large table, and stay correct after appends', async () => {
+    const { DataModel, setBitmapIndexes } = await import('../src/index');
+    const regions = ['North', 'South', 'East', 'West'];
+    const channels = ['Online', 'Store', 'Reseller'];
+    const rows = Array.from({ length: 20_000 }, (_, i) => ({ id: i, region: regions[i % 4], channel: channels[(i * 7) % 3], cat: (i * 13) % 9, amount: (i % 100) + 1 }));
+    const build = () => new DataModel()
+      .addTable('Sales', rows)
+      .addTable('Cat', Array.from({ length: 9 }, (_, k) => ({ cat: k, group: k < 4 ? 'A' : 'B' })))
+      .addRelationship({ from: 'Sales[cat]', to: 'Cat[cat]' })
+      .addMeasure('Total', 'SUM(Sales[amount])')
+      .addMeasure('N', 'COUNTROWS(Sales)');
+    const m = build();
+    const spec = {
+      groupBy: ['Sales[channel]'],
+      values: ['Total', 'N'],
+      filters: [
+        { target: 'Sales[region]', op: 'in' as const, values: ['North', 'East'] },
+        { target: 'Cat[group]', op: 'eq' as const, value: 'A' },
+      ],
+    };
+    const t = m.table('Sales');
+    expect(t.bitmap('region')!.size).toBe(4);
+    expect(t.bitmap('id')).toBeNull(); // too many distinct values
+    try {
+      // separate models, so nothing is answered from a cache
+      setBitmapIndexes(false);
+      const lists = build().query(spec);
+      setBitmapIndexes(true);
+      const withBits = m.query(spec);
+      expect(withBits.rows).toEqual(lists.rows);
+      expect(withBits.rows.reduce((n, r) => n + (r.values[1] as number), 0)).toBe(rows.filter((r) => (r.region === 'North' || r.region === 'East') && r.cat < 4).length);
+      m.appendRows('Sales', [{ id: 99_999, region: 'North', channel: 'Online', cat: 0, amount: 1000 }]);
+      const after = m.query({ values: ['Total'], filters: [{ target: 'Sales[region]', op: 'eq', value: 'North' }] });
+      expect(after.rows[0].values[0]).toBe(rows.filter((r) => r.region === 'North').reduce((n, r) => n + r.amount, 0) + 1000);
+    } finally {
+      setBitmapIndexes(true);
+    }
+  });
+});
+
+describe('scatter renderers', () => {
+  it('falls back from WebGL to canvas to SVG, and honours renderer: svg', async () => {
+    const { DataModel } = await import('../src/index');
+    const rows = Array.from({ length: 4000 }, (_, i) => ({ id: i, x: i % 97, y: (i * 7) % 89 }));
+    const m = new DataModel().addTable('T', rows).addMeasure('X', 'SUM(T[x])').addMeasure('Y', 'SUM(T[y])');
+    const el = document.createElement('div');
+    document.body.append(el);
+    // jsdom has neither WebGL nor a 2D canvas: the scatter still renders, as SVG
+    const v = createVisual(el, { id: 'sc', model: m, type: 'scatter', fields: { details: 'T[id]', x: 'X', y: 'Y' }, format: { scatter: { renderer: 'webgl' } } } as never);
+    v.flush();
+    expect(el.querySelector('.pbi-error')).toBeNull();
+    expect(el.querySelectorAll('circle.pbi-mark').length).toBe(4000);
+    v.visual('sc')!.update({ format: { scatter: { renderer: 'svg' } } } as never);
+    v.flush();
+    expect(el.querySelectorAll('circle.pbi-mark').length).toBe(4000);
+    v.destroy();
+    el.remove();
+  });
+});

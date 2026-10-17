@@ -38,6 +38,8 @@ export interface SqlPlan {
   values: QueryField[];
   /** Rows fetched to detect truncation (`limit + 1`), when grouping. */
   limit?: number;
+  /** `'aggregate'`: one GROUP BY query. `'context'`: correlated subqueries with full filter-context semantics. */
+  mode?: 'aggregate' | 'context';
 }
 
 const unsupported = (msg: string): never => {
@@ -79,8 +81,10 @@ class Scope {
     readonly base: string,
     /** Translates a calculated column's row expression. */
     private rowExpr: (s: Scope, e: Expr) => string,
+    /** Alias prefix, so nested queries never collide. */
+    readonly prefix = 't',
   ) {
-    this.aliases.set(base, 't0');
+    this.aliases.set(base, `${prefix}0`);
   }
 
   table(name: string): string {
@@ -91,14 +95,14 @@ class Scope {
     const known = this.aliases.get(table);
     if (known) return known;
     const path = this.model.pathTo(this.base, table) ?? unsupported(`No many-to-one relationship path from ${this.base} to ${table}`);
-    let alias = 't0';
+    let alias = `${this.prefix}0`;
     for (const rel of path) {
       const next = this.aliases.get(rel.toTable);
       if (next) {
         alias = next;
         continue;
       }
-      const a = `t${this.aliases.size}`;
+      const a = `${this.prefix}${this.aliases.size}`;
       this.aliases.set(rel.toTable, a);
       this.joins.push(`LEFT JOIN ${this.table(rel.toTable)} AS ${a} ON ${alias}.${this.columnName(rel.fromTable, rel.fromColumn)} = ${a}.${this.columnName(rel.toTable, rel.toColumn)}`);
       alias = a;
@@ -122,7 +126,7 @@ class Scope {
   }
 
   from(): string {
-    return [`FROM ${this.table(this.base)} AS t0`, ...this.joins].join('\n');
+    return [`FROM ${this.table(this.base)} AS ${this.prefix}0`, ...this.joins].join('\n');
   }
 }
 
@@ -386,10 +390,500 @@ const toSpec = (f: FilterSpec | Filter): FilterSpec => {
   return unsupported('Row-level security and relationship filters are not pushed down to SQL');
 };
 
+// ---------------------------------------------------------------- filter-context mode
+
+/**
+ * One filter in a DAX filter context. `cols` are the columns it filters (for CALCULATE's replace semantics), `tables`
+ * the tables it touches (a filter only applies to a query whose table can reach them), `build` writes the predicate
+ * for a given FROM scope.
+ */
+interface CtxEntry {
+  kind: 'base' | 'group' | 'calc';
+  cols: string[];
+  tables: string[];
+  build: (s: Scope) => string;
+}
+
+type DateUnit = 'year' | 'quarter' | 'month' | 'day';
+
+const colKey = (r: { table: string; column: string }) => `${r.table}[${r.column}]`;
+
+/**
+ * Translates measures with full filter-context semantics: every aggregate becomes a correlated subquery over its own
+ * table with the filters in effect at that point. CALCULATE replaces, removes (ALL…) or adds filters, and time
+ * intelligence turns the dates in context into shifted or extended date ranges. Filters only reach a table along its
+ * many-to-one relationships, as in DAX.
+ */
+class ContextTranslator {
+  private seq = 0;
+  constructor(
+    private model: DataModel,
+    private opts: SqlOptions,
+    private tr: Translator,
+    private dialect: SqlDialect,
+    /** The query's own filters (what ALLSELECTED restores). */
+    readonly base: CtxEntry[],
+  ) {}
+
+  scope(table: string): Scope {
+    return new Scope(this.model, this.opts, table, (sc, e) => this.tr.rowExpr(sc, e), `q${++this.seq}_`);
+  }
+
+  isNotDistinct(a: string, b: string): string {
+    return this.dialect === 'sqlite' ? `${a} IS ${b}` : `${a} IS NOT DISTINCT FROM ${b}`;
+  }
+
+  private reaches(table: string, e: CtxEntry): boolean {
+    const exp = this.model.expanded(table);
+    return e.tables.every((t) => exp.has(t));
+  }
+
+  /** Entries that filter `table` (directly or through its many-to-one relationships). */
+  applicable(table: string, ctx: CtxEntry[]): CtxEntry[] {
+    return ctx.filter((e) => this.reaches(table, e));
+  }
+
+  /** `(SELECT <select> FROM table … WHERE <filters in ctx that reach table>)`. */
+  subquery(table: string, select: (s: Scope) => string, ctx: CtxEntry[], extra: ((s: Scope) => string)[] = []): string {
+    const s = this.scope(table);
+    const sel = select(s);
+    const preds = [...this.applicable(table, ctx).map((e) => e.build(s)), ...extra.map((f) => f(s))];
+    return `(SELECT ${sel}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
+  }
+
+  // ------------------------------------------------------------ dates
+
+  shift(col: string, n: number, unit: DateUnit): string {
+    if (!n) return col;
+    const months = unit === 'year' ? n * 12 : unit === 'quarter' ? n * 3 : unit === 'month' ? n : 0;
+    const days = unit === 'day' ? n : 0;
+    if (this.dialect === 'sqlite') {
+      if (!months) return `date(${col}, '${days >= 0 ? '+' : ''}${days} days')`;
+      // clamp to the target month's last day (Mar 31 - 1 month = Feb 28), as DAX and the other databases do
+      return `MIN(date(${col}, 'start of month', '${months >= 0 ? '+' : ''}${months} months', '+' || (CAST(strftime('%d', ${col}) AS INTEGER) - 1) || ' days'), date(${col}, 'start of month', '${months + 1 >= 0 ? '+' : ''}${months + 1} months', '-1 day'))`;
+    }
+    if (this.dialect === 'postgres') return `CAST(${col} + make_interval(months => ${months}, days => ${days}) AS DATE)`;
+    return months ? `CAST(${col} + to_months(${months}) AS DATE)` : `CAST(${col} + to_days(${days}) AS DATE)`;
+  }
+
+  monthEnd(x: string): string {
+    if (this.dialect === 'sqlite') return `date(${x}, 'start of month', '+1 month', '-1 day')`;
+    if (this.dialect === 'postgres') return `CAST(date_trunc('month', ${x}) + INTERVAL '1 month - 1 day' AS DATE)`;
+    return `last_day(${x})`;
+  }
+
+  /**
+   * "Fact date `col` is one of the context dates shifted by n units". As in DAX, a month's last day also brings the
+   * rest of the target month (Feb 28, 2025 - 1 year gives Feb 28 and 29, 2024). Written as membership tests against
+   * the context's date set, which databases evaluate once per group rather than once per fact row.
+   */
+  private shiftedDates(date: { table: string; column: string }, ctx: CtxEntry[], n: number, unit: DateUnit): (col: string) => string {
+    const set = (select: (x: string) => string, more: (x: string) => string[] = () => []) => {
+      const s = this.scope(date.table);
+      const x = s.col(date);
+      const preds = [...this.applicable(date.table, ctx).map((e) => e.build(s)), ...more(x)];
+      return `(SELECT ${select(x)}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
+    };
+    const direct = set((x) => this.shift(x, n, unit));
+    if (unit === 'day') return (col) => `${col} IN ${direct}`;
+    const monthEnds = set((x) => x, (x) => [`${x} = ${this.monthEnd(x)}`]);
+    return (col) => {
+      // the context month-end that col would extend: the last day of col's month shifted back
+      const me = this.monthEnd(this.shift(col, -n, unit));
+      return `(${col} IN ${direct} OR (${me} IN ${monthEnds} AND ${this.shift(me, n, unit)} < ${col}))`;
+    };
+  }
+
+  startOf(unit: 'year' | 'quarter' | 'month', x: string): string {
+    if (this.dialect !== 'sqlite') return `CAST(date_trunc('${unit}', ${x}) AS DATE)`;
+    if (unit === 'year') return `date(${x}, 'start of year')`;
+    if (unit === 'month') return `date(${x}, 'start of month')`;
+    return `date(${x}, 'start of month', '-' || ((CAST(strftime('%m', ${x}) AS INTEGER) - 1) % 3) || ' months')`;
+  }
+
+  /** Dates in the current context, as a subquery over the date table: `(SELECT <agg>(x.Date) FROM Date x WHERE …)`. */
+  private dates(date: { table: string; column: string }, ctx: CtxEntry[], select: (col: string) => string): string {
+    return this.subquery(date.table, (s) => select(s.col(date)), ctx);
+  }
+
+  /** A time-intelligence table function used as a filter: replaces every filter on the date table. */
+  private timeFilter(name: string, a: Expr[], ctx: CtxEntry[]): CtxEntry[] {
+    const d = a[0];
+    if (d?.type !== 'column') return unsupported(`${name} needs a date column`);
+    const date = { table: d.table, column: d.column };
+    const rest = ctx.filter((e) => !e.tables.includes(date.table));
+    const entry = (build: (col: string) => string): CtxEntry[] => [...rest, { kind: 'calc', cols: [colKey(date)], tables: [date.table], build: (s) => build(s.col(date)) }];
+    const shifted = (n: number, unit: DateUnit) => this.shiftedDates(date, ctx, n, unit);
+    const unitOf = (e: Expr | undefined): DateUnit => {
+      const u = (e?.type === 'table' ? e.name : e?.type === 'string' ? e.value : '').toLowerCase();
+      return u === 'year' || u === 'quarter' || u === 'month' || u === 'day' ? u : unsupported(`${name}: unknown interval ${u || '(none)'}`);
+    };
+    const max = this.dates(date, ctx, (x) => `MAX(${x})`);
+    const min = this.dates(date, ctx, (x) => `MIN(${x})`);
+    switch (name) {
+      case 'SAMEPERIODLASTYEAR':
+        return entry(shifted(-1, 'year'));
+      case 'DATEADD': {
+        const n = a[1]?.type === 'number' ? a[1].value : a[1]?.type === 'unary' && a[1].op === '-' && a[1].operand.type === 'number' ? -a[1].operand.value : unsupported('DATEADD needs a constant number of intervals');
+        return entry(shifted(n, unitOf(a[2])));
+      }
+      case 'DATESYTD':
+      case 'DATESQTD':
+      case 'DATESMTD': {
+        const unit = name === 'DATESYTD' ? 'year' : name === 'DATESQTD' ? 'quarter' : 'month';
+        return entry((c) => `${c} >= ${this.startOf(unit, max)} AND ${c} <= ${max}`);
+      }
+      case 'PREVIOUSYEAR':
+      case 'PREVIOUSQUARTER':
+      case 'PREVIOUSMONTH': {
+        const unit = name === 'PREVIOUSYEAR' ? 'year' : name === 'PREVIOUSQUARTER' ? 'quarter' : 'month';
+        const start = this.startOf(unit, min);
+        return entry((c) => `${c} >= ${this.shift(start, -1, unit)} AND ${c} < ${start}`);
+      }
+      case 'DATESBETWEEN': {
+        const from = this.value(a[1], ctx);
+        const to = this.value(a[2], ctx);
+        return entry((c) => `${c} >= ${from} AND ${c} <= ${to}`);
+      }
+      default:
+        return unsupported(`${name}() is not pushed down to SQL`);
+    }
+  }
+
+  // ------------------------------------------------------------ CALCULATE filters
+
+  private columnsIn(e: Expr, out: { table: string; column: string }[] = []): { table: string; column: string }[] {
+    if (e.type === 'column') out.push({ table: e.table, column: e.column });
+    else if (e.type === 'binary') (this.columnsIn(e.left, out), this.columnsIn(e.right, out));
+    else if (e.type === 'unary') this.columnsIn(e.operand, out);
+    else if (e.type === 'list') e.items.forEach((x) => this.columnsIn(x, out));
+    else if (e.type === 'call' && !AGG_NAMES.has(e.name.toUpperCase())) e.args.forEach((x) => this.columnsIn(x, out));
+    return out;
+  }
+
+  /** The table a table expression iterates, and how it changes the filters on it (ALL removes them). */
+  private tableArg(e: Expr, ctx: CtxEntry[]): { table: string; ctx: CtxEntry[] } {
+    if (e.type === 'table') return { table: e.name, ctx };
+    if (e.type === 'call') {
+      const n = e.name.toUpperCase();
+      if (n === 'ALL' || n === 'REMOVEFILTERS' || n === 'ALLSELECTED') {
+        const t = e.args[0]?.type === 'table' ? e.args[0].name : e.args[0]?.type === 'column' ? e.args[0].table : unsupported(`${n}() inside FILTER needs a table or column`);
+        return { table: t, ctx: this.applyOne(e, ctx) };
+      }
+      if (n === 'VALUES' || n === 'DISTINCT') {
+        const c = e.args[0];
+        if (c?.type === 'table') return { table: c.name, ctx };
+        if (c?.type === 'column') return { table: c.table, ctx };
+      }
+    }
+    return unsupported('FILTER over this table expression is not pushed down to SQL');
+  }
+
+  /** Apply one CALCULATE filter argument to a context. */
+  applyOne(f: Expr, ctx: CtxEntry[], keep = false): CtxEntry[] {
+    const tablesOf = (t: string) => [...this.model.expanded(t)];
+    const touches = (e: CtxEntry, tables: string[]) => e.tables.some((t) => tables.includes(t));
+    if (f.type === 'call') {
+      const n = f.name.toUpperCase();
+      const a = f.args;
+      if (n === 'KEEPFILTERS') return this.applyOne(a[0], ctx, true);
+      if ((n === 'ALL' || n === 'REMOVEFILTERS') && !a.length) return [];
+      if (n === 'ALL' || n === 'REMOVEFILTERS') {
+        if (a.every((x) => x.type === 'table')) {
+          const tables = a.flatMap((x) => tablesOf((x as { name: string }).name));
+          return ctx.filter((e) => !touches(e, tables));
+        }
+        const cols = a.map((x) => (x.type === 'column' ? colKey(x) : unsupported(`${n} takes a table or columns`)));
+        const tables = a.map((x) => (x as { table: string }).table);
+        return ctx.filter((e) => !(e.cols.some((c) => cols.includes(c)) || (!e.cols.length && touches(e, tables))));
+      }
+      if (n === 'ALLSELECTED') {
+        if (!a.length) return [...this.base];
+        const tables = a.flatMap((x) => (x.type === 'table' ? tablesOf(x.name) : x.type === 'column' ? [x.table] : unsupported('ALLSELECTED takes a table or columns')));
+        const cols = a.filter((x) => x.type === 'column').map((x) => colKey(x as { table: string; column: string }));
+        const hit = (e: CtxEntry) => (cols.length ? e.cols.some((c) => cols.includes(c)) : touches(e, tables));
+        return [...ctx.filter((e) => !hit(e)), ...this.base.filter(hit)];
+      }
+      if (n === 'ALLEXCEPT') {
+        const t = a[0]?.type === 'table' ? a[0].name : unsupported('ALLEXCEPT needs a table first');
+        const keepCols = a.slice(1).map((x) => (x.type === 'column' ? colKey(x) : unsupported('ALLEXCEPT keeps columns')));
+        const tables = tablesOf(t);
+        return ctx.filter((e) => !touches(e, tables) || (e.cols.length > 0 && e.cols.every((c) => keepCols.includes(c))));
+      }
+      if (n === 'FILTER') {
+        const { table, ctx: inner } = this.tableArg(a[0], ctx);
+        const cond = a[1];
+        const cols = this.columnsIn(cond).filter((c) => c.table === table || this.model.expanded(table).has(c.table));
+        // aggregates in the condition (e.g. MAX(Date[Date])) see the context outside FILTER
+        return [...inner, { kind: 'calc', cols: [], tables: [table, ...cols.map((c) => c.table)], build: (s) => this.rowCond(s, cond, ctx) }];
+      }
+      if (n === 'USERELATIONSHIP' || n === 'CROSSFILTER') return unsupported(`${n} is not pushed down to SQL`);
+      if (TIME_FILTERS.has(n)) return this.timeFilter(n, a, ctx);
+      return unsupported(`${n}() as a CALCULATE filter is not pushed down to SQL`);
+    }
+    // a boolean over one column: replaces the filters on that column (unless KEEPFILTERS)
+    const cols = this.columnsIn(f);
+    if (!cols.length) return unsupported('CALCULATE filter without a column');
+    const keys = [...new Set(cols.map(colKey))];
+    const kept = keep ? ctx : ctx.filter((e) => !e.cols.some((c) => keys.includes(c)));
+    return [...kept, { kind: 'calc', cols: keys, tables: [...new Set(cols.map((c) => c.table))], build: (s) => this.rowCond(s, f, ctx) }];
+  }
+
+  /** A row-level condition: columns come from the scope; aggregates and measures are scalars in `outer`. */
+  rowCond(s: Scope, e: Expr, outer: CtxEntry[]): string {
+    const rec = (x: Expr) => this.rowCond(s, x, outer);
+    switch (e.type) {
+      case 'number':
+      case 'string':
+      case 'boolean':
+        return this.tr.literal(e.value);
+      case 'column':
+        return s.col({ table: e.table, column: e.column });
+      case 'unary':
+        return e.op === 'NOT' ? `(NOT ${rec(e.operand)})` : e.op === '-' ? `(-${rec(e.operand)})` : rec(e.operand);
+      case 'list':
+        return `(${e.items.map(rec).join(', ')})`;
+      case 'binary': {
+        if (e.op === 'IN') return `${rec(e.left)} IN ${e.right.type === 'list' ? rec(e.right) : unsupported('IN needs a list')}`;
+        const ops: Record<string, string> = { '=': '=', '==': '=', '<>': '<>', '<': '<', '>': '>', '<=': '<=', '>=': '>=', '&&': 'AND', '||': 'OR', '+': '+', '-': '-', '*': '*', '&': '||' };
+        if (e.op === '/') return `(${rec(e.left)} * 1.0 / NULLIF(${rec(e.right)}, 0))`;
+        if ((e.op === '=' || e.op === '==') && e.right.type === 'call' && e.right.name.toUpperCase() === 'BLANK') return `(${rec(e.left)} IS NULL)`;
+        return ops[e.op] ? `(${rec(e.left)} ${ops[e.op]} ${rec(e.right)})` : unsupported(`Operator ${e.op}`);
+      }
+      case 'call': {
+        const n = e.name.toUpperCase();
+        if (n === 'RELATED') return rec(e.args[0]);
+        if (n === 'BLANK') return 'NULL';
+        if (n === 'ISBLANK') return `(${rec(e.args[0])} IS NULL)`;
+        if (n === 'DATE') return this.tr.literal(new Date(Number((e.args[0] as { value: number }).value), Number((e.args[1] as { value: number }).value) - 1, Number((e.args[2] as { value: number }).value)));
+        if (n === 'YEAR' || n === 'MONTH' || n === 'DAY') {
+          const x = rec(e.args[0]);
+          if (this.dialect === 'sqlite') return `CAST(strftime('${n === 'YEAR' ? '%Y' : n === 'MONTH' ? '%m' : '%d'}', ${x}) AS INTEGER)`;
+          return `EXTRACT(${n} FROM ${x})`;
+        }
+        // aggregates and anything else scalar: evaluated in the outer context
+        return this.value(e, outer);
+      }
+      case 'bracket':
+        if (this.model.hasMeasure(e.name)) return unsupported('Measures inside FILTER conditions (per-row context transition) are not pushed down to SQL');
+        return unsupported(`[${e.name}] is not a measure`);
+      default:
+        return unsupported(`${e.type} in a filter condition`);
+    }
+  }
+
+  // ------------------------------------------------------------ measures
+
+  value(e: Expr, ctx: CtxEntry[], vars: Map<string, string> = new Map(), depth = 0): string {
+    if (depth > 60) unsupported('Measures nest too deeply');
+    const rec = (x: Expr, c = ctx) => this.value(x, c, vars, depth + 1);
+    switch (e.type) {
+      case 'number':
+      case 'string':
+      case 'boolean':
+        return this.tr.literal(e.value);
+      case 'bracket':
+        if (this.model.hasMeasure(e.name)) return `(${rec(parseDax(this.model.measure(e.name).expression))})`;
+        return unsupported(`[${e.name}] is not a measure`);
+      case 'varRef':
+        return vars.get(e.name) ?? unsupported(`Unknown variable ${e.name}`);
+      case 'var': {
+        const inner = new Map(vars);
+        for (const b of e.bindings) inner.set(b.name, `(${this.value(b.value, ctx, inner, depth + 1)})`);
+        return this.value(e.body, ctx, inner, depth + 1);
+      }
+      case 'unary':
+        return e.op === 'NOT' ? `(NOT ${rec(e.operand)})` : e.op === '-' ? `(-${rec(e.operand)})` : rec(e.operand);
+      case 'binary': {
+        const a = rec(e.left);
+        const b = rec(e.right);
+        if (e.op === '+' || e.op === '-') return `(CASE WHEN ${a} IS NULL AND ${b} IS NULL THEN NULL ELSE COALESCE(${a}, 0) ${e.op} COALESCE(${b}, 0) END)`;
+        if (e.op === '*') return `(${a} * ${b})`;
+        if (e.op === '/') return `(${a} * 1.0 / NULLIF(${b}, 0))`;
+        const ops: Record<string, string> = { '=': '=', '==': '=', '<>': '<>', '<': '<', '>': '>', '<=': '<=', '>=': '>=', '&&': 'AND', '||': 'OR', '&': '||' };
+        return ops[e.op] ? `(${a} ${ops[e.op]} ${b})` : unsupported(`Operator ${e.op}`);
+      }
+      case 'call':
+        return this.call(e.name.toUpperCase(), e.args, ctx, rec);
+      case 'column':
+        return unsupported(`${e.table}[${e.column}] needs an aggregation (SUM, AVERAGE…) in a measure`);
+      default:
+        return unsupported(`${e.type} expressions`);
+    }
+  }
+
+  private call(n: string, a: Expr[], ctx: CtxEntry[], rec: (x: Expr, c?: CtxEntry[]) => string): string {
+    const col = (x: Expr | undefined) => (x?.type === 'column' ? { table: x.table, column: x.column } : unsupported(`${n} needs a column`));
+    const agg = (fn: string, c: { table: string; column: string }, distinct = false) => this.subquery(c.table, (s) => `${fn}(${distinct ? 'DISTINCT ' : ''}${s.col(c)})`, ctx);
+    switch (n) {
+      case 'SUM':
+        return agg('SUM', col(a[0]));
+      case 'AVERAGE':
+        return agg('AVG', col(a[0]));
+      case 'MIN':
+      case 'MAX':
+        return a.length === 2 ? `${n === 'MIN' ? 'LEAST' : 'GREATEST'}(${rec(a[0])}, ${rec(a[1])})` : agg(n, col(a[0]));
+      case 'COUNT':
+      case 'COUNTA':
+        return `NULLIF(${agg('COUNT', col(a[0]))}, 0)`;
+      case 'DISTINCTCOUNT':
+        return `NULLIF(${agg('COUNT', col(a[0]), true)}, 0)`;
+      case 'MEDIAN':
+        if (this.dialect !== 'duckdb') unsupported('MEDIAN is only pushed down to DuckDB');
+        return agg('MEDIAN', col(a[0]));
+      case 'COUNTROWS': {
+        const t = a[0];
+        if (t?.type === 'table') return `NULLIF(${this.subquery(t.name, () => 'COUNT(*)', ctx)}, 0)`;
+        if (t?.type === 'call' && t.name.toUpperCase() === 'FILTER') {
+          const { table, ctx: inner } = this.tableArg(t.args[0], ctx);
+          return `NULLIF(${this.subquery(table, () => 'COUNT(*)', inner, [(s) => this.rowCond(s, t.args[1], ctx)])}, 0)`;
+        }
+        if (t?.type === 'call' && (t.name.toUpperCase() === 'VALUES' || t.name.toUpperCase() === 'DISTINCT') && t.args[0]?.type === 'column') return `NULLIF(${agg('COUNT', col(t.args[0]), true)}, 0)`;
+        return unsupported('COUNTROWS of this table expression is not pushed down to SQL');
+      }
+      case 'SUMX':
+      case 'AVERAGEX':
+      case 'MINX':
+      case 'MAXX': {
+        const fn = ({ SUMX: 'SUM', AVERAGEX: 'AVG', MINX: 'MIN', MAXX: 'MAX' } as Record<string, string>)[n];
+        const t = a[0];
+        if (t?.type === 'table') return this.subquery(t.name, (s) => `${fn}(${this.tr.rowExpr(s, a[1])})`, ctx);
+        if (t?.type === 'call' && t.name.toUpperCase() === 'FILTER') {
+          const { table, ctx: inner } = this.tableArg(t.args[0], ctx);
+          return this.subquery(table, (s) => `${fn}(${this.tr.rowExpr(s, a[1])})`, inner, [(s) => this.rowCond(s, t.args[1], ctx)]);
+        }
+        return unsupported(`${n} over this table expression is not pushed down to SQL`);
+      }
+      case 'DIVIDE': {
+        const x = rec(a[0]);
+        const y = rec(a[1]);
+        return `(CASE WHEN COALESCE(${y}, 0) = 0 THEN ${a[2] ? rec(a[2]) : 'NULL'} ELSE ${x} * 1.0 / ${y} END)`;
+      }
+      case 'IF':
+        return `(CASE WHEN ${rec(a[0])} THEN ${rec(a[1])} ELSE ${a[2] ? rec(a[2]) : 'NULL'} END)`;
+      case 'BLANK':
+        return 'NULL';
+      case 'ISBLANK':
+        return `(${rec(a[0])} IS NULL)`;
+      case 'COALESCE':
+        return `COALESCE(${a.map((x) => rec(x)).join(', ')})`;
+      case 'ABS':
+        return `ABS(${rec(a[0])})`;
+      case 'ROUND':
+        return `ROUND(${rec(a[0])}, ${a[1] ? rec(a[1]) : '0'})`;
+      case 'CALCULATE': {
+        let c = ctx;
+        for (const f of a.slice(1)) c = this.applyOne(f, c);
+        return rec(a[0], c);
+      }
+      case 'TOTALYTD':
+      case 'TOTALQTD':
+      case 'TOTALMTD':
+        return rec(a[0], this.timeFilter(n.replace('TOTAL', 'DATES'), [a[1]], ctx));
+      default:
+        return unsupported(`${n}() is not pushed down to SQL`);
+    }
+  }
+}
+
+const AGG_NAMES = new Set(['SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'COUNTROWS', 'DISTINCTCOUNT', 'MEDIAN', 'SUMX', 'AVERAGEX', 'MINX', 'MAXX', 'CALCULATE']);
+const TIME_FILTERS = new Set(['SAMEPERIODLASTYEAR', 'DATEADD', 'DATESYTD', 'DATESQTD', 'DATESMTD', 'PREVIOUSYEAR', 'PREVIOUSQUARTER', 'PREVIOUSMONTH', 'DATESBETWEEN']);
+
+/** The query in filter-context mode: group combinations first, then one correlated subquery per value. */
+function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPlan {
+  const dialect = opts.dialect ?? 'duckdb';
+  const groups = (spec.groupBy ?? []).map((g) => resolveGroupField(model, g));
+  const values = (spec.values ?? []).map((v) => resolveValueField(model, v));
+  const filters = (spec.filters ?? []).map(toSpec);
+  const highlight = (spec.highlight ?? []).map(toSpec);
+  const tr = new Translator(model, dialect);
+  const entryOf = (f: FilterSpec, all: FilterSpec[], cx: () => ContextTranslator): CtxEntry => {
+    const targets = (f.op === 'tuples' ? f.targets : [f.target]).map((t) => asRef(String(t)));
+    if (f.op !== 'topN') return { kind: 'base', cols: targets.map(colKey), tables: [...new Set(targets.map((t) => t.table))], build: (s) => tr.filter(s, f, all) };
+    // Top N: the N members of the column with the highest (lowest) measure under the other filters
+    const target = targets[0];
+    const by = resolveValueField(model, f.by);
+    return {
+      kind: 'base',
+      cols: [colKey(target)],
+      tables: [target.table],
+      build: (s) => {
+        const c = cx();
+        const others = c.base.filter((e) => !e.cols.includes(colKey(target)));
+        const members = c.subquery(target.table, (y) => `DISTINCT ${y.col(target)} AS m`, others);
+        const score = c.value(by.ast, [...others, { kind: 'group', cols: [colKey(target)], tables: [target.table], build: (z) => c.isNotDistinct(z.col(target), 'tn.m') }]);
+        return `${s.col(target)} IN (SELECT tn.m FROM ${members} AS tn ORDER BY ${score} ${f.direction === 'bottom' ? 'ASC' : 'DESC'} NULLS LAST LIMIT ${Math.max(0, Math.floor(f.n))})`;
+      },
+    };
+  };
+  let cx!: ContextTranslator;
+  const baseEntries = filters.map((f) => entryOf(f, filters, () => cx));
+  cx = new ContextTranslator(model, opts, tr, dialect, baseEntries);
+  const groupEntries: CtxEntry[] = groups.map((g, i) => ({ kind: 'group', cols: [colKey(g.column!)], tables: [g.column!.table], build: (s) => cx.isNotDistinct(s.col(g.column!), `c.g${i}`) }));
+
+  // group combinations, as the in-memory engine finds them: one table → its values; several → rows of a table reaching all
+  const gTables = [...new Set(groups.map((g) => g.column!.table))];
+  const anchor = gTables.length <= 1 ? gTables[0] : (model.tableNames().find((t) => gTables.every((g) => model.expanded(t).has(g))) ?? unsupported(`Grouping columns of unrelated tables (${gTables.join(', ')})`));
+  const sortCols = groups.map((g) => model.table(g.column!.table).column(g.column!.column).sortBy);
+  const combos = anchor
+    ? cx.subquery(anchor, (s) => `DISTINCT ${[...groups.map((g, i) => `${s.col(g.column!)} AS g${i}`), ...sortCols.flatMap((sc, i) => (sc ? [`${s.col({ table: groups[i].column!.table, column: sc })} AS s${i}`] : []))].join(', ')}`, baseEntries).replace(/^\(SELECT DISTINCT/, '(SELECT DISTINCT')
+    : '';
+
+  const build = (extra: FilterSpec[], grouped: boolean): string => {
+    const ctx = [...baseEntries, ...extra.map((f) => entryOf(f, [...filters, ...extra], () => cx)), ...(grouped ? groupEntries : [])];
+    const vs = values.map((v) => cx.value(v.ast, ctx));
+    if (!grouped || !groups.length) return `SELECT ${vs.map((v, i) => `${v} AS v${i}`).join(', ') || 'NULL AS v0'}`;
+    const cols = [...groups.map((_, i) => `c.g${i}`), ...vs.map((v, i) => `${v} AS v${i}`), ...sortCols.flatMap((sc, i) => (sc ? [`c.s${i}`] : []))];
+    const parts = [`SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${combos} AS c) AS r`];
+    if (values.length && !spec.includeEmpty) parts.push(`WHERE NOT (${values.map((_, i) => `r.v${i} IS NULL`).join(' AND ')})`);
+    const order: string[] = [];
+    const groupOrder = (i: number, dir: string) => `r.${sortCols[i] ? 's' : 'g'}${i} ${dir} NULLS FIRST`;
+    for (const o of spec.orderBy ?? []) {
+      const dir = o.direction === 'desc' ? 'DESC' : 'ASC';
+      let gi = -1;
+      let vi = -1;
+      if (typeof o.field === 'object') {
+        if ('value' in o.field) vi = o.field.value;
+        else gi = o.field.group;
+      } else {
+        gi = groups.findIndex((g) => g.ref === o.field || g.name === o.field);
+        if (gi < 0) vi = values.findIndex((v) => v.name === o.field || v.ref === o.field);
+      }
+      if (vi >= 0 && vi < values.length) order.push(`r.v${vi} ${dir} NULLS LAST`);
+      else if (gi >= 0) order.push(groupOrder(gi, dir));
+    }
+    groups.forEach((_, i) => order.push(groupOrder(i, 'ASC')));
+    parts.push(`ORDER BY ${order.join(', ')}`);
+    const cap = Math.min(spec.top ?? Infinity, (spec.limit ?? 30_000) + 1);
+    if (Number.isFinite(cap)) parts.push(`LIMIT ${cap}`);
+    return parts.join('\n');
+  };
+  return {
+    sql: build([], true),
+    totals: spec.totals && values.length ? build([], false) : undefined,
+    highlight: highlight.length && values.length ? build(highlight, groups.length > 0) : undefined,
+    groups,
+    values: values.map(({ ast: _a, ...v }) => v),
+    limit: groups.length ? (spec.limit ?? 30_000) : undefined,
+    mode: 'context',
+  };
+}
+
 /** Translate a query to SQL. Throws {@link SqlUnsupportedError} for what SQL can't express. */
 export function toSql(model: DataModel, spec: QuerySpec, opts: SqlOptions = {}): SqlPlan {
   if (model.activeRoleNames.length) unsupported('Row-level security roles are active; they are not pushed down to SQL');
   if (visualCalcPlan(spec)) unsupported('Run visual calculations through sqlEngine (it applies them after the query)');
+  // plain aggregates become one GROUP BY query; anything else (ALL, time intelligence, CALCULATE replacing filters…)
+  // is translated with full filter-context semantics
+  try {
+    return aggregatePlan(model, spec, opts);
+  } catch (e) {
+    if (!(e instanceof SqlUnsupportedError)) throw e;
+    return contextPlan(model, spec, opts);
+  }
+}
+
+function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPlan {
   const dialect = opts.dialect ?? 'duckdb';
   const groups = (spec.groupBy ?? []).map((g) => resolveGroupField(model, g));
   const values = (spec.values ?? []).map((v) => resolveValueField(model, v));
@@ -452,6 +946,7 @@ export function toSql(model: DataModel, spec: QuerySpec, opts: SqlOptions = {}):
     groups,
     values: values.map(({ ast: _a, ...v }) => v),
     limit: groups.length ? (spec.limit ?? 30_000) : undefined,
+    mode: 'aggregate',
   };
 }
 

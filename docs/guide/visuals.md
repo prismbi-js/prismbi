@@ -26,6 +26,25 @@ A `FieldSpec` is one of:
 - `{ field: 'Sales[Qty]', aggregation: 'avg', name: 'Avg qty', format: '#,0.0' }`
 - `{ expression: 'SUM(Sales[Amount]) * 1.1', name: 'Forecast', format: '$#,0' }`
 
+## Gallery
+
+Every built-in visual with the demo data (light theme). The same images back the visual regression tests.
+
+| | | |
+|---|---|---|
+| ![area](../images/visuals/area.png) `area` | ![boxPlot](../images/visuals/boxPlot.png) `boxPlot` | ![bullet](../images/visuals/bullet.png) `bullet` |
+| ![calendar](../images/visuals/calendar.png) `calendar` | ![card](../images/visuals/card.png) `card` | ![clusteredBar](../images/visuals/clusteredBar.png) `clusteredBar` |
+| ![clusteredColumn](../images/visuals/clusteredColumn.png) `clusteredColumn` | ![decompositionTree](../images/visuals/decompositionTree.png) `decompositionTree` | ![donut](../images/visuals/donut.png) `donut` |
+| ![funnel](../images/visuals/funnel.png) `funnel` | ![gauge](../images/visuals/gauge.png) `gauge` | ![heatmap](../images/visuals/heatmap.png) `heatmap` |
+| ![histogram](../images/visuals/histogram.png) `histogram` | ![kpi](../images/visuals/kpi.png) `kpi` | ![line](../images/visuals/line.png) `line` |
+| ![lineClusteredColumn](../images/visuals/lineClusteredColumn.png) `lineClusteredColumn` | ![map](../images/visuals/map.png) `map` | ![matrix](../images/visuals/matrix.png) `matrix` |
+| ![multiRowCard](../images/visuals/multiRowCard.png) `multiRowCard` | ![percentStackedBar](../images/visuals/percentStackedBar.png) `percentStackedBar` | ![percentStackedColumn](../images/visuals/percentStackedColumn.png) `percentStackedColumn` |
+| ![pie](../images/visuals/pie.png) `pie` | ![radar](../images/visuals/radar.png) `radar` | ![ribbon](../images/visuals/ribbon.png) `ribbon` |
+| ![sankey](../images/visuals/sankey.png) `sankey` | ![scatter](../images/visuals/scatter.png) `scatter` | ![slicer-list](../images/visuals/slicer-list.png) `slicer-list` |
+| ![slicer-range](../images/visuals/slicer-range.png) `slicer-range` | ![slicer-tiles](../images/visuals/slicer-tiles.png) `slicer-tiles` | ![stackedArea](../images/visuals/stackedArea.png) `stackedArea` |
+| ![stackedBar](../images/visuals/stackedBar.png) `stackedBar` | ![stackedColumn](../images/visuals/stackedColumn.png) `stackedColumn` | ![table](../images/visuals/table.png) `table` |
+| ![text](../images/visuals/text.png) `text` | ![treemap](../images/visuals/treemap.png) `treemap` | ![waterfall](../images/visuals/waterfall.png) `waterfall` |
+
 ## Catalogue
 
 | Type (aliases) | Roles | Notes |
@@ -181,6 +200,8 @@ Marks are focusable (Tab), and Enter or Space selects one. Tooltips also show on
 
 Line and area charts with a date or number axis can extend each series (up to three) with a forecast:
 
+![A line chart with a forecast band](../images/visuals/line-forecast.png)
+
 ```ts
 { type: 'line', fields: { category: 'Date[Date]', values: 'Total Sales' },
   format: { analytics: { forecast: { periods: 30, confidence: 0.95, seasonality: 'auto' } } } }
@@ -195,6 +216,8 @@ Line and area charts with a date or number axis can extend each series (up to th
 
 Clustered column and bar charts with a single series accept two optional measure roles, **Error bars: lower** (`errorLower`) and **Error bars: upper** (`errorUpper`):
 
+![A column chart with error bars](../images/visuals/column-error-bars.png)
+
 ```ts
 { type: 'clusteredColumn', fields: { category: 'Product[Category]', values: 'Avg Price', errorLower: 'Price P10', errorUpper: 'Price P90' } }
 ```
@@ -204,6 +227,10 @@ Clustered column and bar charts with a single series accept two optional measure
 - **Tooltip:** shows the range.
 
 ## Maps and built-in boundaries
+
+| Filled map (classes) | Bubbles at country centres | Clusters |
+|---|---|---|
+| ![Filled world map](../images/visuals/filled-map-world.png) | ![Bubble map by country](../images/visuals/map-countries.png) | ![Clustered bubble map](../images/visuals/map-cluster.png) |
 
 `@prismbi/prismbi/geo` adds world countries and US states (Natural Earth 1:110m, public domain) as an optional entry. The data is about 60 KB gzipped, and you only pay for it when you import it:
 
@@ -227,6 +254,8 @@ import '@prismbi/prismbi/geo';
 
 `type: 'calendar'` draws one square per day, with weeks as columns and weekdays as rows, and one band per year. It's coloured on the theme's sequential ramp, or by `format.colors.gradient` and rules.
 
+![A calendar heatmap of daily sales](../images/visuals/calendar.png)
+
 ```ts
 { type: 'calendar', fields: { date: 'Date[Date]', values: 'Total Sales' } }
 ```
@@ -237,6 +266,8 @@ import '@prismbi/prismbi/geo';
 ## Axis zoom
 
 `format.categoryAxis.zoom: true` adds a range slider under line and area charts. Dragging its thumbs narrows the visible part of the axis, and **Reset** shows everything again. The zoom is view state kept per visual, so it doesn't change filters or re-query.
+
+![A line chart with a zoomed category axis](../images/visuals/line-zoom.png)
 
 ## Try it
 

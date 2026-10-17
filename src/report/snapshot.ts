@@ -8,6 +8,19 @@ import { CSS, themeVars } from './styles';
 export function elementToSvg(el: HTMLElement, theme: Theme, width: number, height: number, extraClass = ''): string {
   const clone = el.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('.pbi-icons, .pbi-ei').forEach((n) => n.remove());
+  // canvases (dense scatter, WebGL) don't clone their pixels: embed them as images
+  const sources = [...el.querySelectorAll('canvas')];
+  clone.querySelectorAll('canvas').forEach((c, i) => {
+    try {
+      const img = document.createElement('img');
+      img.src = sources[i].toDataURL('image/png');
+      img.setAttribute('style', c.getAttribute('style') ?? '');
+      img.className = c.className;
+      c.replaceWith(img);
+    } catch {
+      /* tainted or unsupported canvas: leave it out */
+    }
+  });
   clone.classList.remove('is-focus', 'is-active');
   clone.style.width = `${width}px`;
   clone.style.height = `${height}px`;

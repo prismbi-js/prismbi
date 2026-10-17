@@ -2,6 +2,8 @@
 
 `@prismbi/prismbi/studio` is a drag-and-drop report editor that works like Power BI Desktop, in the browser. End users build and change reports, and the result is a JSON document you store wherever you like.
 
+![PrismBI Studio: field list, canvas, visualizations and build pane](../images/studio.png)
+
 ```ts
 import { Studio } from '@prismbi/prismbi/studio';
 
@@ -45,6 +47,8 @@ To show the finished report to viewers, pass `doc.report` to `<PrismReport defin
 
 ## The document
 
+
+![The Studio model view: tables, columns and relationships](../images/studio-model-view.png)
 ```ts
 interface StudioDocument {
   version: 1;
@@ -83,9 +87,13 @@ Model changes are stored as a diff against the model the studio was opened with.
 
 `new Studio(el, { model, copilot: daxCopilot(model) })` (from `@prismbi/prismbi/ai`) adds a plain-English box to the measure editor: **✦ Write DAX** fills in the expression, name and format, and **Explain** describes the current expression. Any object with `write(request)` and an optional `explain(expression)` works, so you can plug in your own service. See [AI](ai.md#dax-copilot).
 
+![The measure editor writing and explaining DAX from plain English](../images/studio-dax-copilot.png)
+
 ## Phone layouts
 
 Press **📱 Phone** in the top bar to arrange the current page for phones:
+
+![Editing the phone layout of a page in the Studio](../images/studio-phone.png)
 - **Canvas:** it narrows to phone width with a 4-column grid.
 - **Editing:** dragging and resizing edit the phone layout only; the desktop layout is untouched.
 - **Starting point:** the first time, the page's visuals are stacked in reading order, with small cards paired side by side. **Reset phone layout** regenerates that arrangement.

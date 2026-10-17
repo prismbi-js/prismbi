@@ -6,8 +6,15 @@ import type { DataPointIdentity, RenderContext } from './types';
 import type { CellValue } from '../data/types';
 import { drawReferenceLines, linearFit } from './analytics';
 
-/** Above this many points marks are painted on a canvas instead of one SVG element each. */
+/** Above this many points marks are painted on a canvas instead of one SVG element each... */
 const CANVAS_MIN = 3000;
+/** ...and above this many, with WebGL when available. */
+const WEBGL_MIN = 50_000;
+
+interface ScatterFormat {
+  /** `'auto'` (default): SVG, then canvas above 3,000 points, then WebGL above 50,000. */
+  renderer?: 'auto' | 'svg' | 'canvas' | 'webgl';
+}
 
 interface CanvasPoint {
   x: number;
@@ -18,6 +25,96 @@ interface CanvasPoint {
   identity: DataPointIdentity;
   keys: CellValue[];
   tooltip: () => { title?: string; items: { label: string; value: string; color?: string }[] };
+}
+
+/** CSS colour to RGBA floats (hex, rgb/rgba, or anything the 2D canvas understands). */
+const colorCache = new Map<string, [number, number, number, number]>();
+function rgba(color: string): [number, number, number, number] {
+  const hit = colorCache.get(color);
+  if (hit) return hit;
+  let c = color.trim();
+  if (!/^#|^rgb/i.test(c)) {
+    try {
+      const probe = document.createElement('canvas').getContext('2d');
+      if (probe) {
+        probe.fillStyle = c;
+        c = String(probe.fillStyle);
+      }
+    } catch {
+      /* no 2D canvas */
+    }
+  }
+  let out: [number, number, number, number] = [0.3, 0.45, 0.85, 1];
+  const hex = /^#([0-9a-f]{3,8})$/i.exec(c)?.[1];
+  if (hex) {
+    const full = hex.length <= 4 ? [...hex].map((h) => h + h).join('') : hex;
+    const n = (i: number) => parseInt(full.slice(i, i + 2), 16) / 255;
+    out = [n(0), n(2), n(4), full.length >= 8 ? n(6) : 1];
+  } else {
+    const m = /rgba?\(([^)]+)\)/i.exec(c);
+    if (m) {
+      const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+      out = [p[0] / 255, p[1] / 255, p[2] / 255, p[3] ?? 1];
+    }
+  }
+  colorCache.set(color, out);
+  return out;
+}
+
+const VERTEX = `attribute vec2 a_pos; attribute float a_size; attribute vec4 a_color; uniform vec2 u_res; varying vec4 v_color;
+void main() { vec2 p = a_pos / u_res * 2.0 - 1.0; gl_Position = vec4(p.x, -p.y, 0.0, 1.0); gl_PointSize = a_size; v_color = a_color; }`;
+const FRAGMENT = `precision mediump float; varying vec4 v_color;
+void main() { float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard; gl_FragColor = vec4(v_color.rgb, v_color.a * smoothstep(0.5, 0.4, d)); }`;
+
+/** Draw points as round GL point sprites (one draw call). False when WebGL isn't available. */
+function drawWebGL(canvas: HTMLCanvasElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, height: number, dpr: number): boolean {
+  let gl: WebGLRenderingContext | null = null;
+  try {
+    gl = canvas.getContext('webgl', { premultipliedAlpha: false, antialias: true, preserveDrawingBuffer: true }) as WebGLRenderingContext | null;
+  } catch {
+    gl = null;
+  }
+  if (!gl) return false;
+  const shader = (type: number, src: string) => {
+    const sh = gl!.createShader(type)!;
+    gl!.shaderSource(sh, src);
+    gl!.compileShader(sh);
+    return sh;
+  };
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, VERTEX));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FRAGMENT));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
+  gl.useProgram(prog);
+  const range = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array | null;
+  const maxSize = range ? range[1] : 64;
+  // interleaved x, y, size, r, g, b, a
+  const data = new Float32Array(pts.length * 7);
+  pts.forEach((p, i) => {
+    const [r, g, b, a] = rgba(p.color);
+    data.set([p.x * dpr, p.y * dpr, Math.min(maxSize, (p.r * 2 + 1) * dpr), r, g, b, a * p.alpha], i * 7);
+  });
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  const attr = (name: string, size: number, offset: number) => {
+    const loc = gl!.getAttribLocation(prog, name);
+    gl!.enableVertexAttribArray(loc);
+    gl!.vertexAttribPointer(loc, size, gl!.FLOAT, false, 28, offset * 4);
+  };
+  attr('a_pos', 2, 0);
+  attr('a_size', 1, 2);
+  attr('a_color', 4, 3);
+  gl.uniform2f(gl.getUniformLocation(prog, 'u_res'), canvas.width, canvas.height);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.enable(gl.SCISSOR_TEST);
+  gl.scissor(Math.round(clip.x * dpr), Math.round((height - clip.y - clip.h) * dpr), Math.round(clip.w * dpr), Math.round(clip.h * dpr));
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.POINTS, 0, pts.length);
+  return true;
 }
 
 function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
@@ -32,15 +129,21 @@ function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
  * Paint points on a canvas laid over the SVG axes; a grid index finds the point under the pointer so tooltips,
  * selection, the context menu and drill keep working.
  */
-function paintCanvas(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, width: number, height: number): boolean {
+function paintCanvas(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, width: number, height: number, webgl = false): boolean {
   const canvas = document.createElement('canvas');
-  const g2 = context2d(canvas);
-  if (!g2) return false;
   const dpr = Math.min(3, globalThis.devicePixelRatio || 1);
   canvas.width = Math.round(width * dpr);
   canvas.height = Math.round(height * dpr);
-  canvas.className = 'pbi-canvas';
   canvas.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;pointer-events:none`;
+  const gl = webgl && drawWebGL(canvas, pts, clip, height, dpr);
+  canvas.className = gl ? 'pbi-canvas pbi-webgl' : 'pbi-canvas';
+  if (!gl && !paint2d(ctx, canvas, pts, clip, dpr)) return false;
+  return overlay(ctx, svg, hitLayer, canvas, pts, clip, width, height);
+}
+
+function paint2d(ctx: RenderContext, canvas: HTMLCanvasElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, dpr: number): boolean {
+  const g2 = context2d(canvas);
+  if (!g2) return false;
   g2.scale(dpr, dpr);
   g2.beginPath();
   g2.rect(clip.x, clip.y, clip.w, clip.h);
@@ -58,6 +161,11 @@ function paintCanvas(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGEleme
       g2.stroke();
     }
   }
+  return true;
+}
+
+/** Lay the canvas over the SVG axes, with a grid index so tooltips, selection, the context menu and drill work. */
+function overlay(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGElement, canvas: HTMLCanvasElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, width: number, height: number): boolean {
   const wrap = document.createElement('div');
   wrap.style.cssText = `position:relative;width:${width}px;height:${height}px`;
   svg.style.display = 'block';
@@ -221,7 +329,9 @@ export const scatter = /* @__PURE__ */ defineVisual({
         ...(lField ? [{ label: lField.name, value: ctx.fmt(lField, rows[i].keys[l.indices[0]]), color }] : []),
       ],
     });
-    if (rows.length > CANVAS_MIN) {
+    const renderer = ((ctx.format as { scatter?: ScatterFormat }).scatter?.renderer ?? 'auto') as NonNullable<ScatterFormat['renderer']>;
+    const raster = renderer === 'canvas' || renderer === 'webgl' || (renderer === 'auto' && rows.length > CANVAS_MIN);
+    if (raster) {
       const pts: CanvasPoint[] = order.map((i) => {
         const r = rows[i];
         const color = lField ? ctx.colorFor(lField, r.keys[l.indices[0]]) : ctx.format.colors.default ?? t.dataColors[0];
@@ -232,7 +342,8 @@ export const scatter = /* @__PURE__ */ defineVisual({
         const radius = sField ? 2 + Math.sqrt(sizes[i] / maxSize) * (maxR - 6) : 2.5;
         return { x: x(xs[i]), y: y(ys[i]), r: radius, color, alpha: (dimmed ? 0.25 : markOpacity(ctx, identity)) * (sField ? 0.7 : 0.85), identity, keys, tooltip: tooltipFor(i, keys, color) };
       });
-      if (paintCanvas(ctx, svg, g, pts, { x: left, y: 0, w: width - left, h: bottom }, width, height)) return;
+      const webgl = renderer === 'webgl' || (renderer === 'auto' && rows.length >= WEBGL_MIN);
+      if (paintCanvas(ctx, svg, g, pts, { x: left, y: 0, w: width - left, h: bottom }, width, height, webgl)) return;
     }
     for (const i of order) {
       const r = rows[i];

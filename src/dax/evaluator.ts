@@ -740,9 +740,16 @@ export class Evaluator {
     };
     const existing = new Set(all.map((d) => d.getTime()));
     const shifted = new Map<number, Date>();
+    const lastDay = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     for (const d of visible) {
       const s = shift(d);
       if (existing.has(s.getTime())) shifted.set(s.getTime(), s);
+      // as in DAX: a month's last day maps to the rest of the target month too (Feb 28, 2025 → Feb 28 and 29, 2024)
+      if (unit !== 'DAY' && d.getDate() === lastDay(d))
+        for (let day = s.getDate() + 1; day <= lastDay(s); day++) {
+          const x = new Date(s.getFullYear(), s.getMonth(), day);
+          if (existing.has(x.getTime())) shifted.set(x.getTime(), x);
+        }
     }
     return this.datesTable(col, [...shifted.values()].sort((a, b) => a.getTime() - b.getTime()));
   }

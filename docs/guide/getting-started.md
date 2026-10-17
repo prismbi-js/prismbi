@@ -1,5 +1,7 @@
 # Getting started
 
+
+![The demo report: slicers, KPI cards, charts and a table, all cross-filtering each other](../images/report-overview.png)
 ## Install
 
 ```bash

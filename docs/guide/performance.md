@@ -32,6 +32,8 @@ Pre-aggregated results can differ from a row-by-row scan in the last floating-po
 
 ## Rendering at scale
 
+
+![The scale demo: 250,000 rows, a dense line chart, 8,000 scatter points and a virtualized table](../images/performance.png)
 - **Lines and areas** with more points than about two per pixel are thinned with Largest-Triangle-Three-Buckets for drawing. Peaks and gaps survive. The crosshair and tooltips still read every point. Stacked areas are drawn in full so the layers meet.
 - **Scatter charts** with more than 3,000 points paint on a canvas laid over the SVG axes. A spatial grid finds the point under the pointer, so tooltips, click to select and cross-filter, the context menu and drill keep working. Without canvas support, for example in SSR or jsdom, they fall back to SVG.
 - **Tables** with more than 500 rows render only the rows in view, plus a margin, between spacer rows. Sorting, selection and banding behave as before. `format.table.virtualize` forces windowing on or off, and wrapping text turns it off because rows then vary in height.

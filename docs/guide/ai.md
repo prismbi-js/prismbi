@@ -55,6 +55,8 @@ const answer = await ask(model, 'how did margins move in Europe vs last year?', 
 
 ### The Q&A visual
 
+
+![The Q&A visual answering a typed question with a chart](../images/qna.png)
 ```ts
 { type: 'qna', title: 'Ask a question', layout: { x: 0, y: 0, w: 7, h: 9 }, fields: {},
   format: { qna: { synonyms: { 'Total Sales': ['revenue'] }, suggestions: ['sales by month'] } } }
@@ -80,6 +82,8 @@ Right-clicking any data point offers **Explain this** once `@prismbi/prismbi/ai`
 
 ## Insights
 
+
+![The insights visual listing anomalies, movers and outliers](../images/insights.png)
 ```ts
 findInsights(model, { measure: 'Total Sales', filters, max: 6 });
 // [{ kind: 'outlier', title: 'Road Bikes stands out among Subcategory values', detail: '$2.7M against a typical $124K.', score, spec }, …]
@@ -115,6 +119,8 @@ What is already unusual when watching starts doesn't alert, unless you set `aler
 
 The `narrative` visual writes a short summary of its measures that updates with filters and selections, like Power BI's smart narrative:
 
+![The narrative visual summarising sales in plain language](../images/narrative.png)
+
 ```ts
 { type: 'narrative', fields: { values: ['Total Sales', 'Orders'], category: 'Region[Group]' }, format: { narrative: { insights: 1 } } }
 // "Total Sales for 2025 is $9.34M, up 3.1% from $9.07M in 2024, mostly from Mountain Bikes (+$138K) and Mountain-200 (+$130K).
@@ -135,6 +141,8 @@ The `narrative` visual writes a short summary of its measures that updates with 
 ## DAX copilot
 
 Write measures from plain English, and explain existing ones:
+
+![The DAX copilot in the Studio measure editor](../images/studio-dax-copilot.png)
 
 ```ts
 import { writeDax, writeDaxSync, explainDax, daxCopilot } from '@prismbi/prismbi/ai';
@@ -255,6 +263,8 @@ console.log(result.text);
 
 ### The Studio agent panel
 
+
+![The Studio agent panel building a page from one prompt, with undo per step](../images/studio-agent.png)
 ```ts
 import { agentPanel, anthropicLLM } from '@prismbi/prismbi/ai';
 

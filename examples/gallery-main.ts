@@ -26,6 +26,7 @@ export const GALLERY: Spec[] = [
   { type: 'treemap', fields: { category: 'Product[Subcategory]', values: 'Total Sales' } },
   { type: 'funnel', fields: { category: 'Sales[Channel]', values: 'Total Sales' } },
   { type: 'scatter', fields: { details: 'Product[Name]', legend: 'Product[Category]', x: 'Total Sales', y: 'Margin %', size: 'Units' } },
+  { key: 'scatter-webgl', type: 'scatter', fields: { details: 'Sales[OrderNumber]', legend: 'Product[Category]', x: 'Total Sales', y: 'Units' }, format: { scatter: { renderer: 'webgl' } } },
   { type: 'histogram', fields: { values: 'Sales[SalesAmount]' } },
   { type: 'boxPlot', fields: { category: 'Product[Category]', values: 'Sales[SalesAmount]' } },
   { type: 'bullet', fields: { category: 'Region[Group]', value: 'Total Sales', target: 'Sales Target' } },

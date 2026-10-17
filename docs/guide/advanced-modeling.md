@@ -38,6 +38,8 @@ Table functions: `SUMMARIZE`, `SUMMARIZECOLUMNS`, `ADDCOLUMNS`, `SELECTCOLUMNS`,
 
 A calculation group rewrites whatever measure is evaluated while one of its items is selected (by a slicer, a filter, or because the visual groups by it). One group replaces dozens of near-identical measures.
 
+![The demo modeling page: calculation groups, field parameters and what-if parameters](../images/report-modeling.png)
+
 ```ts
 model.addCalculationGroup({
   name: 'Time Calc',

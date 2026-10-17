@@ -2,7 +2,7 @@
 // Builds the docs site from docs/guide/*.md into examples/docs/ (served by `npm run dev` at /docs/).
 // Code blocks fenced as ```js playground get a "Run" link that opens them in /playground.html.
 // Zero dependencies: a small Markdown renderer covering what the guides use.
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,9 +20,11 @@ function inline(text) {
   const codes = [];
   let s = text.replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`);
   s = esc(s)
+    // images: guides reference ../images/…, the site serves them from images/
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => `<img src="${src.replace(/^\.\.\/images\//, 'images/')}" alt="${alt}" loading="lazy">`)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^\w*])\*([^*\s][^*]*)\*(?!\w)/g, '$1<em>$2</em>')
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => `<a href="${esc(href.replace(/^(?!https?:)([\w./-]+)\.md(#.*)?$/, (_m, p, h) => `${p.split('/').pop()}.html${h ?? ''}`))}">${label}</a>`);
+    .replace(/(?<!<img[^>]*)\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => `<a href="${esc(href.replace(/^(?!https?:)([\w./-]+)\.md(#.*)?$/, (_m, p, h) => `${p.split('/').pop()}.html${h ?? ''}`))}">${label}</a>`);
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[Number(i)])}</code>`);
 }
 
@@ -159,6 +161,7 @@ pre{background:var(--code);border:1px solid var(--line);border-radius:10px;paddi
 pre code{background:none;padding:0;font-size:13px;line-height:1.55}
 .run{position:absolute;top:8px;right:10px;font-size:12px;padding:3px 10px;border-radius:999px;background:var(--accent);color:#fff;text-decoration:none}
 .table{overflow:auto}table{border-collapse:collapse;margin:14px 0;font-size:14px}th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--side)}
+main img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:10px}td img{border:0;border-radius:6px}thead:not(:has(th:not(:empty))){display:none}p:has(>img:only-child){margin:18px 0}
 blockquote{margin:14px 0;padding:8px 14px;border-left:3px solid var(--accent);color:var(--fg2)}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:0;list-style:none}
 .cards a{display:block;padding:14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--fg)}.cards a:hover{border-color:var(--accent)}
@@ -194,6 +197,8 @@ export function buildDocs() {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'docs.css'), CSS);
+  const images = join(root, 'docs', 'images');
+  if (existsSync(images)) cpSync(images, join(out, 'images'), { recursive: true });
   const search = [];
   for (const g of guides) {
     writeFileSync(join(out, `${g.file}.html`), page(g.title, g.html, guides, g.file));

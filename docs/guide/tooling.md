@@ -2,6 +2,8 @@
 
 These are building blocks for editors, consoles and documentation. They're tree-shaken out of apps that don't import them.
 
+![A DAX console built on the language service: diagnostics, completion and formatting](../images/dax-console.png)
+
 ## Language service
 
 ```ts

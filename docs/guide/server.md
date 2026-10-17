@@ -58,6 +58,8 @@ scheduleReport({
 
 Authors define scheduled sends and alerts in the Studio (**⏰ Schedules**), or in the report definition:
 
+![The Studio Schedules dialog: scheduled sends and measure alerts](../images/studio-schedules.png)
+
 ```ts
 { pages: [/* … */],
   subscriptions: [{ id: 's1', name: 'Daily summary', page: 'overview', schedule: 'daily@08:00', recipients: ['team@example.com'] }],

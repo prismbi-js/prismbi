@@ -2,6 +2,12 @@
 
 **Power BI-style data modeling and interactive reports for the web, written in TypeScript.**
 
+![A PrismBI report: slicers, KPI cards and cross-filtering charts](docs/images/report-overview.png)
+
+| Studio | Agent panel | Playground |
+|---|---|---|
+| ![PrismBI Studio](docs/images/studio.png) | ![The Studio agent panel](docs/images/studio-agent.png) | ![The live playground](docs/images/playground.png) |
+
 PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 60 KB min+gzip for the core, about 76 KB for a typical dashboard, and about 93 KB with every visual. Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
 
 ```bash
@@ -132,6 +138,7 @@ npm run typecheck
 npm run bench      # 200k / 1M-row query timings
 npm run build      # dist/ (ESM + CJS + .d.ts)
 npm run docs       # docs site at /docs/ and the live playground at /playground.html
+npm run docs:images  # regenerate the screenshots in docs/images (headless Chrome)
 ```
 
 ## License

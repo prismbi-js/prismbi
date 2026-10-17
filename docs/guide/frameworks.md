@@ -26,6 +26,8 @@ One visual for your own layout:
 
 ## Plain HTML
 
+
+![Web components in a plain HTML page](../images/web-components.png)
 ```html
 <prism-visual model="sales" type="card" fields='{"value":"Total Sales"}' style="height: 200px"></prism-visual>
 <prism-report model="sales" src="/reports/sales.json" style="height: 720px"></prism-report>

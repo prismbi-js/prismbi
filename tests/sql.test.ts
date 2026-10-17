@@ -89,6 +89,46 @@ const CASES: [string, QuerySpec][] = [
   ['no grouping', { values: ['Total Sales', 'Total Profit'], filters: [{ target: 'Region[Country]', op: 'notIn', values: ['Canada'] }] }],
 ];
 
+// measures that need DAX filter-context semantics (correlated subqueries)
+model
+  .addMeasure('Bike Sales', 'CALCULATE([Total Sales], Product[Category] = "Bikes")')
+  .addMeasure('Bike Sales Kept', 'CALCULATE([Total Sales], KEEPFILTERS(Product[Category] = "Bikes"))')
+  .addMeasure('All Products Share', 'DIVIDE([Total Sales], CALCULATE([Total Sales], ALL(Product)))')
+  .addMeasure('Max List Price', 'MAX(Product[ListPrice])')
+  .addMeasure('Product Count', 'COUNTROWS(Product)')
+  .addMeasure('Running Sales', 'CALCULATE([Total Sales], FILTER(ALL(Date[Date]), Date[Date] <= MAX(Date[Date])))')
+  .addMeasure('Prev Month Sales', 'CALCULATE([Total Sales], DATEADD(Date[Date], -1, MONTH))')
+  .addMeasure('Prev Year Sales', 'CALCULATE([Total Sales], PREVIOUSYEAR(Date[Date]))')
+  .addMeasure('Region Group Sales', 'CALCULATE([Total Sales], ALLEXCEPT(Region, Region[Group]))')
+  .addMeasure('Big Orders', 'COUNTROWS(FILTER(Sales, Sales[SalesAmount] > 1000))')
+  .addMeasure('Sales MTD', 'TOTALMTD([Total Sales], Date[Date])')
+  .addMeasure('Sales QTD', 'TOTALQTD([Total Sales], Date[Date])');
+
+const y2025 = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
+const CONTEXT_CASES: [string, QuerySpec][] = [
+  ['SAMEPERIODLASTYEAR and YoY %', { groupBy: ['Date[Year]'], values: ['Total Sales', 'Sales LY', 'YoY %'] }],
+  ['TOTALYTD by month', { groupBy: ['Date[MonthNumber]'], values: ['Sales YTD', 'Sales MTD', 'Sales QTD'], filters: y2025 }],
+  ['DATEADD and PREVIOUSYEAR', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Prev Month Sales', 'Prev Year Sales'] }],
+  ['running total with FILTER(ALL(...))', { groupBy: ['Date[MonthNumber]'], values: ['Running Sales'], filters: y2025 }],
+  ['ALLSELECTED share', { groupBy: ['Product[Subcategory]'], values: ['Total Sales', 'Share of Category'], filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }] }],
+  ['ALL share and totals', { groupBy: ['Product[Category]'], values: ['All Products Share'], filters: y2025, totals: true }],
+  ['CALCULATE replacing a grouped column, and KEEPFILTERS', { groupBy: ['Product[Category]'], values: ['Bike Sales', 'Bike Sales Kept'] }],
+  ['single-direction filters (a dimension measure by another dimension)', { groupBy: ['Region[Group]'], values: ['Max List Price', 'Product Count', 'Total Sales'] }],
+  ['ALLEXCEPT', { groupBy: ['Region[Region]'], values: ['Total Sales', 'Region Group Sales'] }],
+  ['COUNTROWS(FILTER(...)), sorted, Top N filter', { groupBy: ['Product[Name]'], values: ['Big Orders', 'Sales LY'], filters: [{ target: 'Product[Name]', op: 'topN', n: 5, by: 'Total Sales' }, ...y2025], orderBy: [{ field: 'Big Orders', direction: 'desc' }] }],
+  ['no grouping', { values: ['Sales LY', 'Sales YTD'], filters: y2025 }],
+  ['highlights in context mode', { groupBy: ['Product[Category]'], values: ['Sales LY'], highlight: [{ target: 'Region[Country]', op: 'eq', value: 'Canada' }], filters: y2025 }],
+];
+
+describe.skipIf(!sqliteOk)('sqlEngine on SQLite: filter-context mode', () => {
+  for (const [name, spec] of CONTEXT_CASES) {
+    it(`matches the in-memory engine: ${name}`, async () => {
+      expect(engine.toSql(spec).mode).toBe('context');
+      expectSame(await engine.query(spec), model.query(spec));
+    });
+  }
+});
+
 describe.skipIf(!sqliteOk)('sqlEngine on SQLite', () => {
   for (const [name, spec] of CASES) {
     it(`matches the in-memory engine: ${name}`, async () => {
@@ -100,8 +140,8 @@ describe.skipIf(!sqliteOk)('sqlEngine on SQLite', () => {
     statements.length = 0;
     await engine.query({ values: ['Total Profit'] });
     expect(statements[0]).toMatch(/SUM\(\(+t0\."SalesAmount" - t0\."TotalCost"\)+\)/);
-    // a dimension aggregated across a fact (filters don't flow that way in DAX) is refused
-    expect(() => toSql(model, { groupBy: ['Region[Group]'], values: [{ field: 'Product[ListPrice]', aggregation: 'max' }] })).toThrow(SqlUnsupportedError);
+    // a dimension aggregated across a fact (filters don't flow that way in DAX) needs filter-context mode
+    expect(toSql(model, { groupBy: ['Region[Group]'], values: [{ field: 'Product[ListPrice]', aggregation: 'max' }] }).mode).toBe('context');
   });
 });
 
@@ -121,19 +161,22 @@ describe('toSql', () => {
     const plan = toSql(m, { groupBy: ['Region[Country]'], values: ['Bike Sales'] }, { tables: { Sales: 'analytics.fact_sales' }, columns: { Sales: { SalesAmount: 'amount' } } });
     expect(plan.sql).toContain('(SUM(t0."amount") FILTER (WHERE t2."Category" = \'Bikes\'))');
     expect(plan.sql).toContain('FROM "analytics"."fact_sales" AS t0');
-    // replacing a filter the query also uses has no SQL equivalent; KEEPFILTERS intersects and works
-    expect(() => toSql(m, { groupBy: ['Product[Category]'], values: ['Bike Sales'] })).toThrow(SqlUnsupportedError);
+    // replacing a filter the query also uses switches to filter-context mode; KEEPFILTERS stays a plain FILTER clause
+    expect(toSql(m, { groupBy: ['Product[Category]'], values: ['Bike Sales'] }).mode).toBe('context');
     const k = buildModel().addMeasure('Bike Sales', 'CALCULATE([Total Sales], KEEPFILTERS(Product[Category] = "Bikes"))');
     expect(toSql(k, { groupBy: ['Product[Category]'], values: ['Bike Sales'] }).sql).toContain('FILTER (WHERE');
   });
 
   it('reports what it cannot push down, and can fall back to the model', async () => {
-    expect(() => toSql(model, { values: ['Sales LY'] })).toThrow(/SAMEPERIODLASTYEAR\(\) is not pushed down/);
-    expect(() => toSql(model, { values: ['Share of Category'] })).toThrow(SqlUnsupportedError);
+    // time intelligence and ALLSELECTED now translate (filter-context mode); USERELATIONSHIP still doesn't
+    expect(toSql(model, { values: ['Sales LY'] }).mode).toBe('context');
+    expect(toSql(model, { values: ['Total Sales'] }).mode).toBe('aggregate');
+    expect(() => toSql(model, { values: ['Sales by Ship Date'] })).toThrow(/USERELATIONSHIP is not pushed down/);
     const strict = sqlEngine(model, { run: async () => [] });
-    await expect(strict.query({ values: ['Sales LY'] })).rejects.toThrow(SqlUnsupportedError);
+    await expect(strict.query({ values: ['Sales by Ship Date'] })).rejects.toThrow(SqlUnsupportedError);
     const lenient = sqlEngine(model, { run: async () => [], fallback: 'model' });
-    expect((await lenient.query({ values: ['Sales LY'], filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }] })).rows[0].values[0]).toBe(model.query({ values: ['Sales LY'], filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }] }).rows[0].values[0]);
+    const y = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
+    expect((await lenient.query({ values: ['Sales by Ship Date'], filters: y })).rows[0].values[0]).toBe(model.query({ values: ['Sales by Ship Date'], filters: y }).rows[0].values[0]);
   });
 });
 

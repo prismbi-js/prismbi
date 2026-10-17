@@ -2,6 +2,8 @@
 
 ## Tables
 
+
+![The Studio data view of a table](../images/studio-data-view.png)
 ```ts
 model.addTable(name, rows, schema?)                      // rows: object array
 model.addTable(name, DataTable.fromColumns(name, cols))  // fast path for column arrays
@@ -23,6 +25,8 @@ Blank cells (`null`, `undefined`, `''`) become BLANK.
 
 ## Relationships
 
+
+![Relationships in the Studio model view](../images/studio-model-view.png)
 ```ts
 model.addRelationship({ from: 'Sales[ProductId]', to: 'Products[Id]' });
 ```

@@ -4,6 +4,8 @@
 
 `'light'` (the default) and `'dark'`. Both use the same eight-hue categorical palette. Each mode has its own steps, tuned to its surface, and both are validated for colour-vision-deficiency separation.
 
+![The demo report in the dark theme](../images/report-overview-dark.png)
+
 ```ts
 new Report(el, { model, theme: 'dark', pages });
 report.setTheme('light');
@@ -101,6 +103,8 @@ formatValue(1500000, '$#,0', { displayUnits: 'auto' }); // "$1.5M"
 
 ## Accessibility
 
+
+![The high-contrast theme](../images/report-high-contrast.png)
 - **Chart narration.** Every chart gets a plain-language summary, for example: *"Line chart of Total Sales by MonthYear: 24 values from Jan 2024 to Dec 2025. Highest is Dec 2025 at $1.05M, lowest is Feb 2025 at $450K. Up 113% from first to last."*
   - **Where it goes:** the visual's `aria-description`, plus a visually hidden paragraph for screen readers that don't support it.
   - **Content:** it follows the current filters and selection.

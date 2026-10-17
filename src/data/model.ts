@@ -902,6 +902,21 @@ export class DataModel {
     const narrow = (list: number[]) => {
       cand = cand === null ? list : intersectSorted(cand, list);
     };
+    // low-cardinality columns of large tables combine as bitmaps (OR within a filter, AND across filters)
+    let bits: Uint32Array | null = null;
+    const narrowBits = (column: string, keys: Iterable<unknown>): boolean => {
+      const bm = bitmapsEnabled ? t.bitmap(column) : null;
+      if (!bm) return false;
+      const words = (t.rowCount + 31) >>> 5;
+      const or = new Uint32Array(words);
+      for (const k of keys) {
+        const b = bm.get(k);
+        if (b) for (let w = 0; w < words; w++) or[w] |= b[w];
+      }
+      if (bits) for (let w = 0; w < words; w++) bits[w] &= or[w];
+      else bits = or;
+      return true;
+    };
     const ownScan: Filter[] = [];
     const crossScan: Filter[] = [];
     const forward = eff.rels.filter((r) => r.fromTable === table);
@@ -917,6 +932,7 @@ export class DataModel {
       }
       if (f.columns.every((c) => c.table === table)) {
         if (f.lookupKeys && f.columns.length === 1) {
+          if (narrowBits(f.columns[0].column, f.lookupKeys)) continue;
           const idx = t.index(f.columns[0].column);
           narrow(unionLists(f.lookupKeys.map((k) => idx.get(k) ?? []), t.rowCount));
         } else ownScan.push(f);
@@ -935,6 +951,7 @@ export class DataModel {
       const pkCol = dim.column(rel.toColumn).values;
       const keys = new Set<unknown>();
       for (const i of dimRows) keys.add(valueKey(pkCol[i]));
+      if (narrowBits(rel.fromColumn, keys)) continue;
       narrow(unionLists([...keys].map((k) => fkIdx.get(k) ?? []), t.rowCount));
       if (cand!.length === 0) break;
     }
@@ -953,6 +970,19 @@ export class DataModel {
       narrow(unionLists([...keys].map((k) => pkIdx.get(k) ?? []), t.rowCount));
     }
 
+    if (bits) {
+      const b = bits as Uint32Array;
+      const list: number[] = [];
+      for (let w = 0; w < b.length; w++) {
+        let x = b[w];
+        while (x) {
+          const low = x & -x;
+          list.push((w << 5) + 31 - Math.clz32(low));
+          x ^= low;
+        }
+      }
+      narrow(list);
+    }
     let result: number[] = cand ?? this.allRows(table);
     if (ownScan.length || crossScan.length) {
       result = result.filter((i) => {
@@ -979,6 +1009,12 @@ export class DataModel {
 }
 
 const EMPTY: ReadonlySet<string> = new Set();
+
+let bitmapsEnabled = true;
+/** Turn bitmap indexes on or off (on by default; used for low-cardinality columns of large tables). */
+export function setBitmapIndexes(on: boolean): void {
+  bitmapsEnabled = on;
+}
 
 function truthy(v: CellValue): boolean {
   if (v === null) return false;

@@ -2,6 +2,8 @@
 
 PrismBI gives you every Power BI way of narrowing data down, and each one is scriptable.
 
+![Clicking a bar cross-filters every other visual on the page](../images/report-cross-filter.png)
+
 | Mechanism | Scope | Set by |
 |---|---|---|
 | Report filters | all pages | filter pane, `report.setReportFilters()`, `definition.filters` |
@@ -94,6 +96,8 @@ report.on('drill', (e) => console.log(e.level, e.path));
 
 Right-clicking any data point, table row or matrix row opens a menu:
 
+![The data point context menu: Include, Exclude, Drill through and Explain this](../images/report-context-menu.png)
+
 - **Include** keeps only that data point in this visual. **Exclude** removes it. Both are added as visual-level filters, so they show in the filter pane and can be cleared there or with **Clear visual filters**.
 - **Drill through: <page>** appears for every page whose `drillthrough.fields` match the data point.
 - **Clear selection** appears when something is selected.
@@ -120,6 +124,8 @@ report.on('drillThrough', (e) => console.log(e.fromPageId, '→', e.toPageId, e.
 
 ## Decomposition tree
 
+
+![The decomposition tree splitting Total Sales by category and region](../images/decomposition-tree.png)
 ```ts
 { type: 'decompositionTree', fields: { values: 'Total Sales', explainBy: ['Product[Category]', 'Region[Group]', 'Sales[Channel]'] } }
 ```
@@ -151,6 +157,8 @@ report.setInteraction('by-category', 'kpi-card', 'none');   // stored as spec.in
 ## The filter pane
 
 Turn it on with `chrome: { filterPane: true }` (a toolbar toggle) or `'open'`. It lists filter cards for **this visual** (the last one clicked), **this page** and **all pages**. Each card has three modes:
+
+![The filter pane with report, page and visual filters](../images/report-filter-pane.png)
 
 - **Basic:** tick values from the column's full domain, with search.
 - **Advanced:** contains, does not contain, starts with, ends with, is, is not, >, ≥, <, ≤, is blank, is not blank.

@@ -16,6 +16,8 @@ In the Studio, open the Data view and press **Transform** on a table. You can ad
 
 ## Steps
 
+
+![The Studio transform editor: steps applied to a table, with a preview](../images/studio-transforms.png)
 | Step | Example |
 |---|---|
 | `filterRows` | `{ op: 'filterRows', column: 'Amount', test: 'gt', value: 100 }`. Tests: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `notContains`, `startsWith`, `in`, `notIn`, `isBlank`, `notBlank` |

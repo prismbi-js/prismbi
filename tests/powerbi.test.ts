@@ -184,3 +184,66 @@ describe('Power BI import', () => {
     expect(res.warnings).toEqual([]);
   });
 });
+
+describe('Power BI calculation groups', () => {
+  const tiTmdl = `table 'Time Intelligence'
+	lineageTag: 9
+
+	calculationGroup
+		precedence: 2
+
+		calculationItem Current = SELECTEDMEASURE()
+
+		calculationItem 'Double' =
+				SELECTEDMEASURE() * 2
+			ordinal: 2
+
+		calculationItem Share = DIVIDE(SELECTEDMEASURE(), CALCULATE(SELECTEDMEASURE(), ALL(Product)))
+			formatStringDefinition = "0.0%"
+			ordinal: 1
+
+		calculationItem Labelled = SELECTEDMEASURE()
+			formatStringDefinition = SELECTEDMEASUREFORMATSTRING() & " (x)"
+			ordinal: 3
+
+	column 'Time Calc'
+		dataType: string
+		sourceColumn: Name
+		sortByColumn: Ordinal
+
+	column Ordinal
+		dataType: int64
+		isHidden
+		sourceColumn: Ordinal
+`;
+
+  it('parses TMDL calculation groups and builds them with formats', () => {
+    const pm = parseTmdl([salesTmdl, productTmdl, relTmdl, tiTmdl]);
+    const ti = pm.tables.find((t) => t.name === 'Time Intelligence')!;
+    expect(ti.calculationGroup).toMatchObject({ precedence: 2 });
+    expect(ti.calculationGroup!.items.map((i) => [i.name, i.ordinal, i.formatStringDefinition])).toEqual([
+      ['Current', undefined, undefined],
+      ['Double', 2, undefined],
+      ['Share', 1, '"0.0%"'],
+      ['Labelled', 3, 'SELECTEDMEASUREFORMATSTRING() & " (x)"'],
+    ]);
+    expect(ti.calculationGroup!.items[1].expression).toBe('SELECTEDMEASURE() * 2');
+    const { model, warnings } = importPowerBI({ ...project(), 'Shop.SemanticModel/definition/tables/Time Intelligence.tmdl': tiTmdl }, { data });
+    expect(warnings.filter((w) => /Time Intelligence/.test(w))).toEqual([]);
+    const group = model.calculationGroups().find((g) => g.table === 'Time Intelligence')!;
+    expect(group.column).toBe('Time Calc');
+    expect(model.table('Time Intelligence').distinct('Time Calc')).toEqual(['Current', 'Share', 'Double', 'Labelled']); // by ordinal
+    const pick = (item: string) => [{ target: "'Time Intelligence'[Time Calc]", op: 'eq' as const, value: item }];
+    expect(model.evaluate('[Total Sales]', pick('Double'))).toBe(800);
+    const share = model.query({ groupBy: ['Product[Category]'], values: ['Total Sales'], filters: pick('Share') });
+    expect(share.values[0].format).toBe('0.0%');
+    expect(share.rows.find((r) => r.keys[0] === 'Bikes')!.values[0]).toBeCloseTo(0.8, 6);
+    expect(model.query({ values: ['Total Sales'], filters: pick('Labelled') }).values[0].format).toBe('$#,0 (x)');
+  });
+
+  it('reads calculation groups from model.bim', async () => {
+    const { parseModelBim } = await import('@prismbi/prismbi/powerbi');
+    const pm = parseModelBim({ model: { tables: [{ name: 'TI', calculationGroup: { precedence: 1, calculationItems: [{ name: 'YoY %', expression: ['SELECTEDMEASURE()'], ordinal: 0, formatStringDefinition: { expression: '"0%"' } }] }, columns: [{ name: 'Name', dataType: 'string' }] }] } });
+    expect(pm.tables[0].calculationGroup).toEqual({ precedence: 1, items: [{ name: 'YoY %', expression: 'SELECTEDMEASURE()', ordinal: 0, formatStringDefinition: '"0%"' }] });
+  });
+});

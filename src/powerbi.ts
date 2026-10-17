@@ -35,11 +35,21 @@ export interface PbiMeasure {
   isHidden?: boolean;
 }
 
+export interface PbiCalculationItem {
+  name: string;
+  expression: string;
+  ordinal?: number;
+  /** DAX returning the item's format string, e.g. `"0.0%"`. */
+  formatStringDefinition?: string;
+}
+
 export interface PbiTable {
   name: string;
   columns: PbiColumn[];
   measures: PbiMeasure[];
   isHidden?: boolean;
+  /** Calculation group (Time Intelligence, …): the table's items rewrite whatever measure is shown. */
+  calculationGroup?: { precedence?: number; items: PbiCalculationItem[] };
   /** DAX of a calculated table (partition source of type calculated). */
   calculated?: string;
 }
@@ -149,6 +159,23 @@ export function parseTmdl(texts: string[]): PbiModel {
           } else m.expression = expr ?? '';
           continue;
         }
+        if (kind === 'calculationGroup') {
+          table.calculationGroup = { items: [] };
+          obj = { kind, target: table.calculationGroup as unknown as Record<string, unknown>, indent: ind };
+          continue;
+        }
+        if (kind === 'calculationItem' && table.calculationGroup) {
+          const it: PbiCalculationItem = { name, expression: expr ?? '' };
+          table.calculationGroup.items.push(it);
+          obj = { kind, target: it as unknown as Record<string, unknown>, indent: ind, exprKey: 'expression' };
+          if (expr?.startsWith('```')) {
+            it.expression = '';
+            fence = true;
+            fenceTarget = { target: it as unknown as Record<string, unknown>, key: 'expression' };
+            obj.exprKey = undefined;
+          }
+          continue;
+        }
         if (kind === 'partition') {
           // "partition X = calculated" with a DAX source makes a calculated table
           const p: Record<string, unknown> = { mode: expr };
@@ -185,7 +212,16 @@ export function parseTmdl(texts: string[]): PbiModel {
           obj.exprKey = 'expression';
           continue;
         }
-        obj.target[k] = value === 'true' ? true : value === 'false' ? false : unquote(value);
+        // format string definitions are DAX (a quoted literal stays quoted)
+        if (k === 'formatStringDefinition') {
+          if (value.startsWith('```')) {
+            fence = true;
+            fenceTarget = { target: obj.target, key: k };
+          } else if (value) obj.target[k] = value;
+          else obj.exprKey = k;
+          continue;
+        }
+        obj.target[k] = value === 'true' ? true : value === 'false' ? false : /^-?\d+(\.\d+)?$/.test(value) && (k === 'precedence' || k === 'ordinal') ? Number(value) : unquote(value);
         continue;
       }
       if (table && prop && ind === 1 && (prop[1] === 'isHidden')) table.isHidden = prop[2].trim() !== 'false';
@@ -198,7 +234,13 @@ export function parseTmdl(texts: string[]): PbiModel {
       delete (t as PbiTable & { _partition?: unknown })._partition;
     }
   }
-  for (const t of tables) for (const m of t.measures) m.expression = m.expression.trim();
+  for (const t of tables) {
+    for (const m of t.measures) m.expression = m.expression.trim();
+    for (const it of t.calculationGroup?.items ?? []) {
+      it.expression = it.expression.trim();
+      if (it.formatStringDefinition) it.formatStringDefinition = it.formatStringDefinition.trim();
+    }
+  }
   return { tables, relationships };
 }
 
@@ -216,6 +258,12 @@ export function parseModelBim(json: string | Record<string, unknown>): PbiModel 
       columns: ((tt.columns as Record<string, unknown>[]) ?? []).filter((c) => c.type !== 'rowNumber').map((c) => ({ name: String(c.name), dataType: c.dataType as string, formatString: c.formatString as string, isHidden: !!c.isHidden, displayFolder: c.displayFolder as string, description: joinExpr(c.description) || undefined, expression: c.type === 'calculated' ? joinExpr(c.expression) : undefined, sortByColumn: c.sortByColumn as string })),
       measures: ((tt.measures as Record<string, unknown>[]) ?? []).map((m) => ({ name: String(m.name), expression: joinExpr(m.expression), formatString: m.formatString as string, displayFolder: m.displayFolder as string, description: joinExpr(m.description) || undefined, isHidden: !!m.isHidden })),
       calculated: calc ? joinExpr(calc.source?.expression) : undefined,
+      ...(tt.calculationGroup
+        ? (() => {
+            const cg = tt.calculationGroup as { precedence?: number; calculationItems?: { name: string; expression: unknown; ordinal?: number; formatStringDefinition?: { expression?: unknown } }[] };
+            return { calculationGroup: { precedence: cg.precedence, items: (cg.calculationItems ?? []).map((i) => ({ name: String(i.name), expression: joinExpr(i.expression), ordinal: i.ordinal, formatStringDefinition: i.formatStringDefinition ? joinExpr(i.formatStringDefinition.expression) : undefined })) } };
+          })()
+        : {}),
     };
   });
   const relationships = (bim.model?.relationships ?? []).map((r) => {
@@ -409,7 +457,29 @@ export interface ImportResult {
 /** Build a DataModel from a parsed semantic model. */
 export function buildModelFrom(pm: PbiModel, opts: ImportOptions = {}, warn: (m: string) => void = () => {}): DataModel {
   const model = opts.model ?? new DataModel();
-  const physical = pm.tables.filter((t) => !t.calculated);
+  // calculation groups become PrismBI calculation groups (their table is generated)
+  for (const t of pm.tables.filter((x) => x.calculationGroup)) {
+    const cg = t.calculationGroup!;
+    const column = t.columns.find((c) => !/^ordinal$/i.test(c.name) && (c.dataType ?? 'string') === 'string')?.name ?? 'Name';
+    try {
+      model.addCalculationGroup({
+        name: t.name,
+        column,
+        precedence: cg.precedence,
+        items: [...cg.items]
+          .sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0))
+          .map((it) => {
+            const f = it.formatStringDefinition;
+            // a plain string literal is a static format; anything else is a dynamic format expression
+            const literal = f && /^"(?:[^"]|"")*"$/.test(f) ? f.slice(1, -1).replace(/""/g, '"') : undefined;
+            return { name: it.name, expression: it.expression, ...(it.ordinal !== undefined ? { ordinal: it.ordinal } : {}), ...(literal !== undefined ? { format: fmt(literal) ?? literal } : f ? { formatExpression: f } : {}) };
+          }),
+      });
+    } catch (e) {
+      warn(`Calculation group "${t.name}": ${(e as Error).message}`);
+    }
+  }
+  const physical = pm.tables.filter((t) => !t.calculated && !t.calculationGroup);
   for (const t of physical) {
     const schema: Record<string, ColumnSchema> = {};
     const baseCols = t.columns.filter((c) => !c.expression);
@@ -443,7 +513,7 @@ export function buildModelFrom(pm: PbiModel, opts: ImportOptions = {}, warn: (m:
       warn(`Calculated table ${t.name}: ${(e as Error).message}`);
     }
   }
-  for (const t of pm.tables)
+  for (const t of pm.tables.filter((x) => !x.calculationGroup || x.measures.length))
     for (const m of t.measures) {
       if (!m.expression) continue;
       try {

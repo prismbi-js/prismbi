@@ -68,6 +68,11 @@ export function coerce(v: unknown, type: DataType): CellValue {
  * Columnar, immutable-by-convention table. Each column is a typed value array;
  * per-column hash indexes are built lazily and power fast filtering.
  */
+/** Bitmap indexes are built for columns with at most this many values… */
+export const BITMAP_MAX_VALUES = 512;
+/** …in tables with at least this many rows (below it, row lists are already fast). */
+export const BITMAP_MIN_ROWS = 4096;
+
 export class DataTable {
   readonly name: string;
   readonly columns = new Map<string, Column>();
@@ -76,6 +81,7 @@ export class DataTable {
   private distinctCache = new Map<string, CellValue[]>();
   private numericCache = new Map<string, Float64Array>();
   private codesCache = new Map<string, { codes: Int32Array; dict: CellValue[] }>();
+  private bitmaps = new Map<string, Map<unknown, Uint32Array> | null>();
 
   constructor(name: string, rows: Row[] = [], schema: Record<string, ColumnSchema> = {}) {
     this.name = name;
@@ -140,7 +146,7 @@ export class DataTable {
   }
 
   private invalidate(name?: string): void {
-    for (const cache of [this.indexes, this.distinctCache, this.numericCache, this.codesCache] as Map<string, unknown>[]) {
+    for (const cache of [this.indexes, this.distinctCache, this.numericCache, this.codesCache, this.bitmaps] as Map<string, unknown>[]) {
       if (name === undefined) cache.clear();
       else cache.delete(name);
     }
@@ -244,6 +250,27 @@ export class DataTable {
       this.indexes.set(column, idx);
     }
     return idx;
+  }
+
+  /**
+   * Bitmap index: one bitset (32 rows per word) per value, for low-cardinality columns of large tables, so filters
+   * combine with word-wide OR / AND instead of merging row lists. Null when the column doesn't qualify.
+   */
+  bitmap(column: string): Map<unknown, Uint32Array> | null {
+    if (this.bitmaps.has(column)) return this.bitmaps.get(column)!;
+    let out: Map<unknown, Uint32Array> | null = null;
+    const idx = this.index(column);
+    if (this._rowCount >= BITMAP_MIN_ROWS && idx.size <= BITMAP_MAX_VALUES) {
+      const words = (this._rowCount + 31) >>> 5;
+      out = new Map();
+      for (const [k, rows] of idx) {
+        const b = new Uint32Array(words);
+        for (const r of rows) b[r >>> 5] |= 1 << (r & 31);
+        out.set(k, b);
+      }
+    }
+    this.bitmaps.set(column, out);
+    return out;
   }
 
   /** Sorted distinct values (honours `sortBy`). */
