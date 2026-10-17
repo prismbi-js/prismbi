@@ -66,6 +66,7 @@ const CONTEXT_FUNCS = new Set([
 const MS_DAY = 86_400_000;
 
 const UNHANDLED = Symbol('unhandled');
+const FAST_AGGS = new Set(['SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'DISTINCTCOUNT']);
 
 function isTable(v: Value): v is TableValue {
   return v !== null && typeof v === 'object' && !(v instanceof Date) && 'kind' in v;
@@ -115,8 +116,11 @@ export class Evaluator {
   private measureCache = new Map<string, CellValue>();
   private stack: string[] = [];
 
-  constructor(private model: DataModel) {
-    model.onChange(() => this.measureCache.clear());
+  constructor(private model: DataModel) {}
+
+  /** Drop memoised measure results (called by the model whenever data or definitions change). */
+  clearCache(): void {
+    this.measureCache.clear();
   }
 
   // ------------------------------------------------------------ entry points
@@ -616,7 +620,74 @@ export class Evaluator {
 
   // ------------------------------------------------------------ functions
 
+  /** Tight typed-array loops for the common column aggregations (same BLANK semantics as the general path). */
+  private fastAgg(name: string, arg: Expr, ctx: EvalContext): CellValue | typeof UNHANDLED {
+    if (arg.type !== 'column') return UNHANDLED;
+    const col = this.colArg(arg, name);
+    const t = this.model.table(col.table);
+    const c = t.column(col.column);
+    const rows = this.model.rowsOf(col.table, ctx.filters);
+    switch (name) {
+      case 'SUM':
+      case 'AVERAGE': {
+        if (c.type !== 'number') return UNHANDLED;
+        const a = t.numeric(col.column);
+        let sum = 0;
+        let n = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const v = a[rows[i]];
+          if (v === v) {
+            sum += v;
+            n++;
+          }
+        }
+        return n ? (name === 'SUM' ? sum : sum / n) : null;
+      }
+      case 'MIN':
+      case 'MAX': {
+        if (c.type !== 'number' && c.type !== 'date') return UNHANDLED;
+        const a = t.numeric(col.column);
+        let best = NaN;
+        const min = name === 'MIN';
+        for (let i = 0; i < rows.length; i++) {
+          const v = a[rows[i]];
+          if (v === v && (best !== best || (min ? v < best : v > best))) best = v;
+        }
+        if (best !== best) return null;
+        return c.type === 'date' ? new Date(best) : best;
+      }
+      case 'COUNT':
+      case 'COUNTA': {
+        const vals = c.values;
+        let n = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const v = vals[rows[i]];
+          if (v !== null && v !== '') n++;
+        }
+        return n || null;
+      }
+      case 'DISTINCTCOUNT': {
+        const { codes, dict } = t.codes(col.column);
+        const seen = new Uint8Array(dict.length + 1);
+        let n = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const k = codes[rows[i]] + 1;
+          if (!seen[k]) {
+            seen[k] = 1;
+            n++;
+          }
+        }
+        return n || null;
+      }
+    }
+    return UNHANDLED;
+  }
+
   private call(name: string, args: Expr[], ctx: EvalContext): Value {
+    if (args.length === 1 && FAST_AGGS.has(name)) {
+      const r = this.fastAgg(name, args[0], ctx);
+      if (r !== UNHANDLED) return r;
+    }
     const s = (i: number) => this.evalScalar(args[i], ctx);
     const opt = (i: number, d: CellValue = null) => (args[i] ? s(i) : d);
     const agg = (fn: (vals: CellValue[]) => CellValue): CellValue => fn(this.columnValues(this.colArg(args[0], name), ctx));

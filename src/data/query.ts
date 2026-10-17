@@ -5,6 +5,7 @@ import { compileFilter } from './filters';
 import type { DataModel } from './model';
 import type { Expr } from '../dax/ast';
 import { parseDax } from '../dax/parser';
+import { fastGroupQuery, useFastQuery } from './fastQuery';
 
 export type Aggregation = 'sum' | 'avg' | 'min' | 'max' | 'count' | 'countRows' | 'distinctCount' | 'median' | 'first' | 'last';
 
@@ -183,9 +184,13 @@ export function runQuery(model: DataModel, spec: QuerySpec): QueryResult {
   if (groups.length === 0) {
     if (values.length) rows = [{ keys: [], values: evalValues(base), highlights: highlight ? evalValues([...base, ...highlight]) : undefined }];
   } else {
-    const combos = groupCombos(model, groups.map((g) => g.column), base, values.length > 0);
     let truncated = false;
-    for (const keys of combos) {
+    let totals: CellValue[] | undefined;
+    const fast = !spec.includeEmpty && useFastQuery(model, groups.map((g) => g.column)) ? fastGroupQuery(model, groups.map((g) => g.column), values.map((v) => v.ast), base, highlight) : null;
+    if (fast) {
+      rows = fast.rows;
+      totals = fast.totals;
+    } else for (const keys of groupCombos(model, groups.map((g) => g.column), base, values.length > 0)) {
       const gf = groups.map((g, i) => groupFilter(g.column, keys[i]));
       const ctx = [...base, ...gf];
       const vals = evalValues(ctx);
@@ -198,7 +203,7 @@ export function runQuery(model: DataModel, spec: QuerySpec): QueryResult {
       rows = rows.slice(0, limit);
       truncated = true;
     }
-    return { groups, values: values.map(stripAst), rows, totals: spec.totals ? evalValues(base) : undefined, truncated, baseFilters: base };
+    return { groups, values: values.map(stripAst), rows, totals: spec.totals ? (totals ?? evalValues(base)) : undefined, truncated, baseFilters: base };
   }
   return { groups, values: values.map(stripAst), rows, totals: spec.totals ? evalValues(base) : undefined, truncated: false, baseFilters: base };
 }

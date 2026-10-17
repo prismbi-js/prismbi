@@ -11,6 +11,16 @@ import { Evaluator } from '../dax/evaluator';
 import type { QueryResult, QuerySpec } from './query';
 import { runQuery } from './query';
 
+export interface AppendOptions {
+  /** Keep at most this many rows, dropping the oldest (sliding window). */
+  maxRows?: number;
+}
+
+/** Scalar functions whose result depends only on their arguments (safe for incremental calculated columns). */
+const ROW_LOCAL_FNS = new Set(
+  'IF SWITCH AND OR NOT TRUE FALSE BLANK ISBLANK COALESCE DIVIDE ABS ROUND ROUNDUP ROUNDDOWN TRUNC INT CEILING FLOOR MOD POWER SQRT EXP LN LOG LOG10 SIGN DATE TIME YEAR MONTH DAY HOUR MINUTE SECOND WEEKDAY WEEKNUM QUARTER EOMONTH EDATE DATEDIFF DATEVALUE VALUE FORMAT LEFT RIGHT MID LEN UPPER LOWER TRIM CONCATENATE SUBSTITUTE REPLACE SEARCH FIND CONTAINSSTRING EXACT REPT FIXED ISNUMBER ISTEXT ISERROR IFERROR'.split(' '),
+);
+
 export interface Relationship {
   /** Position in the model (used by USERELATIONSHIP / CROSSFILTER). */
   index: number;
@@ -151,6 +161,77 @@ export class DataModel {
     for (const c of calc) this.addCalculatedColumn(name, c.name, c.expression!, { format: c.format, type: c.type, hidden: c.hidden });
     this.recalculateTables();
     return this;
+  }
+
+  /**
+   * Append rows to a table (streaming / incremental refresh). Calculated columns that only read their own row are
+   * computed for the new rows; the rest are recomputed. `maxRows` keeps a sliding window by dropping the oldest rows.
+   */
+  appendRows(name: string, rows: Row[], opts: AppendOptions = {}): this {
+    const t = this.table(name);
+    const calc = [...t.columns.values()].filter((c) => c.expression);
+    const before = t.rowCount;
+    t.appendRows(rows);
+    let firstNew = before;
+    if (opts.maxRows !== undefined && t.rowCount > opts.maxRows) {
+      const drop = t.rowCount - opts.maxRows;
+      t.removeFirst(drop);
+      firstNew = Math.max(0, before - drop);
+    }
+    this.clearCaches();
+    for (const c of calc) {
+      const ast = parseDax(c.expression!);
+      if (!this.rowLocal(ast, name)) {
+        this.addCalculatedColumn(name, c.name, c.expression!, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
+        continue;
+      }
+      const values = c.values;
+      for (let i = firstNew; i < t.rowCount; i++) values[i] = this.evaluator.evalScalarInRow(ast, name, i);
+      t.setColumn(c);
+    }
+    // calculated columns elsewhere may aggregate over this table
+    for (const other of this.tables.values()) {
+      if (other.name === name) continue;
+      for (const c of [...other.columns.values()]) {
+        if (c.expression && !this.rowLocal(parseDax(c.expression), other.name)) {
+          this.clearCaches();
+          this.addCalculatedColumn(other.name, c.name, c.expression, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
+        }
+      }
+    }
+    this.changed();
+    this.recalculateTables();
+    return this;
+  }
+
+  /** Does `ast` only read columns of the current row of `table` (no aggregation, measures or other tables)? */
+  private rowLocal(ast: Expr, table: string): boolean {
+    const walk = (e: Expr): boolean => {
+      switch (e.type) {
+        case 'number':
+        case 'string':
+        case 'boolean':
+        case 'varRef':
+          return true;
+        case 'column':
+          return e.table === table;
+        case 'bracket':
+          return !this.hasMeasure(e.name);
+        case 'table':
+          return false;
+        case 'call':
+          return ROW_LOCAL_FNS.has(e.name) && e.args.every(walk);
+        case 'unary':
+          return walk(e.operand);
+        case 'binary':
+          return walk(e.left) && walk(e.right);
+        case 'list':
+          return e.items.every(walk);
+        case 'var':
+          return e.bindings.every((b) => walk(b.value)) && walk(e.body);
+      }
+    };
+    return walk(ast);
   }
 
   removeTable(name: string): this {
@@ -498,12 +579,17 @@ export class DataModel {
   }
 
   private changed(): void {
+    this.clearCaches();
+    for (const l of this.listeners) l();
+  }
+
+  private clearCaches(): void {
     this.expandedCache.clear();
     this.reachCache.clear();
     this.effectiveCache.clear();
     this.rowsCache.clear();
     this.allRowsCache.clear();
-    for (const l of this.listeners) l();
+    this.evaluator.clearCache();
   }
 
   // ---------------------------------------------------------------- evaluation API

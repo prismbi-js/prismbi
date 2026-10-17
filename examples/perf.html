@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrismBI at scale</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body { display: flex; flex-direction: column; font: 13px system-ui, sans-serif; background: #f9f9f7; color: #0b0b0b; }
+      @media (prefers-color-scheme: dark) { body { background: #0d0d0d; color: #f0efec; color-scheme: dark; } }
+      .demo-bar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid rgba(127,127,127,.25); flex-wrap: wrap; }
+      .demo-bar b { margin-right: auto; }
+      .demo-bar button, .demo-bar select { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(127,127,127,.4); background: transparent; color: inherit; cursor: pointer; }
+      .demo-bar option { color: #0b0b0b; }
+      .demo-bar a { color: inherit; }
+      #stats { font: 12px ui-monospace, Consolas, monospace; opacity: .75; padding: 6px 14px; border-bottom: 1px solid rgba(127,127,127,.25); white-space: pre-wrap; }
+      #app { flex: 1; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="demo-bar">
+      <b>PrismBI · scale &amp; live data</b>
+      <label>Rows <select id="rows"><option value="100000">100k</option><option value="250000" selected>250k</option><option value="1000000">1M</option></select></label>
+      <button id="rebuild" type="button">Rebuild</button>
+      <button id="live" type="button" aria-pressed="false">Start live stream</button>
+      <a href="./index.html">← Report demo</a>
+    </div>
+    <div id="stats">Generating…</div>
+    <div id="app"></div>
+    <script type="module" src="./perf-main.ts"></script>
+  </body>
+</html>

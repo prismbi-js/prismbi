@@ -5,7 +5,9 @@
  */
 // data & model
 export { DataModel } from './data/model';
-export type { CalculationGroup, CalculationGroupDef, CalculationItemDef, FieldInfo, FieldParameterDef, Measure, Relationship, WhatIfParameterDef } from './data/model';
+export type { AppendOptions, CalculationGroup, CalculationGroupDef, CalculationItemDef, FieldInfo, FieldParameterDef, Measure, Relationship, WhatIfParameterDef } from './data/model';
+export { setFastQuery } from './data/fastQuery';
+export type { FastQueryMode } from './data/fastQuery';
 export { DataTable, inferType } from './data/table';
 export type { Column } from './data/table';
 export { generateDateTable } from './data/dates';

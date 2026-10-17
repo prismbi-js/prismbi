@@ -17,6 +17,6 @@
     "baseUrl": ".",
     "paths": { "prismbi": ["./src/index.ts"], "prismbi/*": ["./src/*.ts"] }
   },
-  "include": ["src", "tests", "examples"],
+  "include": ["src", "tests", "examples", "bench"],
   "exclude": ["examples/vite.config.ts"]
 }

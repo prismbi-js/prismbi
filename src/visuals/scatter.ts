@@ -2,8 +2,132 @@ import { s, measureText } from '../render/svg';
 import { linearScale, logScale } from '../render/scales';
 import { defineVisual } from './registry';
 import { drawValueAxisY, emptyState, identityOf, interactive, markOpacity, renderLegend, valueAxisFormatter, withLegend } from './common';
-import type { DataPointIdentity } from './types';
+import type { DataPointIdentity, RenderContext } from './types';
+import type { CellValue } from '../data/types';
 import { drawReferenceLines, linearFit } from './analytics';
+
+/** Above this many points marks are painted on a canvas instead of one SVG element each. */
+const CANVAS_MIN = 3000;
+
+interface CanvasPoint {
+  x: number;
+  y: number;
+  r: number;
+  color: string;
+  alpha: number;
+  identity: DataPointIdentity;
+  keys: CellValue[];
+  tooltip: () => { title?: string; items: { label: string; value: string; color?: string }[] };
+}
+
+function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+  try {
+    return canvas.getContext('2d');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Paint points on a canvas laid over the SVG axes; a grid index finds the point under the pointer so tooltips,
+ * selection, the context menu and drill keep working.
+ */
+function paintCanvas(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, width: number, height: number): boolean {
+  const canvas = document.createElement('canvas');
+  const g2 = context2d(canvas);
+  if (!g2) return false;
+  const dpr = Math.min(3, globalThis.devicePixelRatio || 1);
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  canvas.className = 'pbi-canvas';
+  canvas.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;pointer-events:none`;
+  g2.scale(dpr, dpr);
+  g2.beginPath();
+  g2.rect(clip.x, clip.y, clip.w, clip.h);
+  g2.clip();
+  const stroke = ctx.theme.surface;
+  for (const p of pts) {
+    g2.globalAlpha = p.alpha;
+    g2.beginPath();
+    g2.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    g2.fillStyle = p.color;
+    g2.fill();
+    if (p.r >= 3) {
+      g2.lineWidth = 1;
+      g2.strokeStyle = stroke;
+      g2.stroke();
+    }
+  }
+  const wrap = document.createElement('div');
+  wrap.style.cssText = `position:relative;width:${width}px;height:${height}px`;
+  svg.style.display = 'block';
+  svg.replaceWith(wrap);
+  wrap.append(svg, canvas);
+
+  // spatial grid for hit testing
+  const cell = 24;
+  const grid = new Map<number, number[]>();
+  const keyOf = (cx: number, cy: number) => cx * 100_003 + cy;
+  pts.forEach((p, i) => {
+    const k = keyOf(Math.floor(p.x / cell), Math.floor(p.y / cell));
+    const list = grid.get(k);
+    if (list) list.push(i);
+    else grid.set(k, [i]);
+  });
+  const nearest = (x: number, y: number): CanvasPoint | undefined => {
+    const cx = Math.floor(x / cell);
+    const cy = Math.floor(y / cell);
+    let best: CanvasPoint | undefined;
+    let bestD = Infinity;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (const i of grid.get(keyOf(cx + dx, cy + dy)) ?? []) {
+          const p = pts[i];
+          const d = Math.hypot(p.x - x, p.y - y);
+          // later points are painted on top: prefer them on ties
+          if (d <= Math.max(p.r, 4) + 3 && d <= bestD) {
+            best = p;
+            bestD = d;
+          }
+        }
+    return best;
+  };
+  const hit = s('rect', { x: clip.x, y: clip.y, width: Math.max(0, clip.w), height: Math.max(0, clip.h), fill: 'transparent', class: 'pbi-hit' });
+  hitLayer.append(hit);
+  const at = (e: MouseEvent) => {
+    const r = svg.getBoundingClientRect();
+    return nearest(((e.clientX - r.left) * width) / (r.width || width), ((e.clientY - r.top) * height) / (r.height || height));
+  };
+  hit.addEventListener('mousemove', (e) => {
+    const p = at(e);
+    (hit as SVGElement).style.cursor = p ? 'pointer' : '';
+    if (!p) return ctx.host.hideTooltip();
+    if (ctx.format.tooltip.show) {
+      const t = p.tooltip();
+      ctx.host.showTooltip(e, t.items, t.title, p.identity);
+    }
+  });
+  hit.addEventListener('mouseleave', () => ctx.host.hideTooltip());
+  hit.addEventListener('click', (e) => {
+    const p = at(e);
+    if (!p) return;
+    e.stopPropagation();
+    ctx.host.select(p.identity, { multi: e.ctrlKey || e.metaKey });
+    ctx.host.emit('dataPointClick', { keys: p.keys, identity: p.identity, event: e });
+  });
+  hit.addEventListener('contextmenu', (e) => {
+    const p = at(e);
+    if (!p) return;
+    e.preventDefault();
+    e.stopPropagation();
+    ctx.host.contextMenu(e, p.identity);
+  });
+  hit.addEventListener('dblclick', (e) => {
+    const p = at(e);
+    if (p && ctx.host.drill.levels > 1 && ctx.host.drill.level < ctx.host.drill.levels - 1) ctx.host.drillDown(p.keys[p.keys.length - 1]);
+  });
+  return true;
+}
 
 export const scatter = /* @__PURE__ */ defineVisual({
   type: 'scatter',
@@ -88,6 +212,28 @@ export const scatter = /* @__PURE__ */ defineVisual({
     g.append(marks);
     // draw bigger bubbles first so small ones stay clickable
     const order = rows.map((_, i) => i).sort((a, b) => (sizes[b] ?? 0) - (sizes[a] ?? 0));
+    const tooltipFor = (i: number, keys: CellValue[], color: string) => () => ({
+      title: keys.map((k, j) => ctx.fmt(dFields[j], k)).join(' · '),
+      items: [
+        { label: xField.name, value: ctx.fmt(xField, xs[i]) },
+        { label: yField.name, value: ctx.fmt(yField, ys[i]) },
+        ...(sField ? [{ label: sField.name, value: ctx.fmt(sField, rows[i].values[si!]) }] : []),
+        ...(lField ? [{ label: lField.name, value: ctx.fmt(lField, rows[i].keys[l.indices[0]]), color }] : []),
+      ],
+    });
+    if (rows.length > CANVAS_MIN) {
+      const pts: CanvasPoint[] = order.map((i) => {
+        const r = rows[i];
+        const color = lField ? ctx.colorFor(lField, r.keys[l.indices[0]]) : ctx.format.colors.default ?? t.dataColors[0];
+        const keys = d.indices.map((k) => r.keys[k]);
+        const identity = identityOf(dFields, keys);
+        const dimmed = r.highlights ? r.highlights[yi] === null || r.highlights[xi] === null : false;
+        // dense clouds use small dots; bubbles keep their area encoding
+        const radius = sField ? 2 + Math.sqrt(sizes[i] / maxSize) * (maxR - 6) : 2.5;
+        return { x: x(xs[i]), y: y(ys[i]), r: radius, color, alpha: (dimmed ? 0.25 : markOpacity(ctx, identity)) * (sField ? 0.7 : 0.85), identity, keys, tooltip: tooltipFor(i, keys, color) };
+      });
+      if (paintCanvas(ctx, svg, g, pts, { x: left, y: 0, w: width - left, h: bottom }, width, height)) return;
+    }
     for (const i of order) {
       const r = rows[i];
       const color = lField ? ctx.colorFor(lField, r.keys[l.indices[0]]) : ctx.format.colors.default ?? t.dataColors[0];
@@ -97,21 +243,7 @@ export const scatter = /* @__PURE__ */ defineVisual({
       // highlighted points keep full strength; the rest fade (cross-highlight from other visuals)
       const dimmed = r.highlights ? r.highlights[yi] === null || r.highlights[xi] === null : false;
       const c = s('circle', { cx: x(xs[i]), cy: y(ys[i]), r: radius, fill: color, 'fill-opacity': sField ? 0.7 : 1, stroke: t.surface, 'stroke-width': sField ? 1 : 2, opacity: dimmed ? 0.25 : markOpacity(ctx, identity) });
-      interactive(
-        ctx,
-        c,
-        identity,
-        () => ({
-          title: keys.map((k, j) => ctx.fmt(dFields[j], k)).join(' · '),
-          items: [
-            { label: xField.name, value: ctx.fmt(xField, xs[i]) },
-            { label: yField.name, value: ctx.fmt(yField, ys[i]) },
-            ...(sField ? [{ label: sField.name, value: ctx.fmt(sField, r.values[si!]) }] : []),
-            ...(lField ? [{ label: lField.name, value: ctx.fmt(lField, r.keys[l.indices[0]]), color }] : []),
-          ],
-        }),
-        keys,
-      );
+      interactive(ctx, c, identity, tooltipFor(i, keys, color), keys);
       marks.append(c);
     }
   },

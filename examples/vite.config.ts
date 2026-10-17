@@ -12,8 +12,10 @@ export default defineConfig({
       { find: /^prismbi\/core$/, replacement: src('core.ts') },
       { find: /^prismbi\/visuals$/, replacement: src('visuals.ts') },
       { find: /^prismbi\/studio$/, replacement: src('studio.ts') },
+      { find: /^prismbi\/connectors$/, replacement: src('connectors.ts') },
+      { find: /^prismbi\/worker$/, replacement: src('worker.ts') },
     ],
   },
-  build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html') } } },
+  build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html'), perf: here('./perf.html') } } },
   server: { port: 5173, open: false },
 });

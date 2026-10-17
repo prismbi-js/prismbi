@@ -102,8 +102,18 @@ function strOf(v: CellValue): string {
   return v === null ? '' : v instanceof Date ? v.toISOString() : String(v);
 }
 
+/** Deterministic, unique key for filter values (much cheaper than JSON.stringify with a replacer). */
 function stableKey(v: unknown): string {
-  return JSON.stringify(v, (_k, x) => (x instanceof Date ? `D${x.getTime()}` : x));
+  if (Array.isArray(v)) {
+    let out = '[';
+    for (let i = 0; i < v.length; i++) out += (i ? ',' : '') + stableKey(v[i]);
+    return out + ']';
+  }
+  if (v instanceof Date) return `D${v.getTime()}`;
+  if (v === undefined) return 'u';
+  if (v === null) return 'n';
+  if (typeof v === 'string') return JSON.stringify(v);
+  return `${typeof v === 'number' ? '#' : typeof v === 'boolean' ? '!' : '?'}${String(v)}`;
 }
 
 /** Compile a public filter spec into an engine filter. TopN must be resolved by the query engine first. */

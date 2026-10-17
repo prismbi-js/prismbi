@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.0 (unreleased): Phase 5, scale, performance and connectors
+
+- **Faster engine.**
+  - Typed-array column views and dictionary codes.
+  - Vectorised single-column aggregations.
+  - A single-pass grouped query path for simple measures, with automatic fallback (`setFastQuery('auto' | 'always' | 'off')`).
+  - Cheaper filter cache keys.
+- **Streaming data:** `model.appendRows(table, rows, { maxRows })` with incremental calculated columns and a sliding window.
+- **`prismbi/connectors`:**
+  - `parseCsv` / `loadCsv`, `googleSheetCsvUrl`
+  - `loadJson`, `loadRest` (page, offset, cursor and link pagination), `loadGraphQL`
+  - `addArrowTable`, `loadSqlTables` (`SqlAdapter`)
+  - `streamInto` (WebSocket, EventSource, ports) and `scheduleRefresh`
+- **`prismbi/worker`:** `serveModel`, `createWorkerEngine` and `createLocalEngine`. The model runs off the main thread, with cancellation.
+- **Rendering at scale:**
+  - LTTB downsampling for dense lines and areas
+  - canvas scatter above 3,000 points, with hit-testing
+  - virtualized tables above 500 rows (`format.table.virtualize`)
+- **Tooling:** `npm run bench` and the `/perf.html` demo page (100k–1M rows, live stream).
+- **Internal:** the model clears the evaluator's measure cache directly (`Evaluator.clearCache`) instead of through a change listener.
+
+
 ## 0.4.0 (unreleased): Phase 4, the studio
 
 - **`prismbi/studio`** and **`<PrismStudio>`**: a drag-and-drop report editor. Canvas edit mode (select, move, resize, grid snap, keyboard), Fields, Build, Format and Filters panes, page management, measure and column editors, data and model views (relationship diagram), theme designer, Auto page, preview, export and import.

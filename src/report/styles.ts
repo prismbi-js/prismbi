@@ -120,6 +120,7 @@ export const CSS = /* css */ `
 .pbi-table thead th{position:sticky;top:0;z-index:1;background:var(--pbi-surface);font-weight:600;color:var(--pbi-fg-2);border-bottom:1px solid var(--pbi-axis);cursor:pointer;user-select:none}
 .pbi-table tfoot td,.pbi-table tfoot th{position:sticky;bottom:0;background:var(--pbi-surface);font-weight:600;border-top:1px solid var(--pbi-axis);border-bottom:0}
 .pbi-table .is-num{text-align:right}
+.pbi-table tr.pbi-spacer td{padding:0;border:0;background:none}
 .pbi-banded tbody tr:nth-child(even) td,.pbi-banded tbody tr:nth-child(even) th{background:color-mix(in srgb,var(--pbi-fg) 2.5%,transparent)}
 .pbi-table tbody tr:hover td,.pbi-table tbody tr:hover th{background:color-mix(in srgb,var(--pbi-accent) 7%,transparent)}
 .pbi-row-select{cursor:pointer}

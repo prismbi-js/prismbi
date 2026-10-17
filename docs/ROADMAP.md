@@ -10,12 +10,12 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 2 | Pro visuals and deeper interactivity | `0.2` | ✅ Implemented |
 | 3 | Advanced modeling and DAX coverage | `0.3` | ✅ Implemented |
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | ✅ Implemented |
-| 5 | Scale, performance and data connectors | `0.5` | Planned |
+| 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | Planned |
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine, report runtime with edit mode) is **≈55 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈70 KB**, everything (34 visuals) is **≈87 KB**, and the full studio app (`prismbi/studio`) is **≈94 KB**. Editor tooling is tree-shaken out unless imported.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈59 KB min+gzip**. A typical dashboard that registers five visuals from `prismbi/visuals` is **≈74 KB**, everything (34 visuals) is **≈92 KB**, and the full studio app (`prismbi/studio`) is **≈95 KB**. Connectors (≈3 KB) and the worker engine (≈1.3 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -172,17 +172,45 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 **Deferred:** multi-select with align and distribute, a Power Query-style transform editor, animated transitions between data states, and per-page mobile layouts (Phase 5 polish). Also a usability test with non-developers (acceptance criterion), which is pending the live review.
 
-## Phase 5: Scale, performance and connectors
+## Phase 5: Scale, performance and connectors ✅
 
 **Goal:** millions of rows in the browser, and live data.
 
-- Execution in a Web Worker (off the main thread), with streaming results and cancellation
-- Per-visual entry points (`prismbi/visuals/waterfall`, …) and a core entry without auto-registration, for builds that only pay for the visuals they use
-- Bitmap or roaring indexes, dictionary-encoded columns, typed arrays, vectorised aggregations
-- Optional engines: Apache Arrow tables, DuckDB-WASM pushdown (DAX query → SQL), or a server-side engine on Node
-- Connectors: CSV, JSON, Parquet, REST/GraphQL, SQL (via a backend adapter), Google Sheets, streaming/WebSocket. Incremental refresh and scheduled refresh in the server runtime.
-- Canvas or WebGL rendering for dense scatter and line charts (≥100k points), virtualized tables
-- Performance budgets in CI: 1M rows grouped in under 150 ms, and 60 fps for interactions on the demo
+### Engine
+- [x] **Typed column views:** `Float64Array` numeric views and dictionary encoding (`Int32Array` codes), built lazily and cached per column
+- [x] **Vectorised aggregations** for `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT(A)`, `DISTINCTCOUNT`
+- [x] **Single-pass grouped queries.** Simple measures (those aggregations, `COUNTROWS`, `+ - * /`, `DIVIDE`, measure references) are answered in one pass over the fact rows instead of once per group, with automatic fallback to the general engine. A 16k-group query at 200k rows went from 10 s to 57 ms.
+- [x] Cheaper filter cache keys
+- [x] **Worker engine** (`prismbi/worker`): `serveModel` / `createWorkerEngine` with an async query, evaluate and mutate API, `AbortSignal` cancellation, and `createLocalEngine` for the same API in-process
+- [x] **`model.appendRows(table, rows, { maxRows })`:** incremental calculated columns and a sliding window
+
+### Connectors (`prismbi/connectors`)
+- [x] CSV (RFC 4180, delimiter detection, per-column typing), Google Sheets CSV URLs
+- [x] JSON, REST with page, offset, cursor and Link-header pagination, GraphQL
+- [x] Apache Arrow tables (duck-typed, no dependency). Parquet via DuckDB-Wasm or any Arrow producer
+- [x] SQL adapter interface (`loadSqlTables`)
+- [x] Streaming from WebSocket, EventSource or any message port (`streamInto`, batched, windowed), and `scheduleRefresh`
+
+### Rendering
+- [x] LTTB downsampling for dense lines and areas (hover still reads every point)
+- [x] Canvas scatter above 3,000 points, with grid hit-testing for tooltips, selection, the context menu and drill
+- [x] Virtualized tables above 500 rows
+
+### Tooling
+- [x] `npm run bench` (200k and 1M rows, cold timings with regression ceilings) and the `/perf.html` demo (scale and live stream)
+
+**Acceptance:** 220 tests pass, including equivalence of the fast and general query paths on the demo model and on edge cases (blanks, unmatched keys, dimension nulls). At 1M rows, grouped queries take 11–192 ms cold.
+
+**Not met:** cumulative time intelligence per day (`TOTALYTD`) still takes about 2.8 s cold at 1M rows, so the 150 ms target holds for simple measures only. The 60 fps interaction budget needs the live-browser review.
+
+**Deferred:**
+- Per-visual entry points
+- Bitmap or roaring indexes
+- DuckDB pushdown (DAX → SQL)
+- WebGL rendering
+- Running the `Report` runtime itself on the worker engine
+- A Node server runtime with scheduled refresh
+- Performance budgets in CI
 
 ## Phase 6: Beyond Power BI
 

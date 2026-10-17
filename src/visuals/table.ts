@@ -34,7 +34,15 @@ interface TableFormat {
   /** Pixel width per column name. */
   columnWidths?: Record<string, number>;
   pageSize?: number;
+  /** Render only the rows in view (default: automatic above 500 rows, off when wrapping). */
+  virtualize?: boolean;
 }
+
+/** Row count above which tables window their rows. */
+const VIRTUAL_MIN = 500;
+/** Rows rendered beyond each edge of the viewport while windowing. */
+const OVERSCAN = 12;
+const raf = (cb: () => void): void => void (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(cb) : setTimeout(cb, 16));
 
 function isGroupField(f: FieldSpec): boolean {
   if (typeof f === 'string') return isColumnRefString(f);
@@ -169,37 +177,39 @@ export const table = /* @__PURE__ */ defineVisual({
     tableEl.append(thead);
 
     const tbody = h('tbody');
-    const renderRows = (from: number, to: number) => {
-      for (let ri = from; ri < to; ri++) {
-        const r = rows[ri];
-        const identity = groupFields.length ? identityOf(groupFields, r.keys) : null;
-        const sel = identity ? ctx.host.isSelected(identity) : null;
-        const tr = h('tr', { class: sel === false ? 'is-dim' : sel ? 'is-selected' : '' });
-        cols.forEach((c, ci) => {
-          const v = c.kind === 'group' ? r.keys[c.i] : r.values[c.i];
-          const td = h('td', { class: c.kind === 'value' ? 'is-num' : '' });
-          const text = ctx.fmt(c.field, v);
-          if (c.kind === 'value') decorateCell(ctx, td, tf.conditional?.[c.field.name] ?? tf.conditional?.[c.field.ref], v, stats[ci], text);
-          else td.textContent = text;
-          tr.append(td);
+    const rowEl = (ri: number): HTMLElement => {
+      const r = rows[ri];
+      const identity = groupFields.length ? identityOf(groupFields, r.keys) : null;
+      const sel = identity ? ctx.host.isSelected(identity) : null;
+      const tr = h('tr', { class: sel === false ? 'is-dim' : sel ? 'is-selected' : '' });
+      cols.forEach((c, ci) => {
+        const v = c.kind === 'group' ? r.keys[c.i] : r.values[c.i];
+        const td = h('td', { class: c.kind === 'value' ? 'is-num' : '' });
+        const text = ctx.fmt(c.field, v);
+        if (c.kind === 'value') decorateCell(ctx, td, tf.conditional?.[c.field.name] ?? tf.conditional?.[c.field.ref], v, stats[ci], text);
+        else td.textContent = text;
+        tr.append(td);
+      });
+      if (identity) {
+        tr.classList.add('pbi-row-select');
+        tr.addEventListener('click', (e) => {
+          e.stopPropagation();
+          ctx.host.select(identity, { multi: e.ctrlKey || e.metaKey });
+          ctx.host.emit('dataPointClick', { keys: r.keys, identity, event: e });
         });
-        if (identity) {
-          tr.classList.add('pbi-row-select');
-          tr.addEventListener('click', (e) => {
-            e.stopPropagation();
-            ctx.host.select(identity, { multi: e.ctrlKey || e.metaKey });
-            ctx.host.emit('dataPointClick', { keys: r.keys, identity, event: e });
-          });
-          tr.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            ctx.host.contextMenu(e, identity);
-          });
-        }
-        tbody.append(tr);
+        tr.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          ctx.host.contextMenu(e, identity);
+        });
       }
+      return tr;
     };
-    renderRows(0, shown);
+    const renderRows = (from: number, to: number) => {
+      for (let ri = from; ri < to; ri++) tbody.append(rowEl(ri));
+    };
+    const virtual = tf.virtualize ?? (rows.length > VIRTUAL_MIN && !tf.wrap);
+    if (!virtual) renderRows(0, shown);
     tableEl.append(tbody);
 
     if (data.totals && tf.totals !== false) {
@@ -210,6 +220,58 @@ export const table = /* @__PURE__ */ defineVisual({
       tableEl.append(tfoot);
     }
     const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);
+    if (virtual) {
+      // windowing: spacer rows stand in for everything outside the viewport
+      let rowH = 0;
+      const spacer = (height: number) => {
+        const tr = h('tr', { class: 'pbi-spacer', 'aria-hidden': 'true' });
+        const td = h('td', { colspan: cols.length });
+        td.style.height = `${height}px`;
+        tr.append(td);
+        return tr;
+      };
+      let range = '';
+      const update = () => {
+        const est = rowH || 28;
+        const view = scroller.clientHeight || est * 40;
+        let first = Math.max(0, Math.floor(scroller.scrollTop / est) - OVERSCAN);
+        // keep zebra banding stable: with a top spacer the first data row must have an odd index
+        if (first > 0 && first % 2 === 0) first--;
+        const last = Math.min(rows.length, first + Math.ceil(view / est) + OVERSCAN * 2);
+        if (`${first}:${last}` === range) return;
+        range = `${first}:${last}`;
+        const els: HTMLElement[] = [];
+        if (first > 0) els.push(spacer(first * est));
+        for (let ri = first; ri < last; ri++) els.push(rowEl(ri));
+        if (last < rows.length) els.push(spacer((rows.length - last) * est));
+        tbody.replaceChildren(...els);
+        if (!rowH) {
+          const measured = (els.find((e) => !e.classList.contains('pbi-spacer')) as HTMLElement | undefined)?.offsetHeight ?? 0;
+          if (measured) {
+            rowH = measured;
+            range = '';
+            update();
+          }
+        }
+      };
+      update();
+      let pending = false;
+      scroller.addEventListener('scroll', () => {
+        if (pending) return;
+        pending = true;
+        raf(() => {
+          pending = false;
+          update();
+        });
+      });
+      ctx.root.replaceChildren(scroller);
+      // measure real row heights once attached
+      raf(() => {
+        range = '';
+        update();
+      });
+      return;
+    }
     // incremental rendering: append the next page when scrolled near the bottom
     let rendered = shown;
     scroller.addEventListener('scroll', () => {

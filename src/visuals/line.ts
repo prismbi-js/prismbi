@@ -1,4 +1,5 @@
 import { s, barPath, measureText } from '../render/svg';
+import { downsampleRuns } from '../render/lttb';
 import { bandScale, linearScale, logScale, pointScale, timeScale } from '../render/scales';
 import type { RenderContext } from './types';
 import { defineVisual } from './registry';
@@ -201,6 +202,9 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     });
   }
 
+  // dense series are thinned to ~2 points per pixel for drawing (hover still reads every point)
+  const maxPts = Math.max(300, Math.round((width - right - left) * 2));
+  const thin = (p: ([number, number] | null)[]) => downsampleRuns(p, maxPts);
   // stacked baselines
   const base = categories.map(() => 0);
   lineSeries.forEach((se) => {
@@ -213,12 +217,13 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       const lower = categories.map((_, i) => [xAt(i), scale(stacked ? base[i] : 0)] as [number, number]);
       const valid = pts.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
       if (valid.length) {
-        const upper = valid.map((i) => pts[i]!);
-        const low = valid.map((i) => lower[i]).reverse();
+        // stacked areas need every point to meet the series below; flat baselines can be thinned
+        const upper = stacked ? valid.map((i) => pts[i]!) : (thin(pts).filter(Boolean) as [number, number][]);
+        const low = stacked ? valid.map((i) => lower[i]).reverse() : upper.map((p) => [p[0], scale(0)] as [number, number]).reverse();
         marks.append(s('path', { d: `M${upper.map((p) => p.join(',')).join('L')}L${low.map((p) => p.join(',')).join('L')}Z`, fill: se.color, 'fill-opacity': stacked ? 0.55 : f.lines.areaOpacity, stroke: 'none', 'pointer-events': 'none' }));
       }
     }
-    const path = s('path', { d: linePath(pts, f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: se.highlights ? 0.3 : se.identity ? markOpacity(ctx, se.identity) : 1, class: 'pbi-line' });
+    const path = s('path', { d: linePath(stacked ? pts : thin(pts), f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: se.highlights ? 0.3 : se.identity ? markOpacity(ctx, se.identity) : 1, class: 'pbi-line' });
     if (ctx.animate && f.animation.enabled) {
       path.style.strokeDasharray = '4000';
       path.style.strokeDashoffset = '4000';
@@ -229,7 +234,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     if (se.highlights && !stacked) {
       // cross-highlight: the selected portion drawn solid over the faded full line
       const hp = se.highlights.map((v, i) => (v === null ? null : ([xAt(i), scale(v)] as [number, number])));
-      marks.append(s('path', { d: linePath(hp, f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', class: 'pbi-line pbi-line-highlight', 'pointer-events': 'none' }));
+      marks.append(s('path', { d: linePath(thin(hp), f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', class: 'pbi-line pbi-line-highlight', 'pointer-events': 'none' }));
     }
     const showMarkers = f.lines.markers === true || (f.lines.markers === 'auto' && categories.length <= 16);
     if (showMarkers)

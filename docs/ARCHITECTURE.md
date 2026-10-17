@@ -26,10 +26,11 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | Path | Responsibility |
 |---|---|
 | `src/data/types.ts` | `CellValue`, column refs (`'Table[Col]'`), value ordering and keys |
-| `src/data/table.ts` | `DataTable`: column arrays, type inference and coercion, lazy hash index, sorted distinct values (sort-by aware) |
+| `src/data/table.ts` | `DataTable`: column arrays, type inference and coercion, lazy hash index, sorted distinct values (sort-by aware), cached `Float64Array` numeric views and dictionary codes, `appendRows` / `removeFirst` |
 | `src/data/filters.ts` | Public `FilterSpec` → compiled `Filter`, cache keys, CALCULATE override rules |
 | `src/data/model.ts` | `DataModel`: relationships, expanded tables, `rowsOf(table, ctx)` filter propagation, related lookups, row-set cache |
 | `src/data/query.ts` | Field resolution (measures, implicit aggregations, expressions), auto-exist grouping, sorting, Top N, highlights, totals |
+| `src/data/fastQuery.ts` | Single-pass grouped evaluation: compiles simple measures into aggregation trees and accumulates every group in one scan of the fact rows |
 | `src/data/dates.ts` | Calendar table generator |
 | `src/dax/parser.ts` | Tokenizer and recursive-descent parser for the DAX-like syntax, memoised |
 | `src/dax/evaluator.ts` | Evaluator: filter and row context, context transition, CALCULATE modifiers, iterators, time intelligence, about 110 functions |
@@ -43,6 +44,9 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | `src/report/styles.ts` | The single injected stylesheet, driven by CSS variables |
 | `src/report/editing.ts` | Edit mode: selection overlays, drag and resize with grid snapping, free-spot finder |
 | `src/report/migrate.ts` | Report schema version and migrations |
+| `src/connectors/*` | `prismbi/connectors`: CSV, HTTP (JSON, REST pagination, GraphQL), Arrow, SQL adapters, streaming and scheduled refresh. Imports only types from the core |
+| `src/worker.ts` | `prismbi/worker`: message protocol between `serveModel` (in a worker) and `createWorkerEngine`, plus `createLocalEngine` |
+| `src/render/lttb.ts` | Largest-Triangle-Three-Buckets downsampling for dense series |
 | `src/studio/*` | Studio: shell and history (`studio.ts`), field assignment (`assign.ts`), panes (`panes.ts`, `formatPane.ts`), format schema, dialogs and expression editor, data and model views (`views.ts`), auto report |
 
 ## How a filter flows
@@ -50,7 +54,7 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 1. **Sources of filters** for a visual V on page P:
    report filters + P's page filters + V's visual filters + the selection of every *other* slicer on P + the selection from another visual, when V's interaction mode is `filter`. When V's mode is `highlight`, the selection goes into `QuerySpec.highlight` instead.
 2. `VisualHost.buildQuery()` maps data roles to a `QuerySpec`: grouping roles give `groupBy` and measure roles give `values`. For a drillable role, only the current level goes into `groupBy`, and the parent levels become `eq` filters.
-3. `runQuery` finds the group combinations that exist under the filters ("auto-exist"). It starts from the most granular table that reaches every group column, which is usually the fact table. Each combination adds `eq` filters marked `origin: 'group'`, which `ALLSELECTED` can remove.
+3. If every value is a *simple* measure (see below) and the grouping is multi-column or has more than 1,000 values, `fastGroupQuery` answers the whole query in one scan and steps 3–4 are skipped. Otherwise `runQuery` finds the group combinations that exist under the filters ("auto-exist"). It starts from the most granular table that reaches every group column, which is usually the fact table. Each combination adds `eq` filters marked `origin: 'group'`, which `ALLSELECTED` can remove.
 4. For every combination, the evaluator computes each value expression in that filter context.
 5. `rowsOf(table, ctx)` resolves which rows are visible:
    - Filters on the table's own columns narrow it through hash-index lookups for `eq`/`in`, or a scan otherwise.
@@ -65,6 +69,17 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 - **Bidirectional step:** a dimension is narrowed by the keys of fact rows visible under the *foreign* filters only (filters that apply to the fact but not already to the dimension). The dimension is "blocked" while computing that fact to prevent cycles.
 - **Many-to-many** relationships propagate like any other, but are excluded from `expanded()` / `pathTo()`, so `RELATED` and auto-exist anchors never cross them.
 - **Row-level security:** per-table row sets computed from role rules are appended to every `rowsOf` call, beneath the filter context, so `ALL()` can't remove them.
+
+### Single-pass grouped queries
+
+`fastGroupQuery` compiles each value expression into a tree of leaf aggregations. The leaves are `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT(A)`, `DISTINCTCOUNT` and `COUNTROWS` over one fact table, combined with `+ - * /` and `DIVIDE`. Measure references are inlined. The compiler then checks two things:
+
+- **Blank-preserving:** the tree is BLANK whenever all its leaves are. Groups with no rows must still drop out, so `SUM(x) + 1` is rejected.
+- **Calendar dates:** dates appear only as a whole measure, never inside arithmetic, because date arithmetic has calendar semantics.
+
+Each group column is resolved to a per-fact-row dictionary code. Each many-to-one hop maps the foreign key's dictionary through the key index once. Then one scan over `rowsOf(fact, base)` feeds per-group accumulators, a total accumulator and, when highlighting, a second scan under the highlight filters.
+
+BLANK arithmetic mirrors the evaluator's exactly. Fact rows whose key has no dimension row count in totals but in no group, as in the general path. Calculation groups in play, `USERELATIONSHIP`/`CROSSFILTER` filters and `includeEmpty` fall back to the general path.
 
 ## Evaluation model
 
@@ -81,6 +96,10 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 - Each `VisualHost` caches its last query by a key built from the serialised `QuerySpec` and the model version. A selection change re-queries only the visuals whose filters changed. The source visual just re-renders to dim unselected marks.
 - Visuals receive a `RenderContext` containing their size, merged format, theme, data, role bindings, entity-stable colours, a formatter and the host API. They render into their root element and may return a cleanup function.
 - **Colour follows the entity:** a category's colour is its index in the column's full domain, never its rank in the current result. Filtering never repaints the survivors. Past the palette, values use `theme.otherColor`, and pie, donut and treemap fold extra values into "Other".
+- **Dense data:**
+  - Lines and areas are thinned with LTTB to about two points per pixel.
+  - Scatter charts above 3,000 points paint on a canvas over the SVG axes and hit-test through a spatial grid.
+  - Tables above 500 rows window their `<tbody>` between spacer rows, keeping banding parity.
 - Styles are one injected stylesheet. Themes only set CSS custom properties on the report root, so switching themes needs no re-injection.
 
 ## Extending

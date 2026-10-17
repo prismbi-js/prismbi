@@ -47,6 +47,16 @@
       "import": "./dist/studio.js",
       "require": "./dist/studio.cjs"
     },
+    "./connectors": {
+      "types": "./dist/connectors.d.ts",
+      "import": "./dist/connectors.js",
+      "require": "./dist/connectors.cjs"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js",
+      "require": "./dist/worker.cjs"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",
@@ -64,6 +74,7 @@
     "dev": "vite --config examples/vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench": "vitest run --config vitest.bench.config.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },

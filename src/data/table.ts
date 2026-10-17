@@ -74,6 +74,8 @@ export class DataTable {
   private _rowCount = 0;
   private indexes = new Map<string, Map<unknown, number[]>>();
   private distinctCache = new Map<string, CellValue[]>();
+  private numericCache = new Map<string, Float64Array>();
+  private codesCache = new Map<string, { codes: Int32Array; dict: CellValue[] }>();
 
   constructor(name: string, rows: Row[] = [], schema: Record<string, ColumnSchema> = {}) {
     this.name = name;
@@ -134,14 +136,83 @@ export class DataTable {
   setColumn(col: Column): void {
     if (col.values.length !== this._rowCount) throw new Error(`Column "${col.name}" must have ${this._rowCount} values`);
     this.columns.set(col.name, col);
-    this.indexes.delete(col.name);
-    this.distinctCache.delete(col.name);
+    this.invalidate(col.name);
+  }
+
+  private invalidate(name?: string): void {
+    for (const cache of [this.indexes, this.distinctCache, this.numericCache, this.codesCache] as Map<string, unknown>[]) {
+      if (name === undefined) cache.clear();
+      else cache.delete(name);
+    }
+  }
+
+  /**
+   * Numeric view of a column as a Float64Array (dates as epoch ms, booleans 0/1, BLANK as NaN).
+   * Built once and cached; used by the fast aggregation paths.
+   */
+  numeric(column: string): Float64Array {
+    let a = this.numericCache.get(column);
+    if (!a) {
+      const vals = this.column(column).values;
+      a = new Float64Array(vals.length);
+      for (let i = 0; i < vals.length; i++) {
+        const v = vals[i];
+        a[i] = v === null ? NaN : typeof v === 'number' ? v : v instanceof Date ? v.getTime() : typeof v === 'boolean' ? (v ? 1 : 0) : NaN;
+      }
+      this.numericCache.set(column, a);
+    }
+    return a;
+  }
+
+  /** Dictionary encoding of a column: a code per row (-1 for BLANK) and the distinct values by code. Cached. */
+  codes(column: string): { codes: Int32Array; dict: CellValue[] } {
+    let c = this.codesCache.get(column);
+    if (!c) {
+      const vals = this.column(column).values;
+      const codes = new Int32Array(vals.length);
+      const dict: CellValue[] = [];
+      const seen = new Map<unknown, number>();
+      for (let i = 0; i < vals.length; i++) {
+        const v = vals[i];
+        if (v === null) {
+          codes[i] = -1;
+          continue;
+        }
+        const k = valueKey(v);
+        let code = seen.get(k);
+        if (code === undefined) {
+          code = dict.length;
+          dict.push(v);
+          seen.set(k, code);
+        }
+        codes[i] = code;
+      }
+      c = { codes, dict };
+      this.codesCache.set(column, c);
+    }
+    return c;
+  }
+
+  /** Append rows (coerced to each column's type; unknown keys are ignored, missing ones are BLANK). */
+  appendRows(rows: Row[]): void {
+    if (!rows.length) return;
+    for (const col of this.columns.values()) for (const r of rows) col.values.push(coerce(r[col.name], col.type));
+    this._rowCount += rows.length;
+    this.invalidate();
+  }
+
+  /** Drop the first `n` rows (sliding windows for streaming data). */
+  removeFirst(n: number): void {
+    if (n <= 0) return;
+    const k = Math.min(n, this._rowCount);
+    for (const col of this.columns.values()) col.values.splice(0, k);
+    this._rowCount -= k;
+    this.invalidate();
   }
 
   removeColumn(name: string): void {
     this.columns.delete(name);
-    this.indexes.delete(name);
-    this.distinctCache.delete(name);
+    this.invalidate(name);
   }
 
   /** Hash index: value key → ascending row indices. */
