@@ -96,6 +96,8 @@ format: {
 
 `legend.show: 'auto'` shows a legend when there are two or more series, and hides it for one series because the title already says what is plotted.
 
+`animation` controls motion. On the first render, charts grow in. When the data changes (a filter, a slicer or a selection), each data point moves from where it was to its new place, matched by its identity (category, series). Points that are new fade in. Lines and areas morph when their shape allows it. `duration` is in milliseconds. Users with `prefers-reduced-motion` get no animation. Exports always capture the final state.
+
 ### Visual-specific sections
 
 ```ts

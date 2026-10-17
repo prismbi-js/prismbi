@@ -282,10 +282,10 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
         // stacked areas need every point to meet the series below; flat baselines can be thinned
         const upper = stacked ? valid.map((i) => pts[i]!) : (thin(pts).filter(Boolean) as [number, number][]);
         const low = stacked ? valid.map((i) => lower[i]).reverse() : upper.map((p) => [p[0], lscale(0)] as [number, number]).reverse();
-        marks.append(s('path', { d: `M${upper.map((p) => p.join(',')).join('L')}L${low.map((p) => p.join(',')).join('L')}Z`, fill: se.color, 'fill-opacity': stacked ? 0.55 : f.lines.areaOpacity, stroke: 'none', 'pointer-events': 'none' }));
+        marks.append(s('path', { d: `M${upper.map((p) => p.join(',')).join('L')}L${low.map((p) => p.join(',')).join('L')}Z`, fill: se.color, 'fill-opacity': stacked ? 0.55 : f.lines.areaOpacity, stroke: 'none', 'pointer-events': 'none', 'data-key': `area:${se.name}` }));
       }
     }
-    const path = s('path', { d: linePath(stacked ? pts : thin(pts), f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: se.highlights ? 0.3 : se.identity ? markOpacity(ctx, se.identity) : 1, class: 'pbi-line' });
+    const path = s('path', { d: linePath(stacked ? pts : thin(pts), f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: se.highlights ? 0.3 : se.identity ? markOpacity(ctx, se.identity) : 1, class: 'pbi-line', 'data-key': `line:${se.name}` });
     if (ctx.animate && f.animation.enabled) {
       // pathLength=1 makes the dash keyframes length-independent; nothing is hidden outside the animation
       path.setAttribute('pathLength', '1');

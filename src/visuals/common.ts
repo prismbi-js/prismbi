@@ -270,6 +270,8 @@ export function tooltipItems(ctx: RenderContext, cat: Category, series: Series[]
 export function interactive(ctx: RenderContext, el: Element, identity: DataPointIdentity, tooltip: () => { title?: string; items: TooltipItem[] }, keys: CellValue[]): void {
   el.classList.add('pbi-mark');
   el.setAttribute('tabindex', '0');
+  // stable identity across renders: animated transitions tween the same data point
+  el.setAttribute('data-key', JSON.stringify([identity.columns.map((c) => `${c.table}[${c.column}]`), identity.values.map((v) => (v instanceof Date ? v.getTime() : v))]));
   el.addEventListener('click', (e) => {
     e.stopPropagation();
     const me = e as MouseEvent;

@@ -18,6 +18,7 @@ function portable(spec: QuerySpec): boolean {
 }
 import { download, elementToSvg, svgToCanvas } from './snapshot';
 import { narrate } from './narrate';
+import { prefersReducedMotion, snapshotMarks, tweenMarks } from './transitions';
 
 const asArray = (f: FieldSpec | FieldSpec[] | undefined): FieldSpec[] => (f === undefined ? [] : Array.isArray(f) ? f : [f]);
 const fieldRef = (f: FieldSpec) => (typeof f === 'string' ? f : (f.field ?? f.expression ?? ''));
@@ -247,6 +248,9 @@ export class VisualHost {
     marks.forEach((m, i) => m.setAttribute('tabindex', i === keep ? '0' : '-1'));
   }
 
+  private stopTween?: () => void;
+  private tweenEnd = 0;
+
   /** Index of the data point that holds the visual's tab stop. */
   markIndex = 0;
 
@@ -293,13 +297,23 @@ export class VisualHost {
       return { ...b, fields: b.indices.map((i) => (b.kind === 'group' ? data.groups[i] : data.values[i])).filter(Boolean) };
     };
     if (typeof this.cleanup === 'function') this.cleanup();
+    // data changed after the first render: remember where the data points were, to tween from there
+    const dataChanged = this.dataKey !== this.lastRenderedKey;
+    // a re-render during a transition continues it from the in-between geometry for the time that is left
+    const now = performance.now();
+    const running = !!this.stopTween && now < this.tweenEnd;
+    const prev = (dataChanged && this.lastRenderedKey !== '') || running ? (f.animation.enabled && !this.showTable && !prefersReducedMotion() ? snapshotMarks(this.body) : null) : null;
+    const tweenMs = dataChanged ? f.animation.duration : Math.max(0, this.tweenEnd - now);
+    this.stopTween?.();
+    this.stopTween = undefined;
     this.body.replaceChildren();
     const root = h('div', { class: 'pbi-vroot' });
     this.body.append(root);
     const width = Math.max(0, this.size.w || 300);
     const height = Math.max(0, this.size.h || 200);
     if (this.showTable) return this.renderDataTable(root, data);
-    const animate = this.dataKey !== this.lastRenderedKey;
+    // first render grows in; later data changes tween from the previous state instead
+    const animate = dataChanged && !prev?.size && !running;
     this.lastRenderedKey = this.dataKey;
     const ctx: RenderContext = {
       root,
@@ -326,6 +340,10 @@ export class VisualHost {
     }
     this.applyNarration(f);
     this.rovingMarks();
+    if (prev?.size && tweenMs > 0) {
+      this.stopTween = tweenMarks(root, prev, tweenMs);
+      this.tweenEnd = performance.now() + tweenMs;
+    }
     this.rt.emit('rendered', { visualId: this.id, ms: performance.now() - t0 });
   }
 
@@ -559,6 +577,9 @@ export class VisualHost {
 
   /** Standalone SVG snapshot of the visual (HTML content embedded via foreignObject, styles inlined). */
   toSvg(): string {
+    // snapshots show the final state, not a frame of a transition
+    this.stopTween?.();
+    this.stopTween = undefined;
     const w = Math.max(1, Math.round(this.el.offsetWidth || this.size.w + 24 || 600));
     const hh = Math.max(1, Math.round(this.el.offsetHeight || this.size.h + 60 || 400));
     return elementToSvg(this.el, this.rt.theme, w, hh);

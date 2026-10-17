@@ -173,3 +173,36 @@ describe('keyboard walkthrough', () => {
     el.remove();
   });
 });
+
+describe('animated transitions', () => {
+  it('tweens data points from their previous geometry when the data changes', async () => {
+    const el = document.createElement('div');
+    el.style.cssText = 'width:800px;height:500px';
+    document.body.append(el);
+    const r = new Report(el, {
+      model: makeModel(),
+      pages: [{ id: 'p', name: 'P', visuals: [{ id: 'c', type: 'clusteredColumn', layout: { x: 0, y: 0, w: 12, h: 8 }, fields: { category: 'Products[Category]', values: 'Total Sales' }, format: { animation: { enabled: true, duration: 120 } } }] }],
+      measure: () => ({ width: 700, height: 400 }),
+    });
+    r.flush();
+    const bars = () => [...el.querySelectorAll<SVGPathElement>('path.pbi-mark')];
+    const ds = () => bars().map((b) => b.getAttribute('d'));
+    const round = (d: string | null) => d?.replace(/-?\d*\.?\d+/g, (n) => String(+(+n).toFixed(2)));
+    const keys = bars().map((b) => b.getAttribute('data-key'));
+    const before = ds();
+    r.setReportFilters([{ target: 'Date[Year]', op: 'eq', value: 2025 }]);
+    r.flush();
+    const changed = bars().findIndex((b) => keys.includes(b.getAttribute('data-key')) && b.getAttribute('d') === round(before[keys.indexOf(b.getAttribute('data-key'))]) && b.getAttribute('d') !== before[keys.indexOf(b.getAttribute('data-key'))]);
+    expect(changed).toBeGreaterThanOrEqual(0); // a bar that moves starts where it was
+    await new Promise((res) => setTimeout(res, 400));
+    const after = ds();
+    expect(after).not.toEqual(before); // and ends at the new value
+    // exporting mid-transition shows the final state
+    r.setReportFilters([]);
+    r.flush();
+    r.visual('c')!.toSvg();
+    expect(ds()).toEqual(before);
+    r.destroy();
+    el.remove();
+  });
+});
