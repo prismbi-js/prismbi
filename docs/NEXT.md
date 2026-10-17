@@ -81,6 +81,8 @@ Contents:
 
 ## After Phase 6
 
+**Phase 7 progress:** visual calculations, DAX window functions and visual regression tests are done (tests/phase7.test.ts, scripts/visual-test.mjs, examples/gallery*.ts, baselines in tests/visual/). Next in Phase 7: the transform (Power Query-style) editor, then mobile layouts, multi-select in the Studio, and visual polish. Then Power BI import from Phase 9.
+
 Phases 7–9 are planned in `docs/ROADMAP.md`. Next after Phase 6: visual calculations and window functions, visual regression tests, then Power BI import.
 
 ## Gotchas learned

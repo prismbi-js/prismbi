@@ -22,6 +22,6 @@ export default defineConfig({
       { find: /^@prismbi\/prismbi\/plugins$/, replacement: src('plugins.ts') },
     ],
   },
-  build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html'), perf: here('./perf.html'), elements: here('./elements.html') } } },
+  build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html'), perf: here('./perf.html'), elements: here('./elements.html'), gallery: here('./gallery.html') } } },
   server: { port: 5173, open: false },
 });

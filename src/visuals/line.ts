@@ -108,6 +108,25 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     hi = -Infinity;
     for (const se of all) for (const v of [...se.values, ...(se.highlights ?? [])]) if (v !== null) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
   }
+  // combo: lines on a very different scale (or a different kind of unit) get their own axis on the right
+  const extent = (list: Series[]) => {
+    let a = Infinity;
+    let b = -Infinity;
+    for (const se of list) for (const v of se.values) if (v !== null) (a = Math.min(a, v)), (b = Math.max(b, v));
+    return a <= b ? [a, b] : [0, 0];
+  };
+  const isPct = (se: Series | undefined) => /%/.test(se?.field?.format ?? '');
+  const [, colMax] = extent(colSeries);
+  const [lineMin, lineMax] = extent(lineSeries);
+  const ratio = Math.max(Math.abs(colMax), 1e-9) / Math.max(Math.abs(lineMax), Math.abs(lineMin), 1e-9);
+  const secondary = kind === 'combo' && colSeries.length > 0 && lineSeries.length > 0 && (ratio > 8 || ratio < 1 / 8 || isPct(colSeries[0]) !== isPct(lineSeries[0]));
+  if (secondary) {
+    const [cMin] = extent(colSeries);
+    lo = Math.min(0, cMin);
+    hi = Math.max(0, colMax);
+  }
+  const lineField = secondary ? lineSeries[0].field : undefined;
+  const makeY2 = (range: [number, number], tickCount: number) => linearScale(Math.min(0, lineMin), Math.max(0, lineMax), range, { includeZero: true, tickCount });
   const valueField = all[0]?.field;
   const endLabels = f.lines.endLabels && lineSeries.length <= 4 && kind !== 'combo';
   const labelFmt = labelFormatter(ctx, valueField);
@@ -122,7 +141,8 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   let scale = makeY([height - 30, top], Math.max(2, Math.min(va.tickCount, Math.floor(height / 40))));
   const fmtAxis = valueAxisFormatter(ctx, valueField, scale);
   const left = va.show ? Math.ceil(Math.max(...scale.ticks.map((x) => measureText(fmtAxis(x), fs, t.fontFamily)))) + 12 : 8;
-  const right = endW;
+  const fmtAxis2 = lineField ? valueAxisFormatter(ctx, lineField, makeY2([height - 30, top], 4)) : null;
+  const right = fmtAxis2 ? Math.max(endW, Math.ceil(Math.max(...makeY2([height - 30, top], 4).ticks.map((x) => measureText(fmtAxis2(x), fs, t.fontFamily)))) + 14) : endW;
   const useBand = kind === 'combo';
   let xs = useBand ? bandScale(categories.length, [left, width - right], f.bars.categoryGap, 0.15) : pointScale(categories.length, [left, width - right], 6);
   let xAt = (i: number) => (useBand ? xs(i) + xs.bandwidth / 2 : xs(i));
@@ -166,12 +186,17 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const catLayout = continuous ? { angle: 0 as const, height: f.categoryAxis.show ? fs + 10 : 4, every: 1, maxWidth: 0 } : categoryLabelLayout(ctx, labels, Math.max(xs.step, 1));
   const bottom = height - catLayout.height - 2;
   scale = makeY([bottom, top], Math.max(2, Math.min(va.tickCount, Math.floor((bottom - top) / 36))));
+  const lscale = secondary ? makeY2([bottom, top], Math.max(2, Math.min(va.tickCount, Math.floor((bottom - top) / 36)))) : scale;
 
   const svg = s('svg', { width, height, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Line chart' });
   const g = s('g');
   svg.append(g);
   plot.append(svg);
   drawValueAxisY(ctx, g, scale, left, width - right, valueAxisFormatter(ctx, valueField, scale));
+  if (secondary && va.show) {
+    const fmt2 = valueAxisFormatter(ctx, lineField, lscale);
+    for (const tick of lscale.ticks) g.append(s('text', { x: width - right + 8, y: lscale(tick) + fs / 3, 'text-anchor': 'start', class: 'pbi-tick pbi-tick-secondary', fill: lineSeries[0].color }, fmt2(tick)));
+  }
   if (continuous) {
     if (f.categoryAxis.show)
       for (const tk of contTicks) {
@@ -211,15 +236,15 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     const pts = se.values.map((v, i) => {
       if (v === null && !stacked) return null;
       const y = stacked ? base[i] + (v ?? 0) : (v as number);
-      return [xAt(i), scale(y)] as [number, number];
+      return [xAt(i), lscale(y)] as [number, number];
     });
     if (kind === 'area' || stacked || f.lines.area) {
-      const lower = categories.map((_, i) => [xAt(i), scale(stacked ? base[i] : 0)] as [number, number]);
+      const lower = categories.map((_, i) => [xAt(i), lscale(stacked ? base[i] : 0)] as [number, number]);
       const valid = pts.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
       if (valid.length) {
         // stacked areas need every point to meet the series below; flat baselines can be thinned
         const upper = stacked ? valid.map((i) => pts[i]!) : (thin(pts).filter(Boolean) as [number, number][]);
-        const low = stacked ? valid.map((i) => lower[i]).reverse() : upper.map((p) => [p[0], scale(0)] as [number, number]).reverse();
+        const low = stacked ? valid.map((i) => lower[i]).reverse() : upper.map((p) => [p[0], lscale(0)] as [number, number]).reverse();
         marks.append(s('path', { d: `M${upper.map((p) => p.join(',')).join('L')}L${low.map((p) => p.join(',')).join('L')}Z`, fill: se.color, 'fill-opacity': stacked ? 0.55 : f.lines.areaOpacity, stroke: 'none', 'pointer-events': 'none' }));
       }
     }
@@ -234,7 +259,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     marks.append(path);
     if (se.highlights && !stacked) {
       // cross-highlight: the selected portion drawn solid over the faded full line
-      const hp = se.highlights.map((v, i) => (v === null ? null : ([xAt(i), scale(v)] as [number, number])));
+      const hp = se.highlights.map((v, i) => (v === null ? null : ([xAt(i), lscale(v)] as [number, number])));
       marks.append(s('path', { d: linePath(thin(hp), f.lines.smooth), fill: 'none', stroke: se.color, 'stroke-width': f.lines.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', class: 'pbi-line pbi-line-highlight', 'pointer-events': 'none' }));
     }
     const showMarkers = f.lines.markers === true || (f.lines.markers === 'auto' && categories.length <= 16);
@@ -245,13 +270,13 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
         marks.append(s('circle', { cx: p[0], cy: p[1], r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2, opacity: op, 'pointer-events': 'none' }));
         // the highlighted value gets the solid marker, like the solid highlight line
         const hv = se.highlights && !stacked ? se.highlights[i] : null;
-        if (hv !== null && hv !== undefined) marks.append(s('circle', { cx: p[0], cy: scale(hv), r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2, class: 'pbi-marker-highlight', 'pointer-events': 'none' }));
+        if (hv !== null && hv !== undefined) marks.append(s('circle', { cx: p[0], cy: lscale(hv), r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2, class: 'pbi-marker-highlight', 'pointer-events': 'none' }));
       });
     if (stacked) se.values.forEach((v, i) => (base[i] += v ?? 0));
   });
 
-  drawReferenceLines(ctx, g, scale, 'y', [left, width - right], all.flatMap((se) => se.values.filter((v): v is number => v !== null)), valueField);
-  if (!stacked) lineSeries.forEach((se) => drawTrendLine(ctx, g, se.values, xAt, scale, se.color));
+  drawReferenceLines(ctx, g, scale, 'y', [left, width - right], (secondary ? colSeries : all).flatMap((se) => se.values.filter((v): v is number => v !== null)), valueField);
+  if (!stacked) lineSeries.forEach((se) => drawTrendLine(ctx, g, se.values, xAt, lscale, se.color));
 
   // end labels (value at the end of each line)
   if (endLabels) {
@@ -259,7 +284,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     lineSeries.forEach((se) => {
       const li = lastIndex(se);
       if (li < 0) return;
-      let y = scale(stacked ? cumulative(lineSeries, se, li) : se.values[li]!) + fs / 3;
+      let y = lscale(stacked ? cumulative(lineSeries, se, li) : se.values[li]!) + fs / 3;
       if (placed.some((p) => Math.abs(p - y) < fs + 1)) return; // collisions → legend/tooltip carry it
       placed.push(y);
       y = Math.max(fs, Math.min(bottom, y));
@@ -275,7 +300,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
         const text = fmt(v);
         const w = measureText(text, fs, t.fontFamily);
         const x = xAt(i);
-        const y = scale(v) - 8;
+        const y = lscale(v) - 8;
         if (placed.some(([a, b, py]) => x - w / 2 < b && x + w / 2 > a && Math.abs(py - y) < fs)) return;
         placed.push([x - w / 2 - 2, x + w / 2 + 2, y]);
         marks.append(s('text', { x, y, 'text-anchor': 'middle', class: 'pbi-label', fill: t.foregroundSecondary }, text));
@@ -304,7 +329,7 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       const v = se.values[i];
       if (v === null) continue;
       const yv = stacked ? (cum[i] += v) : v;
-      dots.append(s('circle', { cx: x, cy: scale(yv), r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2 }));
+      dots.append(s('circle', { cx: x, cy: lscale(yv), r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2 }));
     }
     if (f.tooltip.show) ctx.host.showTooltip(e, tooltipItems(ctx, categories[i], all, i), categories[i].label, categories[i].identity);
   });

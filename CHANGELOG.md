@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 (unreleased): Phase 7, analyst essentials (in progress)
+
+- **Visual calculations:** `{ visualCalc: 'RUNNINGSUM([Total Sales])', reset? }` on value fields, evaluated over the visual's rows after sorting and Top N.
+- **DAX window functions:** `OFFSET`, `INDEX`, `WINDOW`, `RANK`, `ROWNUMBER`, `ORDERBY`, `PARTITIONBY` (also in the DAX catalog and language service).
+- **Visual regression tests:** `npm run test:visual` (with `--update`), `/gallery.html` with every visual.
+- **Fixes:** combo charts put a line on a different scale (or unit) on a secondary axis; map bubbles stay inside the frame; radar tick labels no longer overlap category labels; the decomposition tree scrolls instead of clipping.
+
 ## 0.6.0 (2026-10-17): Phase 6, beyond Power BI
 
 - **`@prismbi/prismbi/ai`:**

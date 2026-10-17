@@ -216,7 +216,7 @@ export const CSS = /* css */ `
 .pbi-sm-title{font-size:var(--pbi-label-size);font-weight:600;color:var(--pbi-fg-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:calc(var(--pbi-label-size) + 4px)}
 .pbi-sm-body{position:relative;flex:1;min-height:0}
 .pbi-decomp-scroll{overflow:auto;height:100%}
-.pbi-decomp{display:flex;gap:14px;min-height:100%;align-items:flex-start}
+.pbi-decomp{display:flex;gap:14px;height:100%;align-items:flex-start;overflow:auto}
 .pbi-decomp-col{flex:0 0 var(--pbi-decomp-col,190px);display:flex;flex-direction:column;gap:6px;min-width:0}
 .pbi-decomp-col+.pbi-decomp-col{border-left:1px solid var(--pbi-grid);padding-left:14px}
 .pbi-decomp-head{display:flex;flex-direction:column;gap:2px;font-size:12px;font-weight:600;color:var(--pbi-fg-2);min-height:30px;justify-content:center}

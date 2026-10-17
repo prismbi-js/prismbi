@@ -224,7 +224,8 @@ export const bubbleMap = /* @__PURE__ */ defineVisual({
     const legend = renderLegend(ctx, [...legendItems.values()].map((x) => ({ ...x, shape: 'dot' as const })));
     const { plot, width: W, height: H } = withLegend(ctx, legend);
     const positions = pts.map((r) => [r.values[1] as number, r.values[0] as number] as Position);
-    const proj = fitProjection(mf.geojson && !mf.tiles ? [...positions, ...allPositions(mf.geojson)] : positions, W, H);
+    // keep the largest bubble inside the frame
+    const proj = fitProjection(mf.geojson && !mf.tiles ? [...positions, ...allPositions(mf.geojson)] : positions, W, H, Math.max(24, (mf.maxRadius ?? 28) + 6));
     const svg = s('svg', { width: W, height: H, class: 'pbi-svg pbi-map', role: 'img', 'aria-label': ctx.spec.title ?? 'Map' });
     plot.append(svg);
     const g = s('g');

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrismBI visual gallery</title>
+    <style>
+      html, body { margin: 0; }
+      body { padding: 16px; background: #f9f9f7; font: 13px system-ui, sans-serif; color: #0b0b0b; }
+      body.dark { background: #0d0d0d; color: #f0efec; }
+      #grid { display: grid; grid-template-columns: repeat(auto-fill, 380px); gap: 16px; }
+      .cell { width: 380px; }
+      .cell h2 { font: 600 12px ui-monospace, Consolas, monospace; margin: 0 0 4px; opacity: .7; }
+      .vis { width: 380px; height: 260px; }
+    </style>
+  </head>
+  <body>
+    <div id="grid"></div>
+    <script type="module" src="./gallery-main.ts"></script>
+  </body>
+</html>

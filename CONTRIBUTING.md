@@ -34,3 +34,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the layer diagram and sourc
 
 - Use Conventional Commits (`feat:`, `fix:`, `perf:`, `docs:`) and record user-visible changes in `CHANGELOG.md`.
 - `npm publish` runs `prepublishOnly`, which typechecks, tests and builds.
+
+## Visual regression tests
+
+`npm run test:visual` renders every visual in `/gallery.html` (light and dark), screenshots each one with headless Chrome, and compares it with the baselines in `tests/visual/`.
+- **Failure:** a visual fails when more than 0.5% of its pixels differ noticeably. The new screenshot is saved to `tests/visual/__diff__/`.
+- **Intended changes:** after checking the new screenshots, run `npm run test:visual -- --update` and commit the updated baselines.
+- **Chrome:** found automatically, or set `CHROME_PATH`.
+- **Platform:** baselines depend on installed fonts, so keep one set per platform or CI image.
+- **New visuals:** add them to `GALLERY` in `examples/gallery-main.ts`.

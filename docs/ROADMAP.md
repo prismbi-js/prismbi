@@ -12,7 +12,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | ✅ Implemented |
 | 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | ✅ Implemented |
-| 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | Planned |
+| 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | In progress |
 | 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | Planned |
 | 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | Planned |
 
@@ -246,7 +246,12 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - Framework packages: `@prismbi/vue`, `@prismbi/svelte`, `@prismbi/angular`, web components
 - Version-control-friendly report files (one file per page or visual) and diffable reviews
 
-## Phase 7: Analyst essentials (planned)
+## Phase 7: Analyst essentials (in progress)
+
+**Done:**
+- [x] **Visual calculations** (`visualCalc` on value fields: RUNNINGSUM, MOVINGAVERAGE, PREVIOUS/NEXT, FIRST/LAST, RANK, ROWNUMBER, PERCENTOFTOTAL, with per-parent reset)
+- [x] **DAX window functions:** OFFSET, INDEX, WINDOW, RANK, ROWNUMBER with ORDERBY (columns or measures) and PARTITIONBY
+- [x] **Visual regression tests** (`npm run test:visual`): 35 visuals × light and dark, compared with an in-browser pixel diff. They caught and fixed four defects: combo-chart lines flattened on the primary axis (now a secondary axis), map bubbles clipped, radar labels overlapping, decomposition tree clipped.
 
 **Goal:** close the gaps an analyst hits in the first week, and lock in visual quality.
 

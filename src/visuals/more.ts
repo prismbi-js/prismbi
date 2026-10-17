@@ -128,7 +128,8 @@ export const radar = /* @__PURE__ */ defineVisual({
       if (tk === 0) continue;
       const r = scale(tk);
       svg.append(s('polygon', { points: pv.categories.map((_, i) => pt(i, r).join(',')).join(' '), fill: 'none', stroke: t.gridline, 'stroke-width': 1 }));
-      svg.append(s('text', { x: cx + 4, y: cy - r - 2, class: 'pbi-tick', fill: t.foregroundMuted }, fmt(tk)));
+      // labels sit left of the vertical axis, and the outermost (next to the top category label) is left out
+      if (r < R - fs) svg.append(s('text', { x: cx - 4, y: cy - r + fs / 3, 'text-anchor': 'end', class: 'pbi-tick', fill: t.foregroundMuted }, fmt(tk)));
     }
     pv.categories.forEach((c, i) => {
       const [x, y] = pt(i, R);

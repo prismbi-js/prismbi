@@ -119,3 +119,49 @@ Errors carry readable messages, and a failing visual shows the message in place:
 - `A single value for column 'Sales'[Amount] cannot be determined…`: a bare column used outside row context
 - `Circular dependency detected: A → B → A`
 - `Function X is not supported (yet)`
+
+## Window functions
+
+`OFFSET`, `INDEX`, `WINDOW`, `RANK` and `ROWNUMBER` work over an ordered relation, by default the ALLSELECTED values of the `ORDERBY` and `PARTITIONBY` columns:
+
+```dax
+Prev Year Sales = CALCULATE([Total Sales], OFFSET(-1, ALLSELECTED(Date[Year]), ORDERBY(Date[Year])))
+Running Total   = CALCULATE([Total Sales], WINDOW(1, ABS, 0, REL, ALLSELECTED(Date[MonthNumber]), ORDERBY(Date[MonthNumber])))
+Moving Avg 3    = AVERAGEX(WINDOW(-2, REL, 0, REL, ALLSELECTED(Date[MonthNumber]), ORDERBY(Date[MonthNumber])), [Total Sales])
+Category Rank   = RANK(DENSE, ALLSELECTED(Product[Category]), ORDERBY([Total Sales], DESC))
+Row In Year     = ROWNUMBER(ALLSELECTED(Date[Year], Date[MonthNumber]), ORDERBY(Date[MonthNumber]), PARTITIONBY(Date[Year]))
+```
+
+- **`ORDERBY`** takes columns or expressions (measures are evaluated per row), each optionally followed by `ASC` or `DESC`.
+- **Ties:** `RANK` uses competition ranking by default (`SKIP`: 1, 2, 2, 4), or `DENSE` (1, 2, 2, 3).
+- **Current row:** taken from the row context, or from the single value of each relation column in the filter context.
+- **No current row:** when a partition column has no single value, `OFFSET`, `INDEX` and `WINDOW` return an empty table and `RANK` / `ROWNUMBER` return BLANK.
+
+## Visual calculations
+
+A visual calculation is computed over a visual's own rows: after sorting and Top N, in display order. It is often simpler than a measure:
+
+```ts
+fields: {
+  category: 'Date[MonthYear]',
+  values: [
+    'Total Sales',
+    { name: 'Running total', visualCalc: 'RUNNINGSUM([Total Sales])' },
+    { name: 'vs previous', visualCalc: '[Total Sales] - PREVIOUS([Total Sales])', format: '$#,0' },
+    { name: 'Share', visualCalc: 'PERCENTOFTOTAL([Total Sales])', format: '0.0%' },
+  ],
+}
+```
+
+| Function | Result |
+|---|---|
+| `RUNNINGSUM(x)` | running total |
+| `MOVINGAVERAGE(x, n)` | average of the last `n` rows |
+| `PREVIOUS(x [, k])`, `NEXT(x [, k])` | value `k` rows back or ahead |
+| `FIRST(x)`, `LAST(x)` | first or last value |
+| `RANK(x [, "ASC"])`, `ROWNUMBER()` | rank (descending by default), position |
+| `PERCENTOFTOTAL(x)` | share of the column total |
+
+- **References:** `[Name]` refers to another value of the same visual.
+- **Scalar functions:** arithmetic and comparisons, `DIVIDE`, `ABS`, `ROUND`, `IF`, `BLANK`, `ISBLANK`, and two-argument `MIN` / `MAX`.
+- **Restarting per group:** with two or more group columns, `reset: 'parent'` restarts window functions for each outer group. Year-to-date by month is `{ visualCalc: 'RUNNINGSUM([Sales])', reset: 'parent' }` grouped by year then month.
