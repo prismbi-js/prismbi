@@ -102,3 +102,16 @@ Phone layouts are saved on the page as `mobile` and used automatically below 640
 | `report.isMobileLayout` | whether the phone layout is showing |
 
 Visuals not listed in `mobile.visuals` are hidden on phones. Pages without a phone layout keep the automatic behaviour: below 640 px every visual takes the full width, in order.
+
+## Selecting and arranging several visuals
+
+- **Selecting several:** Ctrl-, Shift- or Cmd-click visuals on the canvas or in **Layers**. Ctrl+A selects every visual on the page.
+- **Moving together:** dragging any selected visual moves the whole selection, kept on the grid, and undoes as one step.
+- **Arrange menu:**
+  - align left, center, right, top, middle or bottom (two or more selected)
+  - distribute horizontally or vertically (three or more)
+  - group (Ctrl+G) and ungroup (Ctrl+Shift+G); grouped visuals select and move together and are marked ⧉ in Layers
+  - bring to front, bring forward, send backward, send to back
+- **Layers:** lists the page front to back. Click to select, use the arrows to reorder.
+
+In code: `report.selectedVisuals`, `selectVisuals(ids)`, `toggleVisualSelection(id)`, `alignVisuals(how, ids?)`, `distributeVisuals(axis, ids?)`, `groupVisuals(ids?)`, `ungroupVisuals(ids?)`, `arrange(id, 'front' | 'forward' | 'backward' | 'back')` and `commitLayouts(updates)`. All of them work on whichever layout is showing, desktop or phone.

@@ -98,6 +98,11 @@ export const STUDIO_CSS = /* css */ `
 .pbs-center{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0}
 .pbs-canvas{flex:1;min-height:0;position:relative}
 .pbs-canvas>.pbi-report{height:100%}
+.pbs-arrange{max-width:120px}
+.pbs-layers{position:absolute;top:52px;right:330px;z-index:50;width:240px;max-height:60vh;overflow:auto;margin:0;padding:6px;list-style:none;display:grid;gap:2px;background:var(--pbs-pane);border:1px solid var(--pbs-line);border-radius:10px;box-shadow:0 12px 32px rgb(0 0 0/.18)}
+.pbs-layers li{display:flex;gap:4px;align-items:center}
+.pbs-layer-name{flex:1;min-width:0;text-align:left;font:inherit;font-size:12px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbs-layer-name[aria-pressed=true]{background:color-mix(in srgb,var(--pbi-accent) 14%,transparent);color:var(--pbi-accent)}
 .is-phone .pbs-canvas{display:flex;justify-content:center;background:color-mix(in srgb,var(--pbi-fg) 4%,transparent)}
 .is-phone .pbs-canvas>.pbi-report{width:390px;max-width:100%;border-inline:1px solid var(--pbs-line);box-shadow:0 0 0 6px color-mix(in srgb,var(--pbi-fg) 6%,transparent)}
 .pbs-canvas.is-drop{outline:2px dashed var(--pbi-accent);outline-offset:-6px}

@@ -510,10 +510,53 @@ export class Report implements ReportRuntime {
     return this.model.valuesOf({ table, column: m[2] }, ctx);
   }
 
+  /** Edit-mode selection (the active visual plus any added with Ctrl/Shift-click, and group members). */
+  private selection: string[] = [];
+
+  /** Ids of the visuals selected in edit mode (the active one first). */
+  get selectedVisuals(): string[] {
+    return [...this.selection];
+  }
+
+  /** A visual and the other members of its group. */
+  private groupOf(id: string): string[] {
+    const found = this.findVisual(id);
+    const g = found?.spec.group;
+    if (!found || !g) return [id];
+    return [id, ...found.page.def.visuals.filter((v) => v.group === g && v.id !== id).map((v) => v.id!)];
+  }
+
+  /** Add or remove a visual (and its group) from the edit selection, as Ctrl/Shift-click does. */
+  toggleVisualSelection(visualId: string): void {
+    const ids = this.groupOf(visualId);
+    if (this.selection.includes(visualId)) this.selection = this.selection.filter((x) => !ids.includes(x));
+    else this.selection = [...this.selection.filter((x) => !ids.includes(x)), ...ids];
+    this.active = this.selection.includes(visualId) ? visualId : (this.selection[0] ?? null);
+    this.markActive();
+    this.emit('visualSelected', { visualId: this.active });
+  }
+
+  /** Select exactly these visuals (the first becomes active). */
+  selectVisuals(ids: string[]): void {
+    this.selection = [...new Set(ids.flatMap((id) => this.groupOf(id)))];
+    this.active = this.selection[0] ?? null;
+    this.markActive();
+    this.emit('visualSelected', { visualId: this.active });
+  }
+
+  private markActive(): void {
+    for (const host of this.page.hosts.values()) host.el.classList.toggle('is-active', this.selection.includes(host.id));
+    this.editor?.markSelection();
+    this.renderPane();
+    this.renderInteractionOverlays();
+  }
+
   setActiveVisual(visualId: string | null): void {
-    if (this.active === visualId) return;
+    const sel = visualId ? this.groupOf(visualId) : [];
+    if (this.active === visualId && sel.length === this.selection.length && sel.every((x) => this.selection.includes(x))) return;
+    this.selection = sel;
     this.active = visualId;
-    for (const host of this.page.hosts.values()) host.el.classList.toggle('is-active', host.id === visualId);
+    for (const host of this.page.hosts.values()) host.el.classList.toggle('is-active', this.selection.includes(host.id));
     this.editor?.markSelection();
     this.renderPane();
     this.renderInteractionOverlays();
@@ -536,6 +579,9 @@ export class Report implements ReportRuntime {
         select: (id) => this.setActiveVisual(id),
         selected: () => this.active,
         commitLayout: (id, layout) => (this.phoneActive && this.page.def.mobile ? this.setMobileLayout(id, layout) : this.updateVisual(id, { layout })),
+        commitLayouts: (updates) => this.commitLayouts(updates),
+        selection: () => this.selectedVisuals,
+        toggle: (id) => this.toggleVisualSelection(id),
       });
       this.root.classList.add('is-editing');
       for (const p of this.pages) for (const host of p.hosts.values()) this.editor.decorate(host.id, host.el);
@@ -592,13 +638,103 @@ export class Report implements ReportRuntime {
   }
 
   /** Bring a visual to the front or send it to the back (layout.z). */
-  arrange(id: string, where: 'front' | 'back'): void {
+  arrange(id: string, where: 'front' | 'back' | 'forward' | 'backward'): void {
     const found = this.findVisual(id);
     if (!found) return;
     const zs = found.page.def.visuals.map((v) => v.layout?.z ?? 0);
-    const z = where === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
     const l = found.spec.layout ?? { x: 0, y: 0, w: 4, h: 6 };
+    const cur = l.z ?? 0;
+    const z = where === 'front' ? Math.max(0, ...zs) + 1 : where === 'back' ? Math.min(0, ...zs) - 1 : where === 'forward' ? cur + 1 : cur - 1;
     this.updateVisual(id, { layout: { ...l, z } });
+  }
+
+  /** Layout of a visual in the layout being shown (phone or desktop). */
+  layoutOf(id: string): VisualLayout {
+    const phone = this.layoutFor(id);
+    return { ...(phone ?? this.findVisual(id)?.spec.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
+  }
+
+  /** Apply several layout changes as one edit (one undo step), in the layout being shown. */
+  commitLayouts(updates: { id: string; layout: VisualLayout }[]): void {
+    if (!updates.length) return;
+    this.suppressChanges++;
+    try {
+      for (const u of updates) {
+        if (this.phoneActive && this.page.def.mobile) this.setMobileLayout(u.id, u.layout);
+        else this.updateVisual(u.id, { layout: u.layout });
+      }
+    } finally {
+      this.suppressChanges--;
+    }
+    this.changedDefinition('layout');
+  }
+
+  /** Align visuals (default: the edit selection) to their shared bounding box. */
+  alignVisuals(how: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom', ids = this.selectedVisuals): void {
+    if (ids.length < 2) return;
+    const ls = ids.map((id) => ({ id, l: this.layoutOf(id) }));
+    const minX = Math.min(...ls.map((v) => v.l.x));
+    const maxX = Math.max(...ls.map((v) => v.l.x + v.l.w));
+    const minY = Math.min(...ls.map((v) => v.l.y));
+    const maxY = Math.max(...ls.map((v) => v.l.y + v.l.h));
+    this.commitLayouts(
+      ls.map(({ id, l }) => {
+        const n = { ...l };
+        if (how === 'left') n.x = minX;
+        if (how === 'right') n.x = maxX - l.w;
+        if (how === 'center') n.x = Math.max(0, Math.round((minX + maxX) / 2 - l.w / 2));
+        if (how === 'top') n.y = minY;
+        if (how === 'bottom') n.y = maxY - l.h;
+        if (how === 'middle') n.y = Math.max(0, Math.round((minY + maxY) / 2 - l.h / 2));
+        return { id, layout: n };
+      }),
+    );
+  }
+
+  /** Spread visuals (default: the selection, at least three) with equal gaps across their bounding box. */
+  distributeVisuals(axis: 'horizontal' | 'vertical', ids = this.selectedVisuals): void {
+    if (ids.length < 3) return;
+    const h = axis === 'horizontal';
+    const ls = ids.map((id) => ({ id, l: this.layoutOf(id) })).sort((a, b) => (h ? a.l.x - b.l.x : a.l.y - b.l.y));
+    const start = h ? ls[0].l.x : ls[0].l.y;
+    const end = Math.max(...ls.map((v) => (h ? v.l.x + v.l.w : v.l.y + v.l.h)));
+    const total = ls.reduce((s, v) => s + (h ? v.l.w : v.l.h), 0);
+    const gap = Math.max(0, (end - start - total) / (ls.length - 1));
+    let pos = start;
+    this.commitLayouts(
+      ls.map(({ id, l }) => {
+        const n = { ...l };
+        if (h) n.x = Math.round(pos);
+        else n.y = Math.round(pos);
+        pos += (h ? l.w : l.h) + gap;
+        return { id, layout: n };
+      }),
+    );
+  }
+
+  /** Group visuals (default: the selection) so they select and move together. Returns the group id. */
+  groupVisuals(ids = this.selectedVisuals): string | null {
+    if (ids.length < 2) return null;
+    const g = `group-${Math.random().toString(36).slice(2, 8)}`;
+    this.suppressChanges++;
+    try {
+      for (const id of ids) this.updateVisual(id, { group: g });
+    } finally {
+      this.suppressChanges--;
+    }
+    this.changedDefinition('group');
+    return g;
+  }
+
+  /** Remove visuals (default: the selection) from their groups. */
+  ungroupVisuals(ids = this.selectedVisuals): void {
+    this.suppressChanges++;
+    try {
+      for (const id of ids) if (this.findVisual(id)?.spec.group) this.updateVisual(id, { group: undefined });
+    } finally {
+      this.suppressChanges--;
+    }
+    this.changedDefinition('ungroup');
   }
 
   toggleFocus(visualId: string): void {

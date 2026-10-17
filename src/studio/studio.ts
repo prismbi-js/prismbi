@@ -166,6 +166,7 @@ export class Studio implements StudioContext {
         this.renderPages();
         this.scheduleCommit();
       }),
+      this.report.on('visualSelected', () => this.syncArrange()),
       this.report.on('visualSelected', ({ visualId }) => {
         if (visualId && this.rightTab === 'filters') this.renderRight();
         this.refreshPanes(true);
@@ -362,6 +363,63 @@ export class Studio implements StudioContext {
         this.toast(`Transform failed: ${(e as Error).message}`);
       }
     });
+  }
+
+  /** Run an Arrange menu action on the selected visuals. */
+  arrangeSelection(action: string): void {
+    const ids = this.report.selectedVisuals;
+    const [kind, arg] = action.split(':');
+    if (kind === 'align') this.report.alignVisuals(arg as never, ids);
+    else if (kind === 'distribute') this.report.distributeVisuals(arg as never, ids);
+    else if (kind === 'group') {
+      if (!this.report.groupVisuals(ids)) return this.toast('Select two or more visuals to group them');
+    } else if (kind === 'ungroup') this.report.ungroupVisuals(ids);
+    else if (kind === 'order') for (const id of ids) this.report.arrange(id, arg as never);
+    else return;
+    this.commit();
+    this.syncArrange();
+    if (this.layersOpen) this.renderLayers();
+  }
+
+  /** Enable Arrange actions that fit the current selection size. */
+  private syncArrange(): void {
+    const sel = this.report.selectedVisuals.length;
+    const menu = this.els.arrange as HTMLSelectElement | undefined;
+    if (!menu) return;
+    menu.disabled = sel === 0;
+    for (const o of menu.querySelectorAll('option[data-min]')) (o as HTMLOptionElement).disabled = sel < Number((o as HTMLOptionElement).dataset.min);
+    if (this.layersOpen) this.renderLayers();
+  }
+
+  private layersOpen = false;
+
+  private toggleLayers(): void {
+    this.layersOpen = !this.layersOpen;
+    this.els.layersBtn?.setAttribute('aria-expanded', String(this.layersOpen));
+    if (this.layersOpen) this.renderLayers();
+    else this.root.querySelector('.pbs-layers')?.remove();
+  }
+
+  /** Selection pane: the page's visuals front to back; click selects (Ctrl/Shift-click adds), arrows reorder. */
+  private renderLayers(): void {
+    this.root.querySelector('.pbs-layers')?.remove();
+    const page = this.report.pageDefinition();
+    const sel = this.report.selectedVisuals;
+    const list = h('ol', { class: 'pbs-layers', 'aria-label': 'Layers' });
+    const sorted = [...page.visuals].sort((a, b) => (b.layout?.z ?? 0) - (a.layout?.z ?? 0));
+    for (const v of sorted) {
+      // untitled visuals read by their main field: "Total Sales · card"
+      const first = Object.values(v.fields ?? {}).flat()[0] as string | { name?: string; field?: string } | undefined;
+      const fieldName = typeof first === 'string' ? first.replace(/^.*\[|\]$/g, '') : (first?.name ?? first?.field);
+      const label = h('button', { type: 'button', class: 'pbs-layer-name', 'aria-pressed': String(sel.includes(v.id!)) }, `${v.title ?? (fieldName ? `${fieldName} · ${v.type}` : v.type)}${v.group ? ' ⧉' : ''}`);
+      label.addEventListener('click', (e) => (e.ctrlKey || e.shiftKey || e.metaKey ? this.report.toggleVisualSelection(v.id!) : this.report.setActiveVisual(v.id!)));
+      const up = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': 'Bring forward', title: 'Bring forward' }, '↑');
+      const down = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': 'Send backward', title: 'Send backward' }, '↓');
+      up.addEventListener('click', () => (this.report.arrange(v.id!, 'forward'), this.commit(), this.renderLayers()));
+      down.addEventListener('click', () => (this.report.arrange(v.id!, 'backward'), this.commit(), this.renderLayers()));
+      list.append(h('li', {}, label, up, down));
+    }
+    this.root.append(list);
   }
 
   /** Is the canvas showing (and editing) the phone layout? */
@@ -638,6 +696,19 @@ export class Studio implements StudioContext {
     const undo = btn('↶', () => this.undo(), { title: 'Undo (Ctrl+Z)', 'aria-label': 'Undo', class: 'pbs-btn pbs-icon' });
     const redo = btn('↷', () => this.redo(), { title: 'Redo (Ctrl+Y)', 'aria-label': 'Redo', class: 'pbs-btn pbs-icon' });
     const previewBtn = btn('Preview', () => this.setPreview(!this.preview), { 'aria-pressed': 'false', title: 'Preview the report as a viewer' });
+    const arrange = h('select', { class: 'pbs-btn pbs-arrange', 'aria-label': 'Arrange selected visuals', title: 'Align, distribute, group and order the selected visuals' },
+      h('option', { value: '' }, 'Arrange…'),
+      h('optgroup', { label: 'Align (2+ selected)' }, ...['left', 'center', 'right', 'top', 'middle', 'bottom'].map((v) => h('option', { value: `align:${v}`, 'data-min': '2' }, `Align ${v}`))),
+      h('optgroup', { label: 'Distribute (3+ selected)' }, h('option', { value: 'distribute:horizontal', 'data-min': '3' }, 'Distribute horizontally'), h('option', { value: 'distribute:vertical', 'data-min': '3' }, 'Distribute vertically')),
+      h('optgroup', { label: 'Group' }, h('option', { value: 'group', 'data-min': '2' }, 'Group (Ctrl+G)'), h('option', { value: 'ungroup', 'data-min': '1' }, 'Ungroup (Ctrl+Shift+G)')),
+      h('optgroup', { label: 'Order' }, ...[['front', 'Bring to front'], ['forward', 'Bring forward'], ['backward', 'Send backward'], ['back', 'Send to back']].map(([v, l]) => h('option', { value: `order:${v}`, 'data-min': '1' }, l))),
+    ) as HTMLSelectElement;
+    arrange.addEventListener('change', () => {
+      const v = arrange.value;
+      arrange.value = '';
+      if (v) this.arrangeSelection(v);
+    });
+    const layersBtn = btn('Layers', () => this.toggleLayers(), { title: 'All visuals on this page, front to back', 'aria-expanded': 'false' });
     const phoneBtn = btn('📱 Phone', () => this.setPhoneLayout(!this.phone), { 'aria-pressed': 'false', title: 'Edit the phone layout of this page' });
     const phoneReset = btn('Reset phone layout', () => {
       this.report.autoMobileLayout();
@@ -668,6 +739,8 @@ export class Studio implements StudioContext {
     this.els.redo = redo;
     this.els.previewBtn = previewBtn;
     this.els.phoneBtn = phoneBtn;
+    this.els.arrange = arrange;
+    this.els.layersBtn = layersBtn;
     this.els.phoneReset = phoneReset;
     const top = h(
       'div',
@@ -689,6 +762,8 @@ export class Studio implements StudioContext {
       fileInput,
       h('span', { class: 'pbs-spacer' }),
       status,
+      arrange,
+      layersBtn,
       phoneReset,
       phoneBtn,
       previewBtn,
@@ -942,6 +1017,16 @@ export class Studio implements StudioContext {
     const t = e.target as HTMLElement;
     const typing = t.closest('input, textarea, select, [contenteditable=true]') !== null;
     const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 'g' && !typing && !this.preview) {
+      e.preventDefault();
+      this.arrangeSelection(e.shiftKey ? 'ungroup' : 'group');
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'a' && !typing && !this.preview && this.report.editMode) {
+      e.preventDefault();
+      this.report.selectVisuals(this.report.visualIds());
+      return;
+    }
     if (mod && e.key.toLowerCase() === 'z' && !typing) {
       e.preventDefault();
       return e.shiftKey ? this.redo() : this.undo();

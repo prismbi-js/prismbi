@@ -16,6 +16,12 @@ export interface EditHost {
   select(id: string | null): void;
   selected(): string | null;
   commitLayout(id: string, layout: VisualLayout): void;
+  /** Several layout changes as one edit (multi-drag). */
+  commitLayouts?(updates: { id: string; layout: VisualLayout }[]): void;
+  /** All selected visual ids (multi-select). */
+  selection?(): string[];
+  /** Ctrl/Shift-click: add or remove from the selection. */
+  toggle?(id: string): void;
 }
 
 type Mode = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -27,7 +33,7 @@ const HANDLES: Mode[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
  * Visual content can't be interacted with while editing (an overlay captures the pointer).
  */
 export class EditController {
-  private drag: { id: string; mode: Mode; x: number; y: number; start: VisualLayout; current: VisualLayout; pointer: number } | null = null;
+  private drag: { id: string; mode: Mode; x: number; y: number; start: VisualLayout; current: VisualLayout; pointer: number; others?: Map<string, { start: VisualLayout; current: VisualLayout }> } | null = null;
 
   constructor(private host: EditHost) {}
 
@@ -66,7 +72,8 @@ export class EditController {
     const p = this.host.page();
     if (!p) return;
     const sel = this.host.selected();
-    for (const [id, el] of p.visuals) el.toggleAttribute('data-selected', id === sel);
+    const many = this.host.selection?.() ?? [];
+    for (const [id, el] of p.visuals) el.toggleAttribute('data-selected', id === sel || many.includes(id));
   }
 
   /** Draw the snapping grid on the page background. */
@@ -82,12 +89,24 @@ export class EditController {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    this.host.select(id);
+    // Ctrl / Shift / Cmd-click adds to or removes from the selection
+    if ((e.ctrlKey || e.shiftKey || e.metaKey) && this.host.toggle) {
+      this.host.toggle(id);
+      return;
+    }
+    const selection = this.host.selection?.() ?? [];
+    if (!selection.includes(id)) this.host.select(id);
     const p = this.host.page();
     const spec = p?.specs.find((s) => s.id === id);
     if (!p || !spec) return;
     const start = { ...(spec.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
-    this.drag = { id, mode: mode ?? 'move', x: e.clientX, y: e.clientY, start, current: { ...start }, pointer: e.pointerId };
+    // moving one of several selected visuals moves them all
+    const group = (this.host.selection?.() ?? []).filter((x) => x !== id);
+    const others = (mode ?? 'move') === 'move' && group.length ? new Map(group.map((x) => {
+      const l = { ...(p.specs.find((s) => s.id === x)?.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
+      return [x, { start: l, current: { ...l } }] as const;
+    })) : undefined;
+    this.drag = { id, mode: mode ?? 'move', x: e.clientX, y: e.clientY, start, current: { ...start }, pointer: e.pointerId, others };
     try {
       (e.target as HTMLElement).closest('.pbi-edit')?.setPointerCapture?.(e.pointerId);
     } catch {
@@ -102,8 +121,19 @@ export class EditController {
     const p = this.host.page();
     if (!p) return;
     const { col, row } = this.steps(p);
-    const dc = Math.round((e.clientX - d.x) / col);
-    const dr = Math.round((e.clientY - d.y) / row);
+    let dc = Math.round((e.clientX - d.x) / col);
+    let dr = Math.round((e.clientY - d.y) / row);
+    if (d.others) {
+      // the whole selection moves by the same amount and stays on the grid
+      const all = [d.start, ...[...d.others.values()].map((o) => o.start)];
+      dc = Math.max(-Math.min(...all.map((l) => l.x)), Math.min(p.cols - Math.max(...all.map((l) => l.x + l.w)), dc));
+      dr = Math.max(-Math.min(...all.map((l) => l.y)), dr);
+      for (const [oid, o] of d.others) {
+        o.current = { ...o.start, x: o.start.x + dc, y: o.start.y + dr };
+        const oel = p.visuals.get(oid);
+        if (oel) for (const k of ['x', 'y'] as const) oel.style.setProperty(`--${k}`, String(o.current[k]));
+      }
+    }
     const s = d.start;
     let { x, y, w, h: hh } = s;
     const m = d.mode;
@@ -144,7 +174,13 @@ export class EditController {
     p?.visuals.get(d.id)?.classList.remove('is-dragging');
     const c = d.current;
     const s = d.start;
-    if (c.x !== s.x || c.y !== s.y || c.w !== s.w || c.h !== s.h) this.host.commitLayout(d.id, c);
+    const changed = (a: VisualLayout, b: VisualLayout) => a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h;
+    if (d.others && this.host.commitLayouts) {
+      const updates = [{ id: d.id, layout: c, start: s }, ...[...d.others].map(([id, o]) => ({ id, layout: o.current, start: o.start }))].filter((u) => changed(u.layout, u.start));
+      if (updates.length) this.host.commitLayouts(updates.map(({ id, layout }) => ({ id, layout })));
+      return;
+    }
+    if (changed(c, s)) this.host.commitLayout(d.id, c);
   }
 }
 

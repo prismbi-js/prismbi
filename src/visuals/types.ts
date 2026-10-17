@@ -17,6 +17,8 @@ export interface VisualLayout {
 
 /** Serialisable description of one visual on a page. */
 export interface VisualSpec {
+  /** Visuals sharing a group id are selected and moved together in edit mode. */
+  group?: string;
   id?: string;
   type: string;
   /** Shorthand for `format.title.text`. */

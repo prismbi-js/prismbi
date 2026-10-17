@@ -245,3 +245,87 @@ describe('phone layouts', () => {
     el.remove();
   });
 });
+
+describe('multi-select editing', () => {
+  const setup = async () => {
+    const { Report } = await import('../src/index');
+    const { makeModel } = await import('./fixtures');
+    const el = document.createElement('div');
+    el.style.height = '700px';
+    document.body.append(el);
+    const r = new Report(el, {
+      model: makeModel(),
+      pages: [
+        {
+          id: 'p',
+          name: 'P',
+          visuals: [
+            { id: 'a', type: 'card', layout: { x: 0, y: 0, w: 2, h: 2 }, fields: { value: 'Total Sales' } },
+            { id: 'b', type: 'card', layout: { x: 4, y: 1, w: 3, h: 2 }, fields: { value: 'Orders' } },
+            { id: 'c', type: 'card', layout: { x: 9, y: 3, w: 2, h: 2 }, fields: { value: 'Total Cost' } },
+          ],
+        },
+      ],
+    });
+    r.setEditMode(true);
+    r.flush();
+    const layout = (id: string) => r.pageDefinition().visuals.find((v) => v.id === id)!.layout!;
+    return { el, r, layout };
+  };
+
+  it('selects several visuals, aligns, distributes, groups and orders them', async () => {
+    const { el, r, layout } = await setup();
+    let changes = 0;
+    r.on('definitionChanged', () => changes++);
+    r.setActiveVisual('a');
+    r.toggleVisualSelection('b');
+    r.toggleVisualSelection('c');
+    expect(r.selectedVisuals).toEqual(['a', 'b', 'c']);
+    expect(el.querySelectorAll('[data-selected]')).toHaveLength(3);
+    r.alignVisuals('top');
+    expect(['a', 'b', 'c'].map((id) => layout(id).y)).toEqual([0, 0, 0]);
+    expect(changes).toBe(1); // one edit for the whole batch
+    r.distributeVisuals('horizontal');
+    // span 0..11, widths 2+3+2 = 7, two gaps of 2
+    expect(['a', 'b', 'c'].map((id) => layout(id).x)).toEqual([0, 4, 9]);
+    r.alignVisuals('right', ['a', 'b']);
+    expect(layout('a').x + layout('a').w).toBe(layout('b').x + layout('b').w);
+    // groups select together
+    r.groupVisuals(['a', 'b']);
+    r.setActiveVisual('a');
+    expect(r.selectedVisuals.sort()).toEqual(['a', 'b']);
+    r.toggleVisualSelection('b'); // removes the whole group
+    expect(r.selectedVisuals).toEqual([]);
+    r.ungroupVisuals(['a', 'b']);
+    r.setActiveVisual('a');
+    expect(r.selectedVisuals).toEqual(['a']);
+    // ordering
+    r.arrange('c', 'front');
+    r.arrange('a', 'backward');
+    expect(layout('c').z).toBeGreaterThan(layout('b').z ?? 0);
+    expect(layout('a').z).toBe(-1);
+    r.destroy();
+    el.remove();
+  });
+
+  it('drags the whole selection together, clamped to the grid', async () => {
+    const { el, r, layout } = await setup();
+    r.setActiveVisual('a');
+    r.toggleVisualSelection('c');
+    const overlay = el.querySelector('.pbi-edit[data-edit-for="a"]') as HTMLElement;
+    const fire = (type: string, x: number, y: number, extra: Record<string, unknown> = {}) => overlay.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0, ...extra }), { pointerId: 1 }));
+    fire('pointerdown', 100, 100);
+    fire('pointermove', 100 + 80 * 3, 100 + 56); // 3 columns right, 1 row down (c would leave the 12-col grid at +3)
+    fire('pointerup', 100 + 80 * 3, 100 + 56);
+    // c (x 9, w 2) can move at most 1 column: the whole selection moves by 1
+    expect(layout('a')).toMatchObject({ x: 1, y: 1 });
+    expect(layout('c')).toMatchObject({ x: 10, y: 4 });
+    expect(layout('b')).toMatchObject({ x: 4, y: 1 }); // not selected: unchanged
+    // Ctrl-click toggles selection without dragging
+    const ob = el.querySelector('.pbi-edit[data-edit-for="b"]') as HTMLElement;
+    ob.dispatchEvent(Object.assign(new MouseEvent('pointerdown', { bubbles: true, clientX: 0, clientY: 0, button: 0, ctrlKey: true }), { pointerId: 2 }));
+    expect(r.selectedVisuals.sort()).toEqual(['a', 'b', 'c']);
+    r.destroy();
+    el.remove();
+  });
+});
