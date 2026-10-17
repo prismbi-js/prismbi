@@ -11,7 +11,7 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 │ report/           Report · VisualHost · FilterPane · Tooltip  │  runtime & chrome
 │                   cross-filter state, bookmarks, JSON, events │
 ├──────────────────────────────────────────────────────────────┤
-│ visuals/          defineVisual registry · 23 built-ins        │  presentation
+│ visuals/          defineVisual registry · 34 built-ins        │  presentation
 │ render/           svg/html helpers · scales · colour          │
 ├──────────────────────────────────────────────────────────────┤
 │ data/query.ts     QuerySpec → QueryResult (group, sort, top)  │  query engine
