@@ -16,6 +16,24 @@ export interface Column {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 
+/** Numeric view of a value: dates as epoch ms, booleans 0/1, BLANK and text as NaN. */
+function toNumber(v: CellValue): number {
+  return v === null ? NaN : typeof v === 'number' ? v : v instanceof Date ? v.getTime() : typeof v === 'boolean' ? (v ? 1 : 0) : NaN;
+}
+
+/** Dictionary code of a value (-1 for BLANK), adding it to the dictionary when new. */
+function encode(v: CellValue, dict: CellValue[], seen: Map<unknown, number>): number {
+  if (v === null) return -1;
+  const k = valueKey(v);
+  let code = seen.get(k);
+  if (code === undefined) {
+    code = dict.length;
+    dict.push(v);
+    seen.set(k, code);
+  }
+  return code;
+}
+
 export function inferType(values: unknown[]): DataType {
   let sawNumber = false;
   let sawDate = false;
@@ -80,7 +98,7 @@ export class DataTable {
   private indexes = new Map<string, Map<unknown, number[]>>();
   private distinctCache = new Map<string, CellValue[]>();
   private numericCache = new Map<string, Float64Array>();
-  private codesCache = new Map<string, { codes: Int32Array; dict: CellValue[] }>();
+  private codesCache = new Map<string, { codes: Int32Array; dict: CellValue[]; seen: Map<unknown, number> }>();
   private bitmaps = new Map<string, Map<unknown, Uint32Array> | null>();
 
   constructor(name: string, rows: Row[] = [], schema: Record<string, ColumnSchema> = {}) {
@@ -161,10 +179,7 @@ export class DataTable {
     if (!a) {
       const vals = this.column(column).values;
       a = new Float64Array(vals.length);
-      for (let i = 0; i < vals.length; i++) {
-        const v = vals[i];
-        a[i] = v === null ? NaN : typeof v === 'number' ? v : v instanceof Date ? v.getTime() : typeof v === 'boolean' ? (v ? 1 : 0) : NaN;
-      }
+      for (let i = 0; i < vals.length; i++) a[i] = toNumber(vals[i]);
       this.numericCache.set(column, a);
     }
     return a;
@@ -178,42 +193,131 @@ export class DataTable {
       const codes = new Int32Array(vals.length);
       const dict: CellValue[] = [];
       const seen = new Map<unknown, number>();
-      for (let i = 0; i < vals.length; i++) {
-        const v = vals[i];
-        if (v === null) {
-          codes[i] = -1;
-          continue;
-        }
-        const k = valueKey(v);
-        let code = seen.get(k);
-        if (code === undefined) {
-          code = dict.length;
-          dict.push(v);
-          seen.set(k, code);
-        }
-        codes[i] = code;
-      }
-      c = { codes, dict };
+      for (let i = 0; i < vals.length; i++) codes[i] = encode(vals[i], dict, seen);
+      c = { codes, dict, seen };
       this.codesCache.set(column, c);
     }
     return c;
   }
 
-  /** Append rows (coerced to each column's type; unknown keys are ignored, missing ones are BLANK). */
+  /**
+   * Append rows (coerced to each column's type; unknown keys are ignored, missing ones are BLANK). Cached views,
+   * dictionaries, indexes and bitmaps are extended for the new rows instead of being rebuilt. Cached objects are
+   * replaced, never mutated, so results computed before the append stay as they were.
+   */
   appendRows(rows: Row[]): void {
     if (!rows.length) return;
     for (const col of this.columns.values()) for (const r of rows) col.values.push(coerce(r[col.name], col.type));
+    const from = this._rowCount;
     this._rowCount += rows.length;
-    this.invalidate();
+    const n = this._rowCount;
+    for (const [name, old] of this.numericCache) {
+      const vals = this.column(name).values;
+      const a = new Float64Array(n);
+      a.set(old);
+      for (let i = from; i < n; i++) a[i] = toNumber(vals[i]);
+      this.numericCache.set(name, a);
+    }
+    for (const [name, old] of this.codesCache) {
+      const vals = this.column(name).values;
+      const codes = new Int32Array(n);
+      codes.set(old.codes);
+      const dict = old.dict.slice();
+      const seen = new Map(old.seen);
+      for (let i = from; i < n; i++) codes[i] = encode(vals[i], dict, seen);
+      this.codesCache.set(name, { codes, dict, seen });
+    }
+    for (const [name, old] of this.indexes) {
+      const vals = this.column(name).values;
+      const idx = new Map(old);
+      const touched = new Set<unknown>();
+      let added = false;
+      for (let i = from; i < n; i++) {
+        const k = valueKey(vals[i]);
+        const list = idx.get(k);
+        if (!list) {
+          idx.set(k, [i]);
+          added = true;
+        } else if (touched.has(k)) list.push(i);
+        else idx.set(k, [...list, i]); // copy on first write: the old index keeps its lists
+        touched.add(k);
+      }
+      this.indexes.set(name, idx);
+      if (added) this.distinctCache.delete(name);
+      this.extendBitmap(name, idx, touched, from);
+    }
+    // views of columns that were never indexed are built on demand as usual
+    for (const name of [...this.bitmaps.keys()]) if (!this.indexes.has(name)) this.bitmaps.delete(name);
+    for (const name of [...this.distinctCache.keys()]) if (!this.indexes.has(name)) this.distinctCache.delete(name);
   }
 
-  /** Drop the first `n` rows (sliding windows for streaming data). */
+  /** Grow a column's bitmaps after an append (`touched`: values with rows added since `from`). */
+  private extendBitmap(name: string, idx: Map<unknown, number[]>, touched: Set<unknown>, from: number): void {
+    if (!this.bitmaps.has(name)) return;
+    const old = this.bitmaps.get(name)!;
+    const qualifies = this._rowCount >= BITMAP_MIN_ROWS && idx.size <= BITMAP_MAX_VALUES;
+    if (!old || !qualifies) {
+      // newly large enough: built on demand; too many values now: none
+      if (qualifies) this.bitmaps.delete(name);
+      else this.bitmaps.set(name, null);
+      return;
+    }
+    const words = (this._rowCount + 31) >>> 5;
+    const out = new Map<unknown, Uint32Array>();
+    for (const [k, rows] of idx) {
+      const prev = old.get(k);
+      if (prev && prev.length === words && !touched.has(k)) {
+        out.set(k, prev);
+        continue;
+      }
+      const b = new Uint32Array(words);
+      if (prev) b.set(prev);
+      for (let j = rows.length - 1; j >= 0 && rows[j] >= from; j--) {
+        const r = rows[j];
+        b[r >>> 5] |= 1 << (r & 31);
+      }
+      out.set(k, b);
+    }
+    this.bitmaps.set(name, out);
+  }
+
+  /**
+   * Drop the first `n` rows (sliding windows for streaming data). Numeric views, codes and indexes are shifted rather
+   * than rebuilt; bitmaps are rebuilt on demand.
+   */
   removeFirst(n: number): void {
     if (n <= 0) return;
     const k = Math.min(n, this._rowCount);
     for (const col of this.columns.values()) col.values.splice(0, k);
     this._rowCount -= k;
-    this.invalidate();
+    this.bitmaps.clear();
+    for (const [name, a] of this.numericCache) this.numericCache.set(name, a.slice(k));
+    for (const [name, old] of this.indexes) {
+      const idx = new Map<unknown, number[]>();
+      for (const [key, rows] of old) {
+        // rows are ascending: find the first one that survives
+        let lo = 0;
+        let hi = rows.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if (rows[mid] < k) lo = mid + 1;
+          else hi = mid;
+        }
+        if (lo === rows.length) continue;
+        const list = new Array<number>(rows.length - lo);
+        for (let j = lo; j < rows.length; j++) list[j - lo] = rows[j] - k;
+        idx.set(key, list);
+      }
+      if (idx.size !== old.size) this.distinctCache.delete(name);
+      this.indexes.set(name, idx);
+    }
+    for (const name of [...this.distinctCache.keys()]) if (!this.indexes.has(name)) this.distinctCache.delete(name);
+    for (const [name, c] of this.codesCache) {
+      // dictionary entries of dropped values linger (harmless to every reader); rebuild once they dominate
+      const live = this.indexes.get(name)?.size;
+      if (live === undefined || c.dict.length > 2 * live + 64) this.codesCache.delete(name);
+      else this.codesCache.set(name, { ...c, codes: c.codes.slice(k) });
+    }
   }
 
   /** Rename a column in place (order and values kept; sort-by references follow). */

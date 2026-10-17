@@ -2,6 +2,9 @@
 
 ## Unreleased: Phases 8 and 9
 
+- **Streaming refresh:** `appendRows` and `maxRows` windows extend or shift the table caches (numeric views, dictionaries, indexes, bitmaps) instead of rebuilding them. `model.onChange` listeners receive a `ModelChange` (`{ tables }`) for data-only changes, and reports re-query only the visuals whose fields, filters, format or measures can reach those tables. Row-local calculated columns compute appended rows with the row-expression compiler, and the visible-rows cache is bounded by total row indices as well as entries.
+- **Numeric group keys:** multi-column fast-path groupings use mixed-radix numeric keys (dense table up to 4M combinations) instead of per-row strings.
+- **Lazy rendering:** scheduled re-renders skip visuals more than 300 px outside the viewport until they scroll into view; `report.flush()` and exports still render everything.
 - **Faster iterators and RELATED:** numeric row expressions in iterators and calculated columns compile to closures over typed views; `SUMX` / `AVERAGEX` measures join the single-pass grouped path; relationship paths and fact-to-dimension row maps are cached (`model.relatedRows`). `SUMX` with `RELATED` is about 12× faster at 300k rows, grouped `SUMX` about 8×. Results are unchanged (`tests/rowcompile.test.ts`).
 - **Accessibility:** chart narration (`describe()`, `narrate`, `format.accessibility.narration`) and the `high-contrast` theme (`highContrastTheme`).
 - **Subscriptions and alerts:** `ReportDefinition.subscriptions` / `alerts`, `report.setSubscriptions` / `setAlerts`, `runSubscriptions` and `watchAlerts` (server entry), and a Studio Schedules dialog.

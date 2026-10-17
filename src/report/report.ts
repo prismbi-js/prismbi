@@ -278,6 +278,9 @@ export function autoMobileLayout(page: PageDefinition, columns = 4): MobileLayou
   return { columns, visuals };
 }
 
+/** Visuals within this many pixels of the viewport render eagerly; the rest wait until scrolled into view. */
+const LAZY_MARGIN = 300;
+
 const raf: (cb: () => void) => void = typeof requestAnimationFrame === 'function' ? (cb) => requestAnimationFrame(cb) : (cb) => setTimeout(cb, 0);
 
 /**
@@ -301,6 +304,11 @@ export class Report implements ReportRuntime {
   private emitter = new Emitter<ReportEvents>();
   private pending = new Set<string>();
   private pendingAll = false;
+  /** Off-screen visuals whose render was skipped; they render when scrolled into view (or on `flush()`). */
+  private deferred = new Set<string>();
+  /** Last known viewport intersection per visual element. */
+  private onScreen = new WeakMap<Element, boolean>();
+  private io?: IntersectionObserver;
   private frame = false;
   private _focused: string | null = null;
   private active: string | null = null;
@@ -368,9 +376,20 @@ export class Report implements ReportRuntime {
     };
     window.addEventListener('resize', onResize);
     this.offResize = () => window.removeEventListener('resize', onResize);
-    this.unsubModel = this.model.onChange(() => {
-      this._modelVersion++;
+    this.unsubModel = this.model.onChange((change) => {
       this.domainCache.clear();
+      if (change) {
+        // only rows changed (streaming, appends): re-query just the visuals that read those tables, on every page
+        const tables = new Set(change.tables);
+        for (const p of this.pages)
+          for (const host of p.hosts.values())
+            if (host.dependsOn(tables)) {
+              host.dataChanged();
+              if (p === this.page) this.schedule(host.id);
+            }
+        return;
+      }
+      this._modelVersion++;
       this.schedule();
     });
 
@@ -1175,18 +1194,63 @@ export class Report implements ReportRuntime {
     else this.pendingAll = true;
     if (this.frame) return;
     this.frame = true;
-    raf(() => this.flush());
+    raf(() => this.flush(true));
   }
 
-  /** Render everything pending right now (useful in tests and SSR snapshots). */
-  flush(): void {
+  /**
+   * Render everything pending right now (useful in tests, exports and SSR snapshots). Scheduled renders pass
+   * `visibleOnly`, which skips visuals scrolled well out of view until they come back.
+   */
+  flush(visibleOnly = false): void {
     this.frame = false;
     if (this.destroyed) return;
     const hosts = this.page.hosts;
     const ids = this.pendingAll ? [...hosts.keys()] : [...this.pending];
     this.pending.clear();
     this.pendingAll = false;
-    for (const id of ids) hosts.get(id)?.render();
+    if (!visibleOnly) {
+      for (const id of this.deferred) if (!ids.includes(id)) ids.push(id);
+      this.deferred.clear();
+    }
+    for (const id of ids) {
+      const host = hosts.get(id);
+      if (!host) continue;
+      if (visibleOnly && !this.isOnScreen(host.el)) {
+        this.deferred.add(id);
+        continue;
+      }
+      this.deferred.delete(id);
+      host.render();
+    }
+  }
+
+  /** Is a visual on (or near) the screen? Unknown and unmeasurable elements count as visible. */
+  private isOnScreen(el: HTMLElement): boolean {
+    if (typeof IntersectionObserver === 'undefined') return true;
+    if (!this.io) {
+      this.io = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            this.onScreen.set(e.target, e.isIntersecting);
+            const id = (e.target as HTMLElement).dataset.visualId;
+            if (e.isIntersecting && id && this.deferred.has(id) && this.page.hosts.get(id)?.el === e.target) this.schedule(id);
+          }
+        },
+        { rootMargin: `${LAZY_MARGIN}px` },
+      );
+    }
+    const known = this.onScreen.get(el);
+    if (known !== undefined) return known;
+    this.io.observe(el);
+    // first sighting: measure now (the observer reports asynchronously)
+    const r = el.getBoundingClientRect();
+    if (!r.width && !r.height) return true;
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (!vw || !vh) return true;
+    const visible = r.bottom >= -LAZY_MARGIN && r.top <= vh + LAZY_MARGIN && r.right >= -LAZY_MARGIN && r.left <= vw + LAZY_MARGIN;
+    this.onScreen.set(el, visible);
+    return visible;
   }
 
   // ================================================================= pages
@@ -1689,6 +1753,7 @@ export class Report implements ReportRuntime {
     this.destroyed = true;
     this.unsubModel();
     this.offResize();
+    this.io?.disconnect();
     for (const p of this.pages) for (const host of p.hosts.values()) host.destroy();
     this.tooltip.destroy();
     this.ctxMenu.destroy();

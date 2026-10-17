@@ -97,7 +97,7 @@ Tables load in parallel. Tables that already exist are refreshed, keeping their 
 model.appendRows('Ticks', rows, { maxRows: 100_000 });
 ```
 
-`appendRows` adds rows to a table and notifies reports once. `maxRows` keeps a sliding window by dropping the oldest rows.
+`appendRows` adds rows to a table and notifies reports once. `maxRows` keeps a sliding window by dropping the oldest rows. Indexes and caches are extended rather than rebuilt, and only the visuals that read the changed table re-query.
 
 - Calculated columns that only read their own row (`Sales[Qty] * Sales[Price]`, `IF`, `FORMAT`, `YEAR`, …) are computed for the new rows only.
 - Calculated columns that aggregate (`SUM`, `CALCULATE`, `RANKX`, measures, `RELATED`, …), in this table or in any other, are recomputed in full. So are calculated tables.

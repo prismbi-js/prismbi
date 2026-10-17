@@ -148,10 +148,14 @@ export class Evaluator {
 
   /** Evaluate `expr` in a row context on each of the first `count` rows of `table` (calculated columns). */
   evalColumn(expr: Expr, table: string, count: number): CellValue[] {
-    const values: CellValue[] = new Array(count);
+    return this.fillColumn(expr, table, new Array(count), 0, count);
+  }
+
+  /** Evaluate `expr` for rows `from`..`to` - 1 of `table` into `values` (calculated columns after an append). */
+  fillColumn(expr: Expr, table: string, values: CellValue[], from: number, to: number): CellValue[] {
     const f = this.rowFn(table, expr, { filters: [] });
-    if (f) for (let i = 0; i < count; i++) values[i] = f(i);
-    else for (let i = 0; i < count; i++) values[i] = this.evalScalarInRow(expr, table, i);
+    if (f) for (let i = from; i < to; i++) values[i] = f(i);
+    else for (let i = from; i < to; i++) values[i] = this.evalScalarInRow(expr, table, i);
     return values;
   }
 

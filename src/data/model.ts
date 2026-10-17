@@ -97,9 +97,17 @@ export interface WhatIfParameterDef {
   format?: string;
 }
 
-type Listener = () => void;
+/** What changed, when only table data did (definitions unchanged). Without it, anything may have changed. */
+export interface ModelChange {
+  /** Tables whose rows changed. */
+  tables: string[];
+}
+
+type Listener = (change?: ModelChange) => void;
 
 const CACHE_LIMIT = 20_000;
+/** Most row indices kept in the visible-rows cache at once (about 100 MB as JS arrays). */
+const ROWS_CACHE_BUDGET = 12_000_000;
 
 interface Effective {
   rels: Relationship[];
@@ -121,10 +129,14 @@ export class DataModel {
   private reachCache = new Map<string, Set<string>>();
   private effectiveCache = new Map<string, Effective>();
   private rowsCache = new Map<string, number[]>();
+  /** Row indices held by `rowsCache`, bounded by ROWS_CACHE_BUDGET. */
+  private rowsCached = 0;
   private allRowsCache = new Map<string, number[]>();
   private pathCache = new Map<string, Relationship[] | null>();
   private relatedCache = new Map<string, Int32Array | null>();
   private listeners = new Set<Listener>();
+  /** While positive, changes clear caches but don't notify (one notification follows). */
+  private quiet = 0;
   private calcTables = new Map<string, string>();
   /** Power Query-style steps per table, with the untransformed source rows they replay over. */
   private transforms = new Map<string, { source: Row[]; steps: TransformStep[] }>();
@@ -231,36 +243,44 @@ export class DataModel {
     const t = this.table(name);
     const calc = [...t.columns.values()].filter((c) => c.expression);
     const before = t.rowCount;
-    t.appendRows(rows);
-    let firstNew = before;
-    if (opts.maxRows !== undefined && t.rowCount > opts.maxRows) {
-      const drop = t.rowCount - opts.maxRows;
-      t.removeFirst(drop);
-      firstNew = Math.max(0, before - drop);
-    }
-    this.clearCaches();
-    for (const c of calc) {
-      const ast = parseDax(c.expression!);
-      if (!this.rowLocal(ast, name)) {
-        this.addCalculatedColumn(name, c.name, c.expression!, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
-        continue;
+    const touched = new Set([name]);
+    this.quiet++;
+    try {
+      t.appendRows(rows);
+      let firstNew = before;
+      if (opts.maxRows !== undefined && t.rowCount > opts.maxRows) {
+        const drop = t.rowCount - opts.maxRows;
+        t.removeFirst(drop);
+        firstNew = Math.max(0, before - drop);
       }
-      const values = c.values;
-      for (let i = firstNew; i < t.rowCount; i++) values[i] = this.evaluator.evalScalarInRow(ast, name, i);
-      t.setColumn(c);
-    }
-    // calculated columns elsewhere may aggregate over this table
-    for (const other of this.tables.values()) {
-      if (other.name === name) continue;
-      for (const c of [...other.columns.values()]) {
-        if (c.expression && !this.rowLocal(parseDax(c.expression), other.name)) {
-          this.clearCaches();
-          this.addCalculatedColumn(other.name, c.name, c.expression, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
+      this.clearCaches();
+      for (const c of calc) {
+        const ast = parseDax(c.expression!);
+        if (!this.rowLocal(ast, name)) {
+          this.addCalculatedColumn(name, c.name, c.expression!, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
+          continue;
+        }
+        const values = c.values;
+        this.evaluator.fillColumn(ast, name, values, firstNew, t.rowCount);
+        t.setColumn(c);
+      }
+      // calculated columns elsewhere may aggregate over this table
+      for (const other of this.tables.values()) {
+        if (other.name === name) continue;
+        for (const c of [...other.columns.values()]) {
+          if (c.expression && !this.rowLocal(parseDax(c.expression), other.name)) {
+            this.clearCaches();
+            this.addCalculatedColumn(other.name, c.name, c.expression, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
+            touched.add(other.name);
+          }
         }
       }
+      for (const ct of this.calcTables.keys()) touched.add(ct);
+      this.recalculateTables();
+    } finally {
+      this.quiet--;
     }
-    this.changed();
-    this.recalculateTables();
+    this.changed({ tables: [...touched] });
     return this;
   }
 
@@ -698,9 +718,10 @@ export class DataModel {
     return () => this.listeners.delete(fn);
   }
 
-  private changed(): void {
+  private changed(change?: ModelChange): void {
     this.clearCaches();
-    for (const l of this.listeners) l();
+    if (this.quiet) return;
+    for (const l of this.listeners) l(change);
   }
 
   private clearCaches(): void {
@@ -708,6 +729,7 @@ export class DataModel {
     this.reachCache.clear();
     this.effectiveCache.clear();
     this.rowsCache.clear();
+    this.rowsCached = 0;
     this.allRowsCache.clear();
     this.pathCache.clear();
     this.relatedCache.clear();
@@ -1047,8 +1069,13 @@ export class DataModel {
         return true;
       });
     }
-    if (this.rowsCache.size > CACHE_LIMIT) this.rowsCache.clear();
+    // bounded by entries and by total row indices (many large row sets would otherwise pin a lot of memory)
+    if (this.rowsCache.size > CACHE_LIMIT || this.rowsCached + result.length > ROWS_CACHE_BUDGET) {
+      this.rowsCache.clear();
+      this.rowsCached = 0;
+    }
     this.rowsCache.set(key, result);
+    this.rowsCached += result.length;
     return result;
   }
 

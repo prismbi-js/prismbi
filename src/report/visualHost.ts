@@ -18,6 +18,7 @@ function portable(spec: QuerySpec): boolean {
 }
 import { download, elementToSvg, svgToCanvas } from './snapshot';
 import { narrate } from './narrate';
+import { dataDependencies } from './dataDeps';
 import { prefersReducedMotion, snapshotMarks, tweenMarks } from './transitions';
 
 const asArray = (f: FieldSpec | FieldSpec[] | undefined): FieldSpec[] => (f === undefined ? [] : Array.isArray(f) ? f : [f]);
@@ -59,6 +60,10 @@ export class VisualHost {
   private data: QueryResult | null = null;
   private dataKey = '';
   private lastRenderedKey = '';
+  /** Bumped when tables this visual reads change (see `dependsOn`), so the next render re-queries. */
+  private dataEpoch = 0;
+  private lastQuery: QuerySpec | null = null;
+  private deps?: { key: string; tables: Set<string> | null };
   private cleanup: (() => void) | void = undefined;
   private ro?: ResizeObserver;
   private showTable = false;
@@ -271,7 +276,8 @@ export class VisualHost {
       if (!built.query) {
         this.data = { groups: [], values: [], rows: [], truncated: false, baseFilters: [] };
       } else {
-        const key = JSON.stringify(built.query, (_k, v) => (v instanceof Date ? `D${v.getTime()}` : v instanceof Set ? [...v] : v)) + this.rt.modelVersion;
+        this.lastQuery = built.query;
+        const key = JSON.stringify(built.query, (_k, v) => (v instanceof Date ? `D${v.getTime()}` : v instanceof Set ? [...v] : v)) + this.rt.modelVersion + '#' + this.dataEpoch;
         if (key !== this.dataKey || !this.data) {
           const engine = this.rt.engine;
           if (engine && !this.def.isSlicer && built.query.values?.length && portable(built.query)) {
@@ -668,6 +674,30 @@ export class VisualHost {
 
   invalidate(): void {
     this.dataKey = '';
+  }
+
+  /**
+   * Could a change to the rows of `tables` change what this visual shows? True until it has rendered, or whenever its
+   * dependencies can't be bounded.
+   */
+  dependsOn(tables: ReadonlySet<string>): boolean {
+    if (!this.dataKey) return true;
+    if (this.deps?.key !== this.dataKey) {
+      let deps: Set<string> | null;
+      try {
+        deps = dataDependencies(this.rt.model, this.lastQuery, this.spec);
+      } catch {
+        deps = null;
+      }
+      this.deps = { key: this.dataKey, tables: deps };
+    }
+    const deps = this.deps.tables;
+    return !deps || [...tables].some((t) => deps.has(t));
+  }
+
+  /** The data this visual shows is stale: re-query on the next render. */
+  dataChanged(): void {
+    this.dataEpoch++;
   }
 
   destroy(): void {

@@ -9,7 +9,7 @@ export { applySteps, applyStep, describeStep } from './data/transform';
 export { lineage, impactOf, expressionRefs, renameInExpression, renameModelField } from './data/lineage';
 export type { Lineage, LineageNode, LineageRef, Impact, RenameResult } from './data/lineage';
 export type { TransformStep, TransformContext } from './data/transform';
-export type { AppendOptions, CalculationGroup, CalculationGroupDef, CalculationItemDef, FieldInfo, FieldParameterDef, Measure, Relationship, WhatIfParameterDef } from './data/model';
+export type { AppendOptions, CalculationGroup, CalculationGroupDef, CalculationItemDef, FieldInfo, FieldParameterDef, Measure, ModelChange, Relationship, WhatIfParameterDef } from './data/model';
 export { setBitmapIndexes } from './data/model';
 export { setFastQuery } from './data/fastQuery';
 export type { FastQueryMode } from './data/fastQuery';

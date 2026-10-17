@@ -185,6 +185,9 @@ class Acc {
   }
 }
 
+/** Group key spaces up to this size use a dense lookup table instead of a hash map. */
+const DENSE_GROUPS = 1 << 22;
+
 /** Code for fact rows with no related row: they count in totals but belong to no group. */
 const UNMATCHED = -2;
 
@@ -286,13 +289,26 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     }
   };
 
-  const single = kc.length === 1;
+  // Group keys are mixed-radix numbers over the codes (BLANK = digit 0), so no strings are built per row. Small key
+  // spaces index a dense table directly; keys beyond 2^53 fall back to strings.
+  const radix = dicts.map((d) => d.length + 1);
+  const space = radix.reduce((a, b) => a * b, 1);
+  const numeric = space <= Number.MAX_SAFE_INTEGER;
+  const dense = space <= DENSE_GROUPS ? new Int32Array(space).fill(-1) : null;
   const groupOf = new Map<number | string, number>();
   const groupKeys: number[][] = [];
   const accs: Acc[] = [];
   const total = new Acc(plan.aggs);
   const keyOf = (r: number): number | string => {
-    if (single) return kc[0][r];
+    if (numeric) {
+      let k = 0;
+      for (let j = 0; j < kc.length; j++) {
+        const c = kc[j][r];
+        if (c === UNMATCHED) return UNMATCHED;
+        k = k * radix[j] + c + 1;
+      }
+      return k;
+    }
     let k = '';
     for (let j = 0; j < kc.length; j++) {
       const c = kc[j][r];
@@ -301,15 +317,23 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     }
     return k;
   };
+  const lookup = (k: number | string): number | undefined => {
+    if (dense) {
+      const gi = dense[k as number];
+      return gi < 0 ? undefined : gi;
+    }
+    return groupOf.get(k);
+  };
   for (const r of model.rowsOf(fact, base)) {
     feed(total, r);
     const k = keyOf(r);
     if (k === UNMATCHED) continue;
-    let gi = groupOf.get(k);
+    let gi = lookup(k);
     if (gi === undefined) {
       gi = accs.length;
-      groupOf.set(k, gi);
-      groupKeys.push(single ? [k as number] : (k as string).split('|').map(Number));
+      if (dense) dense[k as number] = gi;
+      else groupOf.set(k, gi);
+      groupKeys.push(kc.map((codes) => codes[r]));
       accs.push(new Acc(plan.aggs));
     }
     feed(accs[gi], r);
@@ -318,7 +342,8 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   if (highlight) {
     hl = accs.map(() => undefined);
     for (const r of model.rowsOf(fact, [...base, ...highlight])) {
-      const gi = groupOf.get(keyOf(r));
+      const k = keyOf(r);
+      const gi = k === UNMATCHED ? undefined : lookup(k);
       if (gi === undefined) continue;
       feed((hl[gi] ??= new Acc(plan.aggs)), r);
     }
