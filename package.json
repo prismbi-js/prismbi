@@ -41,7 +41,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "@prismbi/prismbi": "bin/prismbi.mjs"
+    "@prismbi/prismbi": "bin/prismbi.mjs",
+    "prismbi-sign-plugin": "scripts/sign-plugin.mjs"
   },
   "exports": {
     ".": {
@@ -99,6 +100,11 @@
       "import": "./dist/collab.js",
       "require": "./dist/collab.cjs"
     },
+    "./plugins": {
+      "types": "./dist/plugins.d.ts",
+      "import": "./dist/plugins.js",
+      "require": "./dist/plugins.cjs"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",
@@ -113,7 +119,8 @@
     "dist/**/*.js",
     "dist/**/*.cjs",
     "dist/**/*.d.ts",
-    "dist/**/*.d.cts"
+    "dist/**/*.d.cts",
+    "scripts/sign-plugin.mjs"
   ],
   "scripts": {
     "build": "tsup",

@@ -11,7 +11,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 3 | Advanced modeling and DAX coverage | `0.3` | ✅ Implemented |
 | 4 | Authoring studio (drag-and-drop editor) | `0.4` | ✅ Implemented |
 | 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
-| 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | In progress (5 of 6) |
+| 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | ✅ Implemented |
 | 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | Planned |
 | 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | Planned |
 | 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | Planned |
@@ -221,7 +221,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - A Node server runtime with scheduled refresh
 - Performance budgets in CI
 
-## Phase 6: Beyond Power BI (in progress)
+## Phase 6: Beyond Power BI ✅
 
 **Done:**
 - [x] **`@prismbi/prismbi/ai`:**
@@ -235,9 +235,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 - [x] **`@prismbi/prismbi/server`:** headless rendering (`renderVisualSvg`, `renderReportHtml`, `withDom`), measure alerts (`watchMeasure`) and report schedules (`scheduleReport`).
 - [x] **`@prismbi/prismbi/collab`:** live co-editing (last-writer-wins entries with a join protocol), presence outlines, comments on visuals and data points, shared bookmarks; BroadcastChannel, WebSocket and in-memory transports.
-
-**Remaining:**
-- Signed plugins and the marketplace
+- [x] **`@prismbi/prismbi/plugins`:** signed plugins (SHA-256 integrity plus ECDSA P-256 signatures, trusted keys), `loadPlugin`, catalogs and an install gallery, and the `prismbi-sign-plugin` CLI.
 
 **Goal:** features Power BI doesn't have, or that are clunky there.
 

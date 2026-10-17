@@ -57,7 +57,11 @@ Contents:
 - **Shared bookmarks:** stored in the document.
 - **Demo:** open `/studio.html` in two tabs. Test with two in-memory peers.
 
-### 3. NEXT: Plugins: `@prismbi/prismbi/plugins`
+### 3. ✅ DONE: Plugins (src/plugins.ts, scripts/sign-plugin.mjs, tests/plugins.test.ts, docs/guide/plugins.md)
+
+**Phase 6 is complete.** Next: Phase 7, starting with visual calculations and window functions plus visual regression tests (see `docs/ROADMAP.md`).
+
+#### Original plan: Plugins: `@prismbi/prismbi/plugins`
 
 - **Manifest:** `{ name, version, kind: 'visual' | 'connector' | 'theme', entry, integrity: 'sha256-…', signature }`.
 - **`loadPlugin(url, { trustedKeys })`:**

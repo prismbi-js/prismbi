@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (2026-10-17): Phase 6, in progress
+## 0.6.0 (2026-10-17): Phase 6, beyond Power BI
 
 - **`@prismbi/prismbi/ai`:**
   - `ask` / `askSync`, with an optional `llm` hook.
@@ -11,6 +11,7 @@
 - **`@prismbi/prismbi/files`:** `splitReport`, `joinReport`, `diffReports`, `formatDiff`, and the `prismbi split|join|diff` CLI.
 - **`@prismbi/prismbi/server`:** `renderVisualSvg`, `renderReportHtml`, `withDom`, `watchMeasure`, `scheduleReport`, plus a new `measure` report option for explicit visual sizes.
 - **`@prismbi/prismbi/collab`:** `connectReport`, `CollabDoc`, `broadcastChannelTransport`, `webSocketTransport`, `memoryHub`; presence outlines, comment badges and threads, "Comment on this point". The Studio demo co-edits with `?room=<name>`.
+- **`@prismbi/prismbi/plugins`:** `loadPlugin`, `verifyPlugin`, `signPlugin`, `generateSigningKeys`, `integrityOf`, `fetchCatalog`, `renderPluginGallery`, `loadedPlugins`, and the `prismbi-sign-plugin` CLI.
 - **Package name:** published as `@prismbi/prismbi` (npm rejected the unscoped `prismbi` as too close to `prisma` and `prismjs`).
 - **Core:** `registerMenuItems` (context-menu plugins), plus `Report.reportFilterList` and `Report.currentSelection`.
 
