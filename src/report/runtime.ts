@@ -27,6 +27,8 @@ export interface ReportRuntime {
   translate?(kind: 'page' | 'title' | 'text' | 'field', key: string, fallback: string): string;
   /** Phone layout position (`null` = hidden on phones), or undefined to use the visual's own layout. */
   layoutFor?(visualId: string): import('../visuals/types').VisualLayout | null | undefined;
+  /** False when the visual's `visibleWhen` condition doesn't hold. */
+  isVisualVisible?(visualId: string): boolean;
   /** Explicit visual sizes (headless rendering, where layout reports 0). */
   readonly measure?: (visualId: string) => { width: number; height: number } | undefined;
   readonly tooltip: Tooltip;

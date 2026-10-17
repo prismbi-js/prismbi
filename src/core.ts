@@ -75,7 +75,7 @@ export { Report, reviveDates, registerMenuItems, autoMobileLayout } from './repo
 export type { MobileLayout , ReportSubscription, ReportAlert, ReportTranslation } from './report/report';
 export type { MenuContext, MenuProvider } from './report/report';
 export type { MenuItem } from './report/contextMenu';
-export type { Bookmark, PageDefinition, PageLayout, ReportChrome, ReportDefinition, ReportOptions, VisualHandle } from './report/report';
+export type { Bookmark, PageDefinition, PageLayout, ReportChrome, ReportDefinition, ReportOptions, UsageEvent, VisualHandle } from './report/report';
 export type { ReportEvents } from './report/events';
 export { createVisual } from './report/standalone';
 export type { StandaloneVisualOptions } from './report/standalone';

@@ -148,6 +148,7 @@ export class VisualHost {
     this.el.className = `pbi-visual${f.shadow.show ? ' has-shadow' : ''}${this.spec.className ? ` ${this.spec.className}` : ''}`;
     // after className is rebuilt: hidden in the current phone layout
     this.el.classList.toggle('is-phone-hidden', phone === null);
+    this.el.classList.toggle('is-conditional-hidden', !(this.rt.isVisualVisible?.(this.id) ?? true));
     if (this.spec.style) this.el.setAttribute('style', `${st.cssText};${this.spec.style}`);
   }
 
@@ -240,6 +241,9 @@ export class VisualHost {
 
   render(): void {
     if (this.destroyed) return;
+    const shown = this.rt.isVisualVisible?.(this.id) ?? true;
+    this.el.classList.toggle('is-conditional-hidden', !shown);
+    if (!shown) return;
     const t0 = performance.now();
     const f = this.format();
     this.renderHeader(f);

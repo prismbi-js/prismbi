@@ -221,3 +221,27 @@ report.reset();               // clear slicers, selection and drill on the curre
 const off = report.on('dataPointClick', ({ keys }) => router.push(`/category/${keys[0]}`));
 off();
 ```
+
+## Usage analytics
+
+`onUsage` gets one record per page view (including the first) and per interaction, ready for any analytics sink:
+
+```ts
+new Report(el, { model, pages, onUsage: (e) => analytics.track(e.type, e) });
+// { type: 'interaction', action: 'filter', report: 'Sales', pageId, page: 'Overview', visualId: 'region', at, detail: { scope, filters } }
+```
+
+Actions are `select`, `drill`, `drillThrough`, `filter` and `bookmark`. A handler that throws is logged and doesn't break the report.
+
+## Conditional visibility
+
+`visibleWhen` shows a visual only when a condition holds. It's evaluated against the filters reaching that visual (slicers, selections, page and report filters), so it updates as viewers interact:
+
+```ts
+{ type: 'table', fields: { /* … */ }, visibleWhen: { field: 'Product[Category]' } }                 // once a category is picked
+{ type: 'card', fields: { /* … */ }, visibleWhen: { field: 'Region[Country]', is: ['Canada'] } }   // only for Canada
+{ type: 'textbox', format: { /* … */ }, visibleWhen: { field: 'Product[Category]', is: 'notSelected' } } // a "pick a category" hint
+{ type: 'card', fields: { /* … */ }, visibleWhen: { roles: ['Managers'] } }                        // only for an active RLS role
+```
+
+`field` and `roles` combine (both must hold). Hidden visuals don't run queries. In edit mode every visual stays visible, so authors can still lay them out. `report.isVisualVisible(id)` tells you the current state.

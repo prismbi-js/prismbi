@@ -39,6 +39,11 @@ export interface VisualSpec {
   /** Persisted drill state. */
   drill?: { level: number; path: CellValue[]; /** Levels shown for all members ("go to next level"). */ skip?: number[]; /** "Expand all down": show levels path.length..level together. */ expanded?: boolean };
   hidden?: boolean;
+  /**
+   * Show the visual only when a condition holds: a field is filtered or selected (`is` omitted or `'selected'`),
+   * filtered to one of some values (`is: [...]`), not filtered (`'notSelected'`), and/or one of `roles` is active.
+   */
+  visibleWhen?: { field?: string; is?: CellValue[] | 'selected' | 'notSelected'; roles?: string[] };
   /** Durable visual-local UI state (sort, expansion, decomposition splits). Saved with the report. */
   state?: Record<string, unknown>;
   className?: string;

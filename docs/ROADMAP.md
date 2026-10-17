@@ -300,6 +300,8 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **Subscriptions and alerts:** `subscriptions` / `alerts` on report definitions, a Studio **Schedules** dialog with live alert notifications, and the `runSubscriptions` / `watchAlerts` server runners
 - [x] **Localization:** `translations` per locale (pages, titles, text, field names) with language fallback, `setLocale` at runtime, and automatic right-to-left for RTL languages
 - [x] **Lineage and impact analysis:** `lineage`, `impactOf`, token-safe `renameModelField` and `model.renameColumn`. The Studio rewrites dependents on rename and shows the impact before a delete.
+- [x] **Conditional visibility:** `VisualSpec.visibleWhen` by filter or selection state (any value, specific values, or none) and by active RLS role; always shown in edit mode.
+- [x] **Usage analytics hook:** `ReportOptions.onUsage` receives page views and select, drill, drill-through, filter and bookmark interactions.
 
 **Goal:** what an organisation needs to roll PrismBI out.
 

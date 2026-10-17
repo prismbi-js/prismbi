@@ -7,6 +7,9 @@
 - **Localization:** `ReportDefinition.translations`, `ReportOptions.direction`, `report.setLocale()`, `report.translate()`.
 - **Lineage:** `lineage`, `impactOf`, `expressionRefs`, `renameInExpression`, `renameModelField`, `model.renameColumn`, `DataTable.renameColumn`. The Studio measure and column renames now update dependent DAX (previously only visual fields).
 
+- **Conditional visibility:** `VisualSpec.visibleWhen` and `report.isVisualVisible()`.
+- **Usage analytics:** `ReportOptions.onUsage` with `UsageEvent` records.
+
 - **Power BI import:** `@prismbi/prismbi/powerbi` with `importPowerBI`, `parseTmdl`, `parseModelBim`, `buildModelFrom`, `mapPbirReport`, `mapLegacyReport`; the `prismbi pbip <dir> [report.json]` CLI.
 
 ## 0.7.0 (unreleased): Phase 7, analyst essentials

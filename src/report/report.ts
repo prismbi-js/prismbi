@@ -154,8 +154,24 @@ export interface ReportOptions extends Partial<ReportDefinition> {
   layoutMode?: 'auto' | 'desktop' | 'mobile';
   /** Width in px below which phone layouts apply (default 640). */
   mobileBreakpoint?: number;
+  /** Usage analytics: page views and interactions (select, drill, drill-through, filter, bookmark), for any analytics sink. */
+  onUsage?: (e: UsageEvent) => void;
   /** Explicit pixel size per visual body, for rendering without layout (e.g. `@prismbi/prismbi/server`). */
   measure?: (visualId: string) => { width: number; height: number } | undefined;
+}
+
+/** One usage record passed to `ReportOptions.onUsage`. */
+export interface UsageEvent {
+  type: 'pageView' | 'interaction';
+  /** For interactions: what the viewer did. */
+  action?: 'select' | 'drill' | 'drillThrough' | 'filter' | 'bookmark';
+  report: string;
+  pageId: string;
+  page: string;
+  visualId?: string;
+  /** Milliseconds since the epoch. */
+  at: number;
+  detail?: Record<string, unknown>;
 }
 
 interface PageState {
@@ -300,6 +316,7 @@ export class Report implements ReportRuntime {
   private unsubModel: () => void;
   private offResize: () => void = () => {};
   private onEvent?: ReportOptions['onEvent'];
+  private onUsage?: ReportOptions['onUsage'];
   private destroyed = false;
 
   constructor(
@@ -322,6 +339,7 @@ export class Report implements ReportRuntime {
     this.reportFilters = opts.filters ?? [];
     this.bookmarks = opts.bookmarks ?? [];
     this.onEvent = opts.onEvent;
+    this.onUsage = opts.onUsage;
     this.chrome = { toolbar: opts.chrome?.toolbar ?? true, pageTabs: opts.chrome?.pageTabs ?? 'auto', filterPane: opts.chrome?.filterPane ?? true };
     this.paneOpen = this.chrome.filterPane === 'open';
 
@@ -361,6 +379,7 @@ export class Report implements ReportRuntime {
     this.applyTheme();
     this.applyDirection();
     this.showPage(Math.max(0, initial), false);
+    this.usage('pageView');
   }
 
   // ================================================================= runtime (used by visuals)
@@ -1080,6 +1099,63 @@ export class Report implements ReportRuntime {
   emit<K extends keyof ReportEvents>(event: K, payload: ReportEvents[K]): void {
     this.emitter.emit(event, payload);
     this.onEvent?.(event, payload);
+    if (this.onUsage) this.trackUsage(String(event), payload as Record<string, unknown>);
+  }
+
+  private trackUsage(event: string, p: Record<string, unknown>): void {
+    const visualId = p.visualId as string | undefined;
+    if (event === 'pageChanged') this.usage('pageView');
+    else if (event === 'selectionChanged') this.usage('interaction', 'select', visualId, { filters: p.filters });
+    else if (event === 'drill') this.usage('interaction', 'drill', visualId, { level: p.level, path: p.path });
+    else if (event === 'drillThrough') this.usage('interaction', 'drillThrough', visualId, { from: p.fromPageId, filters: p.filters });
+    else if (event === 'filtersChanged') this.usage('interaction', 'filter', visualId, { scope: p.scope, filters: p.filters });
+    else if (event === 'bookmarkApplied') this.usage('interaction', 'bookmark', undefined, { name: p.name });
+  }
+
+  private usage(type: UsageEvent['type'], action?: UsageEvent['action'], visualId?: string, detail?: Record<string, unknown>): void {
+    if (!this.onUsage || !this.page) return;
+    const e: UsageEvent = { type, report: this.name, pageId: this.page.def.id!, page: this.page.def.name, at: Date.now() };
+    if (action) e.action = action;
+    if (visualId) e.visualId = visualId;
+    if (detail) e.detail = detail;
+    try {
+      this.onUsage(e);
+    } catch (error) {
+      console.error('onUsage handler failed', error);
+    }
+  }
+
+  /** Whether a visual's `visibleWhen` condition holds (always true in edit mode, so authors can see it). */
+  isVisualVisible(visualId: string): boolean {
+    const found = this.findVisual(visualId);
+    const cond = found?.spec.visibleWhen;
+    if (!cond || this.editor) return true;
+    if (cond.roles?.length && !this.model.activeRoleNames.some((r) => cond.roles!.includes(r))) return false;
+    if (!cond.field) return true;
+    const field = cond.field;
+    let filtered = false;
+    const values: CellValue[] = [];
+    let known = true;
+    for (const f of this.filtersFor(visualId)) {
+      if (f.op === 'tuples') {
+        const i = f.targets.findIndex((t) => sameRef(t, field));
+        if (i < 0) continue;
+        filtered = true;
+        if (f.exclude) known = false;
+        else values.push(...f.tuples.map((t) => t[i]));
+      } else if (f.op !== 'topN' && sameRef(f.target, field)) {
+        filtered = true;
+        if (f.op === 'eq') values.push(f.value ?? null);
+        else if (f.op === 'in') values.push(...(f.values ?? []));
+        else known = false;
+      }
+    }
+    const is = cond.is ?? 'selected';
+    if (is === 'selected') return filtered;
+    if (is === 'notSelected') return !filtered;
+    if (!filtered || !known) return false;
+    const want = new Set(is.map(valueKey));
+    return values.some((v) => want.has(valueKey(v)));
   }
 
   /** Subscribe to an event; returns an unsubscribe function. */
