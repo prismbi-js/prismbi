@@ -57,3 +57,42 @@ describe('visual calculations', () => {
     el.remove();
   });
 });
+
+describe('DAX window functions', () => {
+  const m = buildModel()
+    .addMeasure('Prev Year Sales', 'CALCULATE([Total Sales], OFFSET(-1, ALLSELECTED(Date[Year]), ORDERBY(Date[Year])))')
+    .addMeasure('First Year Sales', 'CALCULATE([Total Sales], INDEX(1, ALLSELECTED(Date[Year]), ORDERBY(Date[Year])))')
+    .addMeasure('Running Months', 'CALCULATE([Total Sales], WINDOW(1, ABS, 0, REL, ALLSELECTED(Date[MonthNumber]), ORDERBY(Date[MonthNumber])))')
+    .addMeasure('Moving 3', 'AVERAGEX(WINDOW(-2, REL, 0, REL, ALLSELECTED(Date[MonthNumber]), ORDERBY(Date[MonthNumber])), [Total Sales])')
+    .addMeasure('Category Rank', 'RANK(DENSE, ALLSELECTED(Product[Category]), ORDERBY([Total Sales], DESC))')
+    .addMeasure('Row In Year', 'ROWNUMBER(ALLSELECTED(Date[Year], Date[MonthNumber]), ORDERBY(Date[MonthNumber]), PARTITIONBY(Date[Year]))');
+
+  it('OFFSET and INDEX pick neighbouring and absolute rows', () => {
+    const q = m.query({ groupBy: ['Date[Year]'], values: ['Total Sales', 'Prev Year Sales', 'First Year Sales'] });
+    const [y2024, y2025] = q.rows;
+    expect(y2024.values[1]).toBeNull();
+    expect(y2025.values[1]).toBe(y2024.values[0]);
+    expect(y2025.values[2]).toBe(y2024.values[0]);
+  });
+
+  it('WINDOW gives running and moving aggregates that match visual calculations', () => {
+    const q = m.query({
+      groupBy: ['Date[MonthNumber]'],
+      values: ['Total Sales', 'Running Months', 'Moving 3', { name: 'vc', visualCalc: 'RUNNINGSUM([Total Sales])' }, { name: 'vm', visualCalc: 'MOVINGAVERAGE([Total Sales], 3)' }],
+      filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
+    });
+    for (const r of q.rows) {
+      expect(r.values[1]).toBeCloseTo(r.values[3] as number, 6);
+      expect(r.values[2]).toBeCloseTo(r.values[4] as number, 6);
+    }
+  });
+
+  it('RANK and ROWNUMBER with measures in ORDERBY and partitions', () => {
+    const q = m.query({ groupBy: ['Product[Category]'], values: ['Total Sales', 'Category Rank'], orderBy: [{ field: 'Total Sales', direction: 'desc' }] });
+    expect(q.rows.map((r) => r.values[1])).toEqual([1, 2, 3, 4]);
+    const months = m.query({ groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Row In Year'] });
+    const mar2025 = months.rows.find((r) => r.keys[0] === 2025 && r.keys[1] === 3)!;
+    expect(mar2025.values[0]).toBe(3);
+    expect(() => m.evaluate('ORDERBY(Date[Year])')).toThrow(/only be used inside/);
+  });
+});

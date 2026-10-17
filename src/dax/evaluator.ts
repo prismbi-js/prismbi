@@ -57,6 +57,7 @@ type Modifier =
 
 /** Functions whose arguments are evaluated in their own context – column refs inside them are not "free". */
 const CONTEXT_FUNCS = new Set([
+  'OFFSET', 'INDEX', 'WINDOW', 'RANK', 'ROWNUMBER', 'ORDERBY', 'PARTITIONBY', 'MATCHBY',
   'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'COUNTBLANK', 'COUNTROWS', 'DISTINCTCOUNT', 'DISTINCTCOUNTNOBLANK', 'MEDIAN',
   'SUMX', 'AVERAGEX', 'MINX', 'MAXX', 'COUNTX', 'COUNTAX', 'MEDIANX', 'CONCATENATEX', 'RANKX', 'PRODUCTX', 'PRODUCT',
   'CALCULATE', 'CALCULATETABLE', 'FILTER', 'ALL', 'ALLSELECTED', 'ALLEXCEPT', 'REMOVEFILTERS', 'VALUES', 'DISTINCT', 'SELECTEDVALUE',
@@ -363,6 +364,121 @@ export class Evaluator {
     const v = this.eval(e, ctx);
     if (!isTable(v)) throw new DaxError('A table expression was expected');
     return v;
+  }
+
+  /**
+   * DAX window functions: OFFSET(delta, …), INDEX(position, …), WINDOW(from, ABS|REL, to, ABS|REL, …), and the
+   * scalars RANK([DENSE|SKIP], …) and ROWNUMBER(…), each taking an optional relation, ORDERBY and PARTITIONBY.
+   * Without a relation, the ALLSELECTED values of the ORDERBY / PARTITIONBY columns are used.
+   */
+  private windowFunction(name: string, args: Expr[], ctx: EvalContext): Value {
+    const isCall = (e: Expr | undefined, n: string): e is Extract<Expr, { type: 'call' }> => e?.type === 'call' && e.name === n;
+    const word = (e: Expr | undefined) => (e?.type === 'table' ? e.name.toUpperCase() : undefined);
+    const orderBy = args.find((a) => isCall(a, 'ORDERBY')) as Extract<Expr, { type: 'call' }> | undefined;
+    const partitionBy = args.find((a) => isCall(a, 'PARTITIONBY')) as Extract<Expr, { type: 'call' }> | undefined;
+    // leading positional arguments per function, then an optional relation
+    const lead = name === 'WINDOW' ? 4 : name === 'OFFSET' || name === 'INDEX' ? 1 : name === 'RANK' && ['DENSE', 'SKIP'].includes(word(args[0]) ?? '') ? 1 : 0;
+    const rest = args.slice(lead).filter((a) => !isCall(a, 'ORDERBY') && !isCall(a, 'PARTITIONBY') && !isCall(a, 'MATCHBY') && !['KEEP', 'FIRST', 'LAST', 'DEFAULT'].includes(word(a) ?? ''));
+    const relExpr = rest[0];
+
+    // ORDERBY(expr, [ASC|DESC], expr, …)
+    const orders: { expr: Expr; desc: boolean }[] = [];
+    const oargs = orderBy?.args ?? [];
+    for (let i = 0; i < oargs.length; i++) {
+      const dir = word(oargs[i + 1]);
+      orders.push({ expr: oargs[i], desc: dir === 'DESC' });
+      if (dir === 'ASC' || dir === 'DESC') i++;
+    }
+    const partCols = (partitionBy?.args ?? []).map((a) => this.colArg(a, 'PARTITIONBY'));
+
+    // the relation as tuples with known columns
+    let rel: TuplesTable;
+    if (relExpr) {
+      const t = this.evalTable(relExpr, ctx);
+      rel = t.kind === 'tuples' ? t : { kind: 'tuples', columns: [...this.model.table(t.table).columns.keys()].map((c) => ({ table: t.table, column: c })), tuples: this.tableTuples(t) };
+    } else {
+      const cols = [...orders.filter((o) => o.expr.type === 'column').map((o) => this.colArg(o.expr, 'ORDERBY')), ...partCols];
+      if (!cols.length) throw new DaxError(`${name} needs a relation or ORDERBY columns`);
+      const unique = cols.filter((c, i) => cols.findIndex((d) => d.table === c.table && d.column === c.column) === i);
+      const filters = this.removeFilters([...this.transition(ctx)], { mod: 'allSelected' });
+      rel = unique.length === 1 ? { kind: 'tuples', columns: unique, tuples: this.model.valuesOf(unique[0], filters).map((v) => [v]) } : this.distinctTuples(unique, filters);
+    }
+    if (!orders.length) for (const c of rel.columns) orders.push({ expr: { type: 'column', table: c.table, column: c.column }, desc: false });
+    const colIndex = (c: ColumnRef) => rel.columns.findIndex((d) => d.table === c.table && d.column === c.column);
+
+    // the current row: each relation column's value from the row context, else a single value in the filter context
+    const filters = this.transition(ctx);
+    const current = rel.columns.map((c): { known: boolean; value: CellValue } => {
+      for (let i = (ctx.rows?.length ?? 0) - 1; i >= 0; i--) {
+        const b = ctx.rows![i];
+        if (b.kind === 'tuple') {
+          const k = b.columns.findIndex((d) => d.table === c.table && d.column === c.column);
+          if (k >= 0) return { known: true, value: b.values[k] };
+        } else if (b.table === c.table) return { known: true, value: this.model.table(c.table).value(c.column, b.row) };
+      }
+      const vals = this.model.valuesOf(c, filters);
+      return vals.length === 1 ? { known: true, value: vals[0] } : { known: false, value: null };
+    });
+    const same = (tu: CellValue[], idx: number[]) => idx.every((i) => valueKey(tu[i]) === valueKey(current[i].value));
+    const pIdx = partCols.map(colIndex);
+    if (pIdx.some((i) => i < 0)) throw new DaxError('PARTITIONBY columns must be part of the relation');
+    if (pIdx.some((i) => !current[i].known)) return name === 'RANK' || name === 'ROWNUMBER' ? null : { ...rel, tuples: [] };
+
+    // sort the current partition
+    const part = rel.tuples.filter((tu) => same(tu, pIdx));
+    const partTable: TuplesTable = { ...rel, tuples: part };
+    const keys = orders.map((o) => this.iterate(partTable, o.expr, ctx));
+    const order = part.map((_, i) => i).sort((a, b) => {
+      for (let k = 0; k < orders.length; k++) {
+        const c = compareValues(keys[k][a], keys[k][b]);
+        if (c) return orders[k].desc ? -c : c;
+      }
+      return 0;
+    });
+    const sorted = order.map((i) => part[i]);
+    const known = rel.columns.map((_, i) => i).filter((i) => current[i].known);
+    const pos = sorted.findIndex((tu) => same(tu, known));
+    const empty = (): TuplesTable => ({ ...rel, tuples: [] });
+
+    switch (name) {
+      case 'OFFSET': {
+        if (pos < 0) return empty();
+        const t = sorted[pos + Math.trunc(num(this.evalScalar(args[0], ctx)))];
+        return { ...rel, tuples: t ? [t] : [] };
+      }
+      case 'INDEX': {
+        const n = Math.trunc(num(this.evalScalar(args[0], ctx)));
+        const t = n > 0 ? sorted[n - 1] : n < 0 ? sorted[sorted.length + n] : undefined;
+        return { ...rel, tuples: t ? [t] : [] };
+      }
+      case 'WINDOW': {
+        const at = (vi: number, ti: number) => {
+          const v = Math.trunc(num(this.evalScalar(args[vi], ctx)));
+          if (word(args[ti]) === 'ABS') return v > 0 ? v - 1 : sorted.length + v;
+          return pos + v;
+        };
+        if (pos < 0 && (word(args[1]) !== 'ABS' || word(args[3]) !== 'ABS')) return empty();
+        const from = Math.max(0, at(0, 1));
+        const to = Math.min(sorted.length - 1, at(2, 3));
+        return { ...rel, tuples: from <= to ? sorted.slice(from, to + 1) : [] };
+      }
+      case 'ROWNUMBER':
+        return pos < 0 ? null : pos + 1;
+      case 'RANK': {
+        if (pos < 0) return null;
+        // ties share a rank: SKIP (default) is competition ranking (1, 2, 2, 4), DENSE has no gaps (1, 2, 2, 3)
+        const keyOf = (i: number) => JSON.stringify(orders.map((_, k) => valueKey(keys[k][order[i]])));
+        const mine = keyOf(pos);
+        if (word(args[0]) !== 'DENSE') return sorted.findIndex((_, i) => keyOf(i) === mine) + 1;
+        const seen = new Set<string>();
+        for (let i = 0; i < sorted.length; i++) {
+          seen.add(keyOf(i));
+          if (keyOf(i) === mine) return seen.size;
+        }
+        return null;
+      }
+    }
+    return null;
   }
 
   private listToTable(e: Extract<Expr, { type: 'list' }>, ctx: EvalContext): TuplesTable {
@@ -839,6 +955,16 @@ export class Evaluator {
         const col = this.colArg(args[0], name);
         return { kind: 'tuples', columns: [col], tuples: this.model.valuesOf(col, ctx.filters).map((v) => [v]) };
       }
+      case 'OFFSET':
+      case 'INDEX':
+      case 'WINDOW':
+      case 'RANK':
+      case 'ROWNUMBER':
+        return this.windowFunction(name, args, ctx);
+      case 'ORDERBY':
+      case 'PARTITIONBY':
+      case 'MATCHBY':
+        throw new DaxError(`${name} can only be used inside OFFSET, INDEX, WINDOW, RANK or ROWNUMBER`);
       case 'TOPN': {
         const n = num(s(0));
         const t = this.evalTable(args[1], ctx);
