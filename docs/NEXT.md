@@ -11,6 +11,13 @@ Last updated 2026-10-17. Branch `phase-5`; local `master` fast-forwarded to the 
 - **CLI:** `bin/prismbi.mjs`.
 - **Demo pages** (`npm run dev`, then http://localhost:5173): `/`, `/studio.html`, `/perf.html`, `/elements.html`.
 
+## Publishing (deferred by the owner: "we will deploy later")
+
+- **Package:** `@prismbi/prismbi@0.6.0` is ready. npm rejected the unscoped name `prismbi` as too close to `prisma` and `prismjs`.
+- **Before publishing:** the owner creates the free npm organization `prismbi` on npmjs.com.
+- **Then:** run `npm publish --access public --auth-type=web` in a real terminal, since the passkey prompt opens in the browser.
+- **Bump first:** if new features land before then, bump the version and date the CHANGELOG entry.
+
 ## Remaining Phase 6 items (do in this order)
 
 ### 1. ✅ DONE: `@prismbi/prismbi/server` (src/server.ts, tests/server.test.ts, docs/guide/server.md)
