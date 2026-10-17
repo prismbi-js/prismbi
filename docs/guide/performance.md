@@ -8,11 +8,14 @@ Try it with `npm run dev`, then open `/perf.html`. That page generates 100k to 1
 
 - **Columnar storage with typed views.** Each column is a plain array. On demand, the engine also builds a `Float64Array` view (numbers, dates as milliseconds) and a dictionary encoding (`Int32Array` codes + distinct values). Both are cached until the table changes.
 - **Vectorised aggregations.** `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA` and `DISTINCTCOUNT` over a column run as tight loops over those views.
-- **Single-pass grouped queries.** A visual whose measures are built from those aggregations and `COUNTROWS` is answered in one pass over the fact rows. Measures may combine them with `+ - * /` and `DIVIDE`, and reference other such measures. This replaces evaluating every group separately. Group columns may be on the fact table or on dimensions reached through many-to-one relationships.
-  - **Fallback:** anything else (time intelligence, `CALCULATE`, iterators, calculation groups in play, `USERELATIONSHIP`, `includeEmpty`) uses the general engine, so results never change.
+- **Single-pass grouped queries.** A visual whose measures are built from those aggregations, `COUNTROWS` and compiled `SUMX` / `AVERAGEX` (below) is answered in one pass over the fact rows. Measures may combine them with `+ - * /` and `DIVIDE`, and reference other such measures. This replaces evaluating every group separately. Group columns may be on the fact table or on dimensions reached through many-to-one relationships.
+  - **Fallback:** anything else (time intelligence, `CALCULATE`, other iterators, calculation groups in play, `USERELATIONSHIP`, `includeEmpty`) uses the general engine, so results never change.
   - **When it applies:** in `'auto'` mode it is used for multi-column groupings and for single columns with more than 1,000 values. Below that, indexed per-group evaluation is already faster.
   - **Toggle:** use `setFastQuery('always' | 'off' | 'auto')` to compare the two paths.
+- **Compiled row expressions.** Iterators (`SUMX`, `AVERAGEX`, `MINX`, `MAXX`, `COUNTX`, `RANKX`…) and calculated columns compile their row expression to a closure over the typed views when it only uses numbers, number columns of the iterated table, `RELATED` (or bare references) to number columns of related tables, unary minus, `+ - * /` and `DIVIDE`. BLANK handling matches the interpreter exactly. `SUMX(Sales, Sales[Quantity] * RELATED(Product[Price]))` over 300k rows drops from about 0.5 s to 40 ms. Anything else, such as measures, variables, text or dates in the row expression, runs in the interpreter, as does everything when `setFastQuery('off')` is set.
+- **Relationship maps.** `RELATED`, cross-table filters and grouping by a dimension use a cached `Int32Array` from each fact row to its related row, built once per table pair from the foreign key's dictionary codes.
 - **Per-dimension pre-aggregation.** Time intelligence and running totals evaluate the same measure once per day or period, each time with a different set of dates but otherwise identical filters. After a filter split repeats, the engine sums the fact column once per dimension row (per date, per product…). Each evaluation then adds up the visible rows' partials instead of scanning the fact table. This applies to `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT` and `COUNTA` through a direct many-to-one relationship with no bidirectional filtering, and only when the dimension filters leave at least 16 rows visible.
+- **Bitmap indexes.** Low-cardinality columns of large tables (at most 512 values, at least 4,096 rows) also get one bitset per value. Filters on them combine with word-wide OR (within a filter) and AND (across filters and relationships) before row lists are built. At 1M rows, that is 2–4× faster for stacked filters such as channel × priority × country (`npm run bench`). `setBitmapIndexes(false)` turns them off.
 - **Hash indexes and caches.** `eq`/`in` filters use column indexes. Visible row sets are cached per filter context and measure results per (measure, context). Visuals re-query only when their own filters change.
 
 ## Numbers
@@ -32,10 +35,10 @@ Pre-aggregated results can differ from a row-by-row scan in the last floating-po
 
 ## Rendering at scale
 
-
 ![The scale demo: 250,000 rows, a dense line chart, 8,000 scatter points and a virtualized table](../images/performance.png)
+
 - **Lines and areas** with more points than about two per pixel are thinned with Largest-Triangle-Three-Buckets for drawing. Peaks and gaps survive. The crosshair and tooltips still read every point. Stacked areas are drawn in full so the layers meet.
-- **Scatter charts** with more than 3,000 points paint on a canvas laid over the SVG axes. A spatial grid finds the point under the pointer, so tooltips, click to select and cross-filter, the context menu and drill keep working. Without canvas support, for example in SSR or jsdom, they fall back to SVG.
+- **Scatter charts** with more than 3,000 points paint on a canvas laid over the SVG axes. A spatial grid finds the point under the pointer, so tooltips, click to select and cross-filter, the context menu and drill keep working. From 50,000 points they draw with WebGL (one draw call of anti-aliased point sprites) when the browser supports it, falling back to canvas. Without canvas support, for example in SSR or jsdom, they fall back to SVG. `format.scatter.renderer: 'auto' | 'svg' | 'canvas' | 'webgl'` forces one. Image exports embed the canvas pixels.
 - **Tables** with more than 500 rows render only the rows in view, plus a margin, between spacer rows. Sorting, selection and banding behave as before. `format.table.virtualize` forces windowing on or off, and wrapping text turns it off because rows then vary in height.
 
 ## Off the main thread

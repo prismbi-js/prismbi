@@ -19,7 +19,7 @@ console.warn(warnings); // everything that could not be imported, in plain langu
 
 | Part | Imported |
 |---|---|
-| Semantic model (TMDL, or `model.bim` in older projects) | tables and typed columns, hidden flags, formats, display folders, descriptions; calculated columns and calculated tables; measures (single-line, multi-line and fenced DAX); relationships (active or inactive, single or both directions) |
+| Semantic model (TMDL, or `model.bim` in older projects) | tables and typed columns, hidden flags, formats, display folders, descriptions; calculated columns and calculated tables; measures (single-line, multi-line and fenced DAX); relationships (active or inactive, single or both directions); calculation groups with their items, ordinals, precedence and format strings (static or dynamic) |
 | Report (PBIR folder format, or legacy `report.json`) | pages in order, hidden pages, visuals with their fields, titles and positions (converted to the 12-column grid) |
 | Visuals | column, bar and 100% variants, line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, funnel, scatter, card, multi-row card, KPI, gauge, table, matrix, slicer, map, filled map, decomposition tree, text box |
 

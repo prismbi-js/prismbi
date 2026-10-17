@@ -42,14 +42,28 @@ new Report(el, { model, engine, pages });
 | `CALCULATE` with column comparisons and `IN` lists (and `KEEPFILTERS`) | `FILTER (WHERE …)` on the aggregates |
 | Calculated columns with row arithmetic (e.g. `Sales[Amount] - Sales[Cost]`) | inlined; map others (and date columns) to real database columns in `columns` |
 
-## What isn't
+## Filter-context mode
+
+Queries that a single `GROUP BY` can't answer switch to filter-context mode automatically (`toSql(...).mode` says which one ran). Each aggregate becomes a correlated subquery over its own table, carrying the DAX filter context at that point:
+
+| DAX | In filter-context mode |
+|---|---|
+| `CALCULATE` filters that replace a filter the query also uses (and `KEEPFILTERS` to intersect) | the column's filter is replaced |
+| `ALL`, `REMOVEFILTERS`, `ALLSELECTED`, `ALLEXCEPT` | filters removed or restored to the query's own |
+| `FILTER(ALL(Date[Date]), Date[Date] <= MAX(Date[Date]))` and other row conditions | row predicates; aggregates inside see the outer context |
+| `SAMEPERIODLASTYEAR`, `DATEADD`, `DATESYTD` / `QTD` / `MTD`, `TOTALYTD` / `QTD` / `MTD`, `PREVIOUSYEAR` / `QUARTER` / `MONTH`, `DATESBETWEEN` | date ranges derived from the dates in context, with DAX month-end handling (Feb 28, 2025 a year back covers Feb 29, 2024) |
+| A dimension measure by another dimension (`MAX(Product[ListPrice])` by region), `COUNTROWS(Product)`, `COUNTROWS(FILTER(...))`, iterators over `FILTER` | evaluated over their own table, with only the filters that reach it (single-direction relationships) |
+
+Filters reach a table only along its many-to-one relationships, as in DAX. Group combinations follow the in-memory engine: one dimension lists its values, several list the combinations present in the fact table. Results are checked against the in-memory engine on SQLite in the tests. DuckDB and Postgres decorrelate these subqueries well; SQLite is slower, but contiguous date contexts (years, months, ranges) use range checks.
+
+### Still not pushed down
 
 These throw a `SqlUnsupportedError` that names the cause:
 
-- Time intelligence (`SAMEPERIODLASTYEAR`, `TOTALYTD`…), `ALL` / `ALLSELECTED` / `REMOVEFILTERS`, and `FILTER` tables.
-- A `CALCULATE` filter on a column that the query also filters or groups by. DAX replaces that filter, which SQL can't express; wrap it in `KEEPFILTERS` to intersect instead.
-- Measures that aggregate several tables, or a dimension aggregated across the fact (DAX filters don't flow that way).
+- `USERELATIONSHIP`, `CROSSFILTER` and bidirectional filtering.
+- Measures inside `FILTER` conditions (they need a context transition per row).
 - Row-level security roles and compiled row-set filters.
+- `MEDIAN` outside DuckDB, and DAX functions without an SQL equivalent.
 
 `fallback: 'model'` answers those queries from the in-memory model instead. That only helps if the model holds the rows it needs, e.g. a summary table.
 

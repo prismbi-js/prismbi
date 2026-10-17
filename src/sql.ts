@@ -425,6 +425,31 @@ class ContextTranslator {
     readonly base: CtxEntry[],
   ) {}
 
+  /**
+   * Scalars that depend only on the group (not on fact rows), such as the first and last date in context, are
+   * computed once per group in a layer around the group combinations and referenced as `c.hN`. Databases without
+   * subquery decorrelation (SQLite) would otherwise evaluate them once per fact row.
+   */
+  private hoisted = new Map<string, string>();
+  hoistTo: 'groups' | null = null;
+  hoist(sql: string): string {
+    // only group-correlated scalars can move out (Top N scores correlate with their own member rows)
+    if (this.hoistTo !== 'groups' || sql.includes('tn.m')) return sql;
+    let name = this.hoisted.get(sql);
+    if (!name) {
+      name = `h${this.hoisted.size}`;
+      this.hoisted.set(sql, name);
+    }
+    return `c.${name}`;
+  }
+
+  /** The hoisted scalars of the last build, as `expr AS hN` select items (and reset). */
+  takeHoisted(): string[] {
+    const out = [...this.hoisted].map(([sql, name]) => `${sql} AS ${name}`);
+    this.hoisted.clear();
+    return out;
+  }
+
   scope(table: string): Scope {
     return new Scope(this.model, this.opts, table, (sc, e) => this.tr.rowExpr(sc, e), `q${++this.seq}_`);
   }
@@ -466,6 +491,12 @@ class ContextTranslator {
     return months ? `CAST(${col} + to_months(${months}) AS DATE)` : `CAST(${col} + to_days(${days}) AS DATE)`;
   }
 
+  daysBetween(a: string, b: string): string {
+    if (this.dialect === 'sqlite') return `CAST(julianday(${b}) - julianday(${a}) AS INTEGER)`;
+    if (this.dialect === 'postgres') return `(${b} - ${a})`;
+    return `date_diff('day', ${a}, ${b})`;
+  }
+
   monthEnd(x: string): string {
     if (this.dialect === 'sqlite') return `date(${x}, 'start of month', '+1 month', '-1 day')`;
     if (this.dialect === 'postgres') return `CAST(date_trunc('month', ${x}) + INTERVAL '1 month - 1 day' AS DATE)`;
@@ -485,13 +516,21 @@ class ContextTranslator {
       return `(SELECT ${select(x)}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
     };
     const direct = set((x) => this.shift(x, n, unit));
-    if (unit === 'day') return (col) => `${col} IN ${direct}`;
     const monthEnds = set((x) => x, (x) => [`${x} = ${this.monthEnd(x)}`]);
-    return (col) => {
+    const general = (col: string) => {
+      if (unit === 'day') return `${col} IN ${direct}`;
       // the context month-end that col would extend: the last day of col's month shifted back
       const me = this.monthEnd(this.shift(col, -n, unit));
       return `(${col} IN ${direct} OR (${me} IN ${monthEnds} AND ${this.shift(me, n, unit)} < ${col}))`;
     };
+    // the usual case: the dates in context are one unbroken range (a year, a month, a date filter), so the shifted
+    // dates are a range too, checked with scalars that are computed once per group
+    const min = this.hoist(set((x) => `MIN(${x})`));
+    const max = this.hoist(set((x) => `MAX(${x})`));
+    const count = this.hoist(set(() => 'COUNT(*)'));
+    const hi = unit === 'day' ? this.shift(max, n, unit) : `(CASE WHEN ${max} = ${this.monthEnd(max)} THEN ${this.monthEnd(this.shift(max, n, unit))} ELSE ${this.shift(max, n, unit)} END)`;
+    const contiguous = `${count} = ${this.daysBetween(min, max)} + 1`;
+    return (col) => `(CASE WHEN ${contiguous} THEN ${col} >= ${this.shift(min, n, unit)} AND ${col} <= ${hi} ELSE ${general(col)} END)`;
   }
 
   startOf(unit: 'year' | 'quarter' | 'month', x: string): string {
@@ -518,8 +557,8 @@ class ContextTranslator {
       const u = (e?.type === 'table' ? e.name : e?.type === 'string' ? e.value : '').toLowerCase();
       return u === 'year' || u === 'quarter' || u === 'month' || u === 'day' ? u : unsupported(`${name}: unknown interval ${u || '(none)'}`);
     };
-    const max = this.dates(date, ctx, (x) => `MAX(${x})`);
-    const min = this.dates(date, ctx, (x) => `MIN(${x})`);
+    const max = this.hoist(this.dates(date, ctx, (x) => `MAX(${x})`));
+    const min = this.hoist(this.dates(date, ctx, (x) => `MIN(${x})`));
     switch (name) {
       case 'SAMEPERIODLASTYEAR':
         return entry(shifted(-1, 'year'));
@@ -831,10 +870,17 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
 
   const build = (extra: FilterSpec[], grouped: boolean): string => {
     const ctx = [...baseEntries, ...extra.map((f) => entryOf(f, [...filters, ...extra], () => cx)), ...(grouped ? groupEntries : [])];
+    const hoisting = grouped && groups.length > 0;
+    cx.hoistTo = hoisting ? 'groups' : null;
     const vs = values.map((v) => cx.value(v.ast, ctx));
-    if (!grouped || !groups.length) return `SELECT ${vs.map((v, i) => `${v} AS v${i}`).join(', ') || 'NULL AS v0'}`;
+    cx.hoistTo = null;
+    const hoisted = cx.takeHoisted();
+    if (!hoisting) return `SELECT ${vs.map((v, i) => `${v} AS v${i}`).join(', ') || 'NULL AS v0'}`;
     const cols = [...groups.map((_, i) => `c.g${i}`), ...vs.map((v, i) => `${v} AS v${i}`), ...sortCols.flatMap((sc, i) => (sc ? [`c.s${i}`] : []))];
-    const parts = [`SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${combos} AS c) AS r`];
+    // group-only scalars are computed once per group, in a layer around the combinations
+    // (a materialized CTE, so SQLite's query flattener doesn't inline them back into every fact row)
+    const withClause = hoisted.length ? `WITH hz AS ${dialect === 'duckdb' ? '' : 'MATERIALIZED '}(SELECT c.*, ${hoisted.join(',\n  ')}\nFROM ${combos} AS c)\n` : '';
+    const parts = [`${withClause}SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${hoisted.length ? 'hz' : combos} AS c) AS r`];
     if (values.length && !spec.includeEmpty) parts.push(`WHERE NOT (${values.map((_, i) => `r.v${i} IS NULL`).join(' AND ')})`);
     const order: string[] = [];
     const groupOrder = (i: number, dir: string) => `r.${sortCols[i] ? 's' : 'g'}${i} ${dir} NULLS FIRST`;

@@ -25,10 +25,15 @@ Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forw
   - geo upgrades (`@prismbi/prismbi/geo`, clustering, classed legends).
 
   Their tests are in `tests/deferred.test.ts`.
+- **Closed on 2026-10-17 (second pass):**
+  - SQL filter-context mode (time intelligence, `ALL*`, `CALCULATE` overrides);
+  - Power BI calculation groups;
+  - bitmap indexes;
+  - WebGL scatter;
+  - screenshots throughout the docs (`npm run docs:images` regenerates them).
 - **Known gaps:**
-  - SQL pushdown doesn't translate time intelligence, `ALL` / `ALLSELECTED`, or `CALCULATE` overriding a column the query also uses. These throw `SqlUnsupportedError`; set `fallback: 'model'` to answer them in memory.
-  - The Power BI importer skips calculation groups.
-  - Bitmap indexes and WebGL rendering remain ideas.
+  - SQL: `USERELATIONSHIP` / `CROSSFILTER`, measures inside `FILTER` conditions, and RLS. These throw `SqlUnsupportedError`; set `fallback: 'model'` to answer them in memory.
+  - SQLite is slow on non-contiguous date contexts (no subquery decorrelation); DuckDB and Postgres are fine.
 - **Playground:** add more ```` ```js playground ```` examples to the guides; each one is tested automatically.
 
 ## Publishing (deferred by the owner: "we will deploy later")

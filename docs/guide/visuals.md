@@ -40,10 +40,11 @@ Every built-in visual with the demo data (light theme). The same images back the
 | ![lineClusteredColumn](../images/visuals/lineClusteredColumn.png) `lineClusteredColumn` | ![map](../images/visuals/map.png) `map` | ![matrix](../images/visuals/matrix.png) `matrix` |
 | ![multiRowCard](../images/visuals/multiRowCard.png) `multiRowCard` | ![percentStackedBar](../images/visuals/percentStackedBar.png) `percentStackedBar` | ![percentStackedColumn](../images/visuals/percentStackedColumn.png) `percentStackedColumn` |
 | ![pie](../images/visuals/pie.png) `pie` | ![radar](../images/visuals/radar.png) `radar` | ![ribbon](../images/visuals/ribbon.png) `ribbon` |
-| ![sankey](../images/visuals/sankey.png) `sankey` | ![scatter](../images/visuals/scatter.png) `scatter` | ![slicer-list](../images/visuals/slicer-list.png) `slicer-list` |
-| ![slicer-range](../images/visuals/slicer-range.png) `slicer-range` | ![slicer-tiles](../images/visuals/slicer-tiles.png) `slicer-tiles` | ![stackedArea](../images/visuals/stackedArea.png) `stackedArea` |
-| ![stackedBar](../images/visuals/stackedBar.png) `stackedBar` | ![stackedColumn](../images/visuals/stackedColumn.png) `stackedColumn` | ![table](../images/visuals/table.png) `table` |
-| ![text](../images/visuals/text.png) `text` | ![treemap](../images/visuals/treemap.png) `treemap` | ![waterfall](../images/visuals/waterfall.png) `waterfall` |
+| ![sankey](../images/visuals/sankey.png) `sankey` | ![scatter](../images/visuals/scatter.png) `scatter` | ![scatter-webgl](../images/visuals/scatter-webgl.png) `scatter-webgl` |
+| ![slicer-list](../images/visuals/slicer-list.png) `slicer-list` | ![slicer-range](../images/visuals/slicer-range.png) `slicer-range` | ![slicer-tiles](../images/visuals/slicer-tiles.png) `slicer-tiles` |
+| ![stackedArea](../images/visuals/stackedArea.png) `stackedArea` | ![stackedBar](../images/visuals/stackedBar.png) `stackedBar` | ![stackedColumn](../images/visuals/stackedColumn.png) `stackedColumn` |
+| ![table](../images/visuals/table.png) `table` | ![text](../images/visuals/text.png) `text` | ![treemap](../images/visuals/treemap.png) `treemap` |
+| ![waterfall](../images/visuals/waterfall.png) `waterfall` |  |  |
 
 ## Catalogue
 
@@ -176,6 +177,9 @@ format: { map: {
   tiles: 'https://tiles.example.com/{z}/{x}/{y}.png', attribution: '© provider',   // optional raster basemap
   maxRadius: 28, zoom: true, graticule: true,
 } }
+
+// scatter: force a renderer (auto: SVG, canvas above 3,000 points, WebGL above 50,000)
+format: { scatter: { renderer: 'auto' | 'svg' | 'canvas' | 'webgl' } }
 
 // slicer sync group (any style)
 format: { slicer: { syncGroup: 'year' } }

@@ -2,11 +2,18 @@
 
 ## Unreleased: Phases 8 and 9
 
+- **Faster iterators and RELATED:** numeric row expressions in iterators and calculated columns compile to closures over typed views; `SUMX` / `AVERAGEX` measures join the single-pass grouped path; relationship paths and fact-to-dimension row maps are cached (`model.relatedRows`). `SUMX` with `RELATED` is about 12× faster at 300k rows, grouped `SUMX` about 8×. Results are unchanged (`tests/rowcompile.test.ts`).
 - **Accessibility:** chart narration (`describe()`, `narrate`, `format.accessibility.narration`) and the `high-contrast` theme (`highContrastTheme`).
 - **Subscriptions and alerts:** `ReportDefinition.subscriptions` / `alerts`, `report.setSubscriptions` / `setAlerts`, `runSubscriptions` and `watchAlerts` (server entry), and a Studio Schedules dialog.
 - **Localization:** `ReportDefinition.translations`, `ReportOptions.direction`, `report.setLocale()`, `report.translate()`.
 - **Lineage:** `lineage`, `impactOf`, `expressionRefs`, `renameInExpression`, `renameModelField`, `model.renameColumn`, `DataTable.renameColumn`. The Studio measure and column renames now update dependent DAX (previously only visual fields).
 
+- **SQL filter-context mode:** `toSql` falls back to correlated subqueries with DAX filter-context semantics: `ALL` / `ALLSELECTED` / `ALLEXCEPT` / `REMOVEFILTERS`, `CALCULATE` replacing filters, `FILTER(ALL(...), ...)`, time intelligence (`SAMEPERIODLASTYEAR`, `DATEADD`, `DATES*TD`, `TOTAL*TD`, `PREVIOUS*`, `DATESBETWEEN`), single-direction filter flow. `SqlPlan.mode`.
+- **Time intelligence:** `DATEADD` / `SAMEPERIODLASTYEAR` extend a month's last day to the rest of the target month, as in DAX.
+- **Power BI import:** calculation groups (TMDL and model.bim) with ordinals, precedence and format string definitions.
+- **Bitmap indexes:** low-cardinality columns of large tables filter with bitsets (`setBitmapIndexes`); `bench/bitmap.test.ts`.
+- **WebGL scatter:** `format.scatter.renderer`; WebGL from 50,000 points; snapshots embed canvas pixels.
+- **Docs images:** screenshots in the guides and README, `npm run docs:images`, a visual gallery in the visuals guide.
 - **Geo:** new entry `@prismbi/prismbi/geo` (`worldCountries`, `usStates`); `format.map.boundaries`, `featureKey` lists, `legend: 'classes'`, `cluster`; bubble maps without latitude/longitude; `registerBoundaries`, `getBoundaries`, `featureCentroid`, `clusterPoints`, `quantileBreaks`.
 - **Animated transitions:** data points tween from their previous geometry when data changes (identity-keyed; respects reduced motion).
 - **Keyboard:** roving data-point focus with arrows/Home/End, Shift+F10 menus with focus return, page-tab arrows, edit-mode arrow moves and Shift+arrow resizes; walkthrough tests.
