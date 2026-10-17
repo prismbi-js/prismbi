@@ -220,6 +220,22 @@ export class Studio implements StudioContext {
     if (d) this.applyDocument(d);
   }
 
+  /** Replace the current document as one undo step (unlike `load`, history is kept). */
+  restore(doc: StudioDocument | string): void {
+    const d = typeof doc === 'string' ? (JSON.parse(doc, reviveDates) as StudioDocument) : doc;
+    this.flushCommit();
+    this.applyDocument(d);
+    this.commit();
+  }
+
+  /** Add a button to the Studio top bar (after the status area); returns it. Used by add-ons such as the AI agent panel. */
+  addToolbarButton(label: string, onClick: () => void, attrs: Record<string, string> = {}): HTMLButtonElement {
+    const b = h('button', { type: 'button', class: 'pbs-btn', ...attrs }, label) as HTMLButtonElement;
+    b.addEventListener('click', onClick);
+    this.els.top.insertBefore(b, this.els.schedBtn);
+    return b;
+  }
+
   get canUndo(): boolean {
     return this.history.canUndo || this.commitPending;
   }
@@ -803,6 +819,8 @@ export class Studio implements StudioContext {
       phoneBtn,
       previewBtn,
     );
+    this.els.top = top;
+    this.els.schedBtn = schedBtn;
     // rail
     const rail = h('nav', { class: 'pbs-rail', 'aria-label': 'Views' });
     for (const v of ['report', 'data', 'model'] as View[]) {

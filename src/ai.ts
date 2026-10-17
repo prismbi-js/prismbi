@@ -13,6 +13,11 @@ export { getAIContext, contextToPrompt, createAgentTools, runTool, toAnthropicTo
 export type { AIContext, AIColumn, ContextOptions, AgentTool, AgentToolOptions } from './ai/agent';
 export { qnaVisual, insightsVisual, enableExplain, registerAI, showPanel, renderExplanation } from './ai/visuals';
 
+export { runAgent, anthropicLLM, openAILLM, ruleBasedLLM, planPrompt, WRITE_TOOLS, AGENT_SYSTEM } from './ai/run';
+export type { AgentLLM, AgentMessage, AgentReply, AgentRun, AgentStep, AgentToolCall, RunAgentOptions, HttpLLMOptions } from './ai/run';
+export { agentPanel, describeCall } from './ai/panel';
+export type { AgentPanel, AgentPanelOptions } from './ai/panel';
+
 import { registerAI } from './ai/visuals';
 
 registerAI();

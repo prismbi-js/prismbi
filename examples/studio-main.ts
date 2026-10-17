@@ -1,5 +1,6 @@
 import { Studio } from '@prismbi/prismbi/studio';
 import { broadcastChannelTransport, connectReport } from '@prismbi/prismbi/collab';
+import { agentPanel, anthropicLLM } from '@prismbi/prismbi/ai';
 import { buildModel } from './model';
 
 const model = buildModel();
@@ -20,4 +21,11 @@ studio.on('change', (doc) => console.debug('document changed', doc));
 const session = room ? connectReport(studio.report, broadcastChannelTransport(room), { user: params.get('user') ?? `Guest ${Math.floor(Math.random() * 90 + 10)}` }) : null;
 if (session) session.on('peers', () => (document.title = `PrismBI Studio · ${room} · ${session.peers().length + 1} editing`));
 
-Object.assign(window, { studio, model, session });
+// AI agent panel: rule-based offline; ?llm=/api/llm points it at your own Anthropic-compatible proxy
+const llmUrl = params.get('llm');
+const agent = agentPanel(studio, {
+  llm: llmUrl ? anthropicLLM({ url: llmUrl }) : undefined,
+  suggestions: ['Build a page about bikes: sales by month, top 5 products by sales, sales by country', 'show sales by category'],
+});
+
+Object.assign(window, { studio, model, session, agent });

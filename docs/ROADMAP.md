@@ -328,6 +328,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 ## Phase 9: Ecosystem (in progress)
 
 **Done:**
+- [x] **Agent panel in the Studio:** `agentPanel(studio, { llm })` with a step log, per-step undo and optional Apply/Skip previews; `runAgent` with `anthropicLLM`, `openAILLM` and an offline `ruleBasedLLM`; new `add_page` tool
 - [x] **Power BI import** (`@prismbi/prismbi/powerbi`): TMDL and model.bim semantic models, PBIR and legacy report.json reports, about 30 visual types mapped, data supplied per table, plain-language warnings, and a `prismbi pbip` CLI
 
 **Goal:** adoption: bring existing work in, and make PrismBI easy to learn and extend.

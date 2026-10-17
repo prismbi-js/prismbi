@@ -309,6 +309,15 @@ export function createAgentTools(opts: AgentToolOptions): AgentTool[] {
       },
     });
     tools.push({
+      name: 'add_page',
+      description: 'Add an empty report page and show it; add_visual then places visuals on it.',
+      inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      run: async (i) => {
+        const id = report.addPage({ name: String(i.name || `Page ${report.pageList.length + 1}`), visuals: [] });
+        return { id, name: report.currentPage.name };
+      },
+    });
+    tools.push({
       name: 'remove_visual',
       description: 'Remove a visual by id.',
       inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },

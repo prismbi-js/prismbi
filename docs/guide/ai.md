@@ -124,7 +124,7 @@ The context contains:
 | `ask` | a question → a visual spec |
 | `explain_value`, `find_insights` | as above |
 | `get_report_state`, `go_to_page` | with a report |
-| `add_visual`, `remove_visual`, `set_filters` | with a report and writes allowed |
+| `add_page`, `add_visual`, `remove_visual`, `set_filters` | with a report and writes allowed |
 | `create_measure` | validated by evaluating it first; writes allowed |
 
 - **Writes:** allowed by default when a report is attached. Set `allowWrites: false` for read-only agents.
@@ -166,6 +166,47 @@ for (;;) {
 ```
 
 The same tools work with any orchestrator that accepts JSON-schema tools: OpenAI function calling, LangGraph, the Vercel AI SDK, and your own planner.
+
+### `runAgent` and LLM adapters
+
+`runAgent` is the same loop without an SDK. It works with any model through a small adapter:
+
+```ts
+import { runAgent, anthropicLLM, openAILLM, createAgentTools } from '@prismbi/prismbi/ai';
+
+const result = await runAgent({
+  llm: anthropicLLM({ url: '/api/llm' }),        // or openAILLM({ url, model }) for OpenAI-compatible servers (Azure, Ollama, vLLM…)
+  tools: createAgentTools({ model, report }),
+  prompt: 'Build a page explaining Q3 by region and product',
+  beforeTool: (call, write) => !write || confirm(`Run ${call.name}?`),
+  onStep: (step) => console.log(step.call.name, step.result),
+});
+console.log(result.text);
+```
+
+- **Keys stay on your server.** Point `url` at a proxy that adds the API key. `apiKey` also works for local experiments; it sends the browser-access header Anthropic requires.
+- **Your own model:** an `AgentLLM` is one function, `({ system, messages, tools, signal }) => { text?, toolCalls? }`. Messages use a neutral format (`user`, `assistant` with `toolCalls`, and `tool` results).
+- **Offline:** `ruleBasedLLM()` needs no model. It splits the prompt into a page and questions with `planPrompt`, then calls `add_page`, `ask` and `add_visual`. It handles "build a page about X: A, B and C"-style requests; anything open-ended needs a real model.
+- **Defaults:** `maxSteps` defaults to 16 model turns. `WRITE_TOOLS` lists the tools that change things. Errors come back to the model as `{ error }`.
+
+### The Studio agent panel
+
+```ts
+import { agentPanel, anthropicLLM } from '@prismbi/prismbi/ai';
+
+const agent = agentPanel(studio, {
+  llm: anthropicLLM({ url: '/api/llm' }),  // omit to use the offline rule-based planner
+  confirmWrites: false,                    // true: preview every change and wait for Apply / Skip
+  suggestions: ['Build a page about bikes: sales by month, top 5 products, sales by country'],
+});
+```
+
+- **Where it lives:** a **✦ Agent** button in the Studio top bar opens a side panel.
+- **What it logs:** each tool call is listed with its input and result. Changes have an **Undo** button that restores the report from before that step and drops later steps. The model is told about the undo on its next turn.
+- **Undo history:** every change is also a normal Studio undo step, so Ctrl+Z still works.
+- **API:** `agent.run(prompt)`, `agent.undoStep(i)`, `agent.steps`, `open()`, `close()`, `destroy()`.
+
+Try it with `npm run dev`, then open `/studio.html`. Add `?llm=/api/llm` to use your own Anthropic-compatible endpoint.
 
 ### An MCP server
 
