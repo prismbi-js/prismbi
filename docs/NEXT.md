@@ -100,7 +100,19 @@ Agreed on 2026-10-17 to be done later, in this order. Before starting, check wit
   - New files: `src/report/xlsx.ts` and `tests/xlsx.test.ts`.
   - Changes in `src/core.ts`, `src/report/report.ts`, `src/report/visualHost.ts`, `docs/guide/interactions.md`, `docs/guide/visuals.md` and `CHANGELOG.md`.
   - The full suite passed (406 tests), and openpyxl reads the files back correctly.
-  - Before committing, run `npm run build && npm run size`: the `core (api)` scenario grows a little from the new exports, while the writer itself loads lazily.
+  - Build passes. **`npm run size` currently FAILS** (measured 2026-10-17, working tree = `8bb376b` + the uncommitted Excel export):
+
+    | Scenario | At `916f12e` | Now | Budget |
+    |---|---|---|---|
+    | core, `DataModel` + `Report` | 75.3 KB | 79.9 KB | 77 KB |
+    | core, everything exported | 85.7 KB | 90.3 KB | 88 KB |
+    | full entry, every visual | 117.1 KB | 121.8 KB | 120 KB |
+
+    The core bundles grew about 4.6 KB. The xlsx writer loads lazily (lazy chunks grew only 0.2 → 0.4 KB), so most of it likely comes from `8bb376b` (CALCULATE in the fast path) and the new export methods in `report.ts` / `visualHost.ts`. This is unconfirmed.
+  - Before committing:
+    1. Compare per-module sizes at `916f12e` and now (esbuild `--metafile` on the core entry).
+    2. Trim, or raise the budgets in `scripts/size.mjs` deliberately in that commit.
+    3. Rerun `npm run build && npm run size`.
 - **Visual baselines after lazy rendering:** run `npm run test:visual` once, to confirm lazy off-screen rendering didn't change the screenshots. The gallery renders through `flush()`, so it should pass. (A run on 2026-10-17 after `e499abb`/`8bb376b` passed: 86 screenshots, 0 failures.)
 - **Core trimming (optional, decided against for now):** lazy-loading edit mode (`setEditMode`), the filter pane (`toggleFilterPane`) and transforms (`transformTable`) would save about 5–6 KB gzipped, but needs API changes. The size budgets in `scripts/size.mjs` prevent further growth.
 - **Feature ideas:**
