@@ -9,6 +9,7 @@ export default defineConfig({
       { find: /^@prismbi\/prismbi$/, replacement: src('index.ts') },
       { find: /^@prismbi\/prismbi\/core$/, replacement: src('core.ts') },
       { find: /^@prismbi\/prismbi\/visuals$/, replacement: src('visuals.ts') },
+      { find: /^@prismbi\/prismbi\/visuals\/([\w-]+)$/, replacement: src('visuals/entries/$1.ts') },
       { find: /^@prismbi\/prismbi\/studio$/, replacement: src('studio.ts') },
       { find: /^@prismbi\/prismbi\/connectors$/, replacement: src('connectors.ts') },
       { find: /^@prismbi\/prismbi\/worker$/, replacement: src('worker.ts') },

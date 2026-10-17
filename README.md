@@ -73,11 +73,16 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 
 ## Lean builds
 
+`@prismbi/prismbi/core` has the model, DAX and report runtime without any visuals. Add visuals per family; each import registers its visuals:
+
 ```ts
-import { Report, DataModel, registerVisual } from '@prismbi/prismbi/core';
-import { clusteredColumn, lineChart, card, slicer, table } from '@prismbi/prismbi/visuals';
-[clusteredColumn, lineChart, card, slicer, table].forEach((v) => registerVisual(v));
+import { Report, DataModel } from '@prismbi/prismbi/core';
+import '@prismbi/prismbi/visuals/bar';      // column and bar charts
+import '@prismbi/prismbi/visuals/card';
+import '@prismbi/prismbi/visuals/slicer';
 ```
+
+Entries: `bar`, `line`, `pie`, `treemap`, `funnel`, `scatter`, `card`, `kpi`, `gauge`, `table`, `slicer`, `text`, `waterfall`, `heatmap`, `calendar`, `decomposition`, `distribution`, `bullet`, `radar`, `sankey`, `ribbon`, `map`. Each also exports its definitions (`import { waterfall } from '@prismbi/prismbi/visuals/waterfall'`). Minified and gzipped, core with one visual is about 41 KB; the full package is about 78 KB. You can also import definitions from `@prismbi/prismbi/visuals` and call `registerVisual` yourself.
 
 ## React
 

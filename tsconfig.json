@@ -15,7 +15,7 @@
     "resolveJsonModule": true,
     "types": ["vitest/globals"],
     "baseUrl": ".",
-    "paths": { "@prismbi/prismbi": ["./src/index.ts"], "@prismbi/prismbi/*": ["./src/*.ts"] }
+    "paths": { "@prismbi/prismbi": ["./src/index.ts"], "@prismbi/prismbi/visuals/*": ["./src/visuals/entries/*.ts"], "@prismbi/prismbi/*": ["./src/*.ts"] }
   },
   "include": ["src", "tests", "examples", "bench"],
   "exclude": ["examples/vite.config.ts"]

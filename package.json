@@ -29,6 +29,8 @@
   "author": "Santhoshkumar Hariharan",
   "type": "module",
   "sideEffects": [
+    "./dist/visuals/*.js",
+    "./dist/visuals/*.cjs",
     "./dist/ai.js",
     "./dist/ai.cjs",
     "./dist/elements.js",
@@ -59,6 +61,11 @@
       "types": "./dist/visuals.d.ts",
       "import": "./dist/visuals.js",
       "require": "./dist/visuals.cjs"
+    },
+    "./visuals/*": {
+      "types": "./dist/visuals/*.d.ts",
+      "import": "./dist/visuals/*.js",
+      "require": "./dist/visuals/*.cjs"
     },
     "./studio": {
       "types": "./dist/studio.d.ts",

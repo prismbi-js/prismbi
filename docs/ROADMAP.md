@@ -328,6 +328,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 ## Phase 9: Ecosystem (in progress)
 
 **Done:**
+- [x] **Per-visual entry points:** `@prismbi/prismbi/visuals/<family>` (22 self-registering entries; core + one visual ≈ 41 KB gzipped vs 78 KB for everything)
 - [x] **Incremental refresh policies:** `model.setRefreshPolicy`, `incrementalRefresh` (replace the last N periods, keep and trim history; works with transforms), `scheduleRefresh({ mode: 'incremental' })`, `applyRefreshPolicy`, `periodStart`
 - [x] **SQL pushdown** (`@prismbi/prismbi/sql`): `sqlEngine` / `toSql` for DuckDB, Postgres and SQLite (joins, filters, Top N, totals, highlights, sort-by columns, measures with CALCULATE column filters, SUMX, inlined calculated columns), `duckdbRunner`, and an optional in-memory fallback; checked against SQLite in tests
 - [x] **Anomaly alerts:** `watchAnomalies` (AI entry) and `when: { anomaly: true }` report alerts in the server's `watchAlerts` and the Studio Schedules dialog
