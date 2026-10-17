@@ -95,6 +95,27 @@ findInsights(model, { measure: 'Total Sales', filters, max: 6 });
 
 The `insights` visual (`fields: { values: 'Total Sales' }`, optional `dimensions`) lists them for the current filters. Clicking one shows its chart.
 
+## Narrative
+
+The `narrative` visual writes a short summary of its measures that updates with filters and selections, like Power BI's smart narrative:
+
+```ts
+{ type: 'narrative', fields: { values: ['Total Sales', 'Orders'], category: 'Region[Group]' }, format: { narrative: { insights: 1 } } }
+// "Total Sales for 2025 is $9.34M, up 3.1% from $9.07M in 2024, mostly from Mountain Bikes (+$138K) and Mountain-200 (+$130K).
+//  Orders is 16K (up 8.1% from 2024). North America leads Group with $5.18M (55% of the total); Pacific is lowest at $1.47M. …"
+```
+
+- **What it covers:**
+  - The first measure gets its value, the change from the previous period (when the filters name a year or date range) and the biggest contributors.
+  - Other measures (up to three) get their value and change.
+  - The optional `category` adds a breakdown: the leader and the lowest, or the trend for dates and numbers.
+  - `format.narrative.insights` (default 2) appends the top `findInsights` results.
+- **Custom text:** `format.narrative.text` sets the wording, e.g. `'Revenue is {[Total Sales]} across {[Orders]} orders.
+
+{summary}'`. `{[Measure]}` becomes a formatted value, `{summary}` the automatic text, and a blank line starts a paragraph.
+- **Rewording with a language model:** `setNarrativeWriter(async (facts) => callYourLLM(facts))`. The rule-based text shows immediately, and the reworded version replaces it when it arrives. Results are cached per filter state. Set `format.narrative.llm: false` to keep a visual rule-based.
+- **Outside a visual:** `writeNarrative(model, { measures, filters, breakdown?, insights?, template? })` returns `{ text, sentences }`. Each sentence is a list of parts, with `{ value }` parts for the emphasised numbers and names.
+
 ## Agents
 
 Agent frameworks need two things: context about the data, and tools to act on it.

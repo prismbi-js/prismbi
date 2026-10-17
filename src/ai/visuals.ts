@@ -3,6 +3,7 @@ import type { FieldSpec, FilterSpec, MenuContext, Report, RenderContext, VisualS
 import { askSync, suggestQuestions, type AskOptions } from './ask';
 import { explain, type Explanation } from './explain';
 import { findInsights, type Insight } from './insights';
+import { writeNarrative, type NarrativePart } from './narrative';
 
 // ---------------------------------------------------------------- styles
 
@@ -33,6 +34,10 @@ const CSS = `
 .pbi-ai-bar i.neg{background:var(--pbi-bad)}
 .pbi-ai-bar em{font-style:normal;font-variant-numeric:tabular-nums;color:var(--pbi-fg-2)}
 .pbi-ai-panel .pbi-ai-mini{height:220px}
+.pbi-ai-narrative{height:100%;overflow:auto;font-size:var(--pbi-narrative-size,14px);line-height:1.6}
+.pbi-ai-narrative p{margin:0 0 .6em}
+.pbi-ai-narrative strong{color:var(--pbi-accent);font-weight:600}
+.pbi-ai-narrative small{display:block;color:var(--pbi-fg-3);font-size:11px}
 .pbi-ai-close{position:absolute;top:6px;right:8px;border:0;background:none;color:var(--pbi-fg-3);font-size:16px;cursor:pointer}
 `;
 
@@ -187,6 +192,88 @@ export const insightsVisual = /* @__PURE__ */ defineVisual({
   },
 });
 
+// ---------------------------------------------------------------- Narrative visual
+
+/** Rewrites the rule-based facts in natural language (e.g. with your LLM endpoint). */
+export type NarrativeWriter = (facts: string, info: { measures: string[]; filters: FilterSpec[] }) => Promise<string>;
+
+let narrativeWriter: NarrativeWriter | null = null;
+const narrativeCache = new Map<string, string | Promise<string>>();
+
+/** Let narrative visuals reword their summary with a language model (`null` turns it off). Results are cached per filter state. */
+export function setNarrativeWriter(fn: NarrativeWriter | null): void {
+  narrativeWriter = fn;
+  narrativeCache.clear();
+}
+
+// model data changes invalidate cached narratives
+const modelEpoch = new WeakMap<object, { n: number }>();
+function epochOf(model: RenderContext['model']): number {
+  let e = modelEpoch.get(model);
+  if (!e) {
+    const box = { n: 0 };
+    model.onChange(() => void box.n++);
+    modelEpoch.set(model, (e = box));
+  }
+  return e.n;
+}
+
+interface NarrativeFormat {
+  /** Custom text with `{[Measure]}` values and `{summary}` (the automatic summary). */
+  text?: string;
+  /** Insights appended to the summary (default 2). */
+  insights?: number;
+  /** Use the narrative writer when one is set (default true). */
+  llm?: boolean;
+  fontSize?: number;
+}
+
+const partsToNodes = (parts: NarrativePart[]) => parts.map((p) => (typeof p === 'string' ? p : el('strong', {}, p.value)));
+
+/** Smart narrative: a plain-language summary of the bound measures that updates with filters and selections. */
+export const narrativeVisual = /* @__PURE__ */ defineVisual({
+  type: 'narrative',
+  displayName: 'Narrative',
+  category: 'other',
+  roles: [
+    { name: 'values', displayName: 'Measures', kind: 'measure', multiple: true, required: true },
+    { name: 'category', displayName: 'Breakdown (optional)', kind: 'grouping' },
+  ],
+  // the breakdown query: the first measure by the category (the summary runs its own queries)
+  buildQuery: (_ctx, base) => ({ ...base, values: (base.values ?? []).slice(0, 1) }),
+  render(ctx) {
+    injectStyles();
+    const measures = ctx.fields('values');
+    if (!measures.length) return;
+    const nf = ((ctx.format as { narrative?: NarrativeFormat }).narrative ?? {}) as NarrativeFormat;
+    const filters = [...ctx.data.baseFilters] as unknown as FilterSpec[];
+    const key = JSON.stringify([measures, filters, nf.text, nf.insights, epochOf(ctx.model), ctx.data.rows.length], (_k, v) => (typeof v === 'function' ? undefined : v instanceof Set ? [...v] : v));
+    const n = writeNarrative(ctx.model, { measures, filters, breakdown: ctx.data.groups.length ? ctx.data : undefined, insights: nf.insights, template: nf.text });
+    const box = el('div', { class: 'pbi-ai-narrative', 'aria-live': 'polite' });
+    if (nf.fontSize) box.style.setProperty('--pbi-narrative-size', `${nf.fontSize}px`);
+    box.dataset.key = key;
+    const paras = nf.text ? n.sentences : [n.sentences.flatMap((s, i) => (i ? [' ', ...s] : s))];
+    const showRules = () => box.replaceChildren(...paras.map((p) => el('p', {}, ...partsToNodes(p))));
+    const showLlm = (text: string) => box.replaceChildren(...text.split(/\n{2,}/).map((p) => el('p', {}, p.trim())), el('small', {}, 'AI-written from the current figures'));
+    showRules();
+    const writer = narrativeWriter;
+    if (writer && nf.llm !== false && !nf.text) {
+      const hit = narrativeCache.get(key);
+      if (typeof hit === 'string') showLlm(hit);
+      else {
+        const job = hit ?? writer(n.text, { measures: measures.map((m) => (typeof m === 'string' ? m : (m.field ?? ''))), filters });
+        if (!hit) {
+          if (narrativeCache.size > 100) narrativeCache.clear();
+          narrativeCache.set(key, job);
+          job.then((t) => narrativeCache.set(key, t), () => narrativeCache.delete(key));
+        }
+        job.then((t) => box.isConnected && box.dataset.key === key && showLlm(t)).catch(() => {});
+      }
+    }
+    ctx.root.replaceChildren(box);
+  },
+});
+
 // ---------------------------------------------------------------- Explain this
 
 let openPanel: HTMLElement | null = null;
@@ -284,5 +371,6 @@ export function enableExplain(enabled = true): void {
 export function registerAI(): void {
   registerVisual(qnaVisual);
   registerVisual(insightsVisual);
+  registerVisual(narrativeVisual);
   enableExplain();
 }

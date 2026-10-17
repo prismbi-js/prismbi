@@ -2,7 +2,7 @@ import type { CellValue } from '../data/types';
 import type { QueryField, QueryResult } from '../data/query';
 
 /** Visuals whose content is already text (screen readers read them directly). */
-const TEXTUAL = new Set(['table', 'matrix', 'slicer', 'text', 'qna', 'insights', 'button', 'image', 'shape']);
+const TEXTUAL = new Set(['table', 'matrix', 'slicer', 'text', 'qna', 'insights', 'narrative', 'button', 'image', 'shape']);
 
 export interface NarrateOptions {
   /** Readable visual type, e.g. "Line chart". */

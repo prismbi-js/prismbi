@@ -127,6 +127,7 @@ const report = new Report(document.getElementById('app')!, {
           fields: {},
           format: { title: { subtitle: 'Try "top 5 products by profit", "sales trend by month" or "share of sales by channel in Canada"' }, qna: { synonyms: { 'Total Sales': ['revenue', 'turnover'] } } },
         },
+        { id: 'i-story', type: 'narrative', title: 'Summary', layout: { x: 0, y: 31, w: 12, h: 3 }, fields: { values: ['Total Sales', 'Orders'], category: 'Region[Group]' }, format: { title: { subtitle: 'Smart narrative · updates with the slicers above' }, narrative: { insights: 1 } } },
         { id: 'i-auto', type: 'insights', title: 'Insights', layout: { x: 7, y: 22, w: 5, h: 9 }, fields: { values: 'Total Sales' }, format: { title: { subtitle: 'Found automatically · click one to see it · right-click any data point for "Explain this"' } } },
       ],
     },
