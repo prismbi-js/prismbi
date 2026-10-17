@@ -95,6 +95,11 @@
       "import": "./dist/server.js",
       "require": "./dist/server.cjs"
     },
+    "./sql": {
+      "types": "./dist/sql.d.ts",
+      "import": "./dist/sql.js",
+      "require": "./dist/sql.cjs"
+    },
     "./collab": {
       "types": "./dist/collab.d.ts",
       "import": "./dist/collab.js",

@@ -17,6 +17,7 @@ export default defineConfig({
       { find: /^@prismbi\/prismbi\/ai$/, replacement: src('ai.ts') },
       { find: /^@prismbi\/prismbi\/server$/, replacement: src('server.ts') },
       { find: /^@prismbi\/prismbi\/collab$/, replacement: src('collab.ts') },
+      { find: /^@prismbi\/prismbi\/sql$/, replacement: src('sql.ts') },
       { find: /^@prismbi\/prismbi\/plugins$/, replacement: src('plugins.ts') },
       { find: /^@prismbi\/prismbi\/powerbi$/, replacement: src('powerbi.ts') },
     ],

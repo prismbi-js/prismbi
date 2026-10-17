@@ -63,6 +63,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | `@prismbi/prismbi/elements` | `<prism-report>`, `<prism-visual>` web components (Vue, Svelte, Angular, plain HTML) |
 | `@prismbi/prismbi/connectors` | CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh |
 | `@prismbi/prismbi/worker` | Run the model in a Web Worker |
+| `@prismbi/prismbi/sql` | Push visual queries down to DuckDB, Postgres or SQLite |
 | `@prismbi/prismbi/ai` | Ask, explain, insights, and agent context and tools (Claude, OpenAI, MCP) |
 | `@prismbi/prismbi/plugins` | Signed plugins, catalogs and an install gallery |
 | `@prismbi/prismbi/collab` | Live co-editing, presence and comments |
@@ -111,6 +112,7 @@ import { PrismReport, PrismVisual } from '@prismbi/prismbi/react';
 - [Collaboration: co-editing, presence, comments](docs/guide/collab.md)
 - [Plugins: signed visuals, themes, connectors](docs/guide/plugins.md)
 - [Connectors and live data](docs/guide/connectors.md): CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh
+- [SQL pushdown: DuckDB, Postgres, SQLite](docs/guide/sql.md)
 - [Performance and scale](docs/guide/performance.md): the fast query path, rendering at scale, the worker engine, benchmarks
 - [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 

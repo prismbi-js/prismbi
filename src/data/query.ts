@@ -176,12 +176,24 @@ function resolveTopN(model: DataModel, spec: TopNFilterSpec, ctx: Filter[]): Col
 }
 
 export function runQuery(model: DataModel, spec: QuerySpec): QueryResult {
+  const plan = visualCalcPlan(spec);
+  return plan ? plan.finish(runQueryCore(model, plan.spec)) : runQueryCore(model, spec);
+}
+
+/**
+ * For a query with visual calculations: the query of its plain values, and `finish` to add the calculations to that
+ * query's result. Null when there are none. Lets other engines (SQL, workers) support visual calculations.
+ */
+export function visualCalcPlan(spec: QuerySpec): { spec: QuerySpec; finish: <R extends Omit<QueryResult, 'baseFilters'>>(res: R) => R } | null {
   const all = spec.values ?? [];
   const isCalc = (v: FieldSpec): v is Exclude<FieldSpec, string> & { visualCalc: string } => typeof v === 'object' && !!v.visualCalc;
-  if (!all.some(isCalc)) return runQueryCore(model, spec);
+  if (!all.some(isCalc)) return null;
   // run the plain values, then evaluate visual calculations over the final (sorted, Top N) rows
   const plain = all.filter((v) => !isCalc(v));
-  const res = runQueryCore(model, { ...spec, values: plain, orderBy: spec.orderBy?.filter((o) => typeof o.field !== 'object' || !('value' in o.field)) });
+  return { spec: { ...spec, values: plain, orderBy: spec.orderBy?.filter((o) => typeof o.field !== 'object' || !('value' in o.field)) }, finish: (res) => finishVisualCalcs(all, isCalc, res) };
+}
+
+function finishVisualCalcs<R extends Omit<QueryResult, 'baseFilters'>>(all: FieldSpec[], isCalc: (v: FieldSpec) => v is Exclude<FieldSpec, string> & { visualCalc: string }, res: R): R {
   const plainFields = res.values;
   const values: QueryField[] = [];
   const calcCols = new Map<number, { values: CellValue[]; highlights?: CellValue[]; total?: CellValue }>();
