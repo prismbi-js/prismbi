@@ -239,6 +239,17 @@ export class VisualHost {
 
   // ------------------------------------------------------------ render
 
+  /** One tab stop per visual: the last focused data point (or the first); arrow keys move between points. */
+  private rovingMarks(): void {
+    const marks = [...this.body.querySelectorAll<HTMLElement | SVGElement>('.pbi-mark')];
+    if (!marks.length) return;
+    const keep = Math.min(this.markIndex, marks.length - 1);
+    marks.forEach((m, i) => m.setAttribute('tabindex', i === keep ? '0' : '-1'));
+  }
+
+  /** Index of the data point that holds the visual's tab stop. */
+  markIndex = 0;
+
   render(): void {
     if (this.destroyed) return;
     const shown = this.rt.isVisualVisible?.(this.id) ?? true;
@@ -314,6 +325,7 @@ export class VisualHost {
       return;
     }
     this.applyNarration(f);
+    this.rovingMarks();
     this.rt.emit('rendered', { visualId: this.id, ms: performance.now() - t0 });
   }
 
@@ -617,6 +629,7 @@ export class VisualHost {
       },
       emit: (event, payload) => self.rt.emit(event, { visualId: self.id, keys: payload.keys, identity: payload.identity, event: payload.event }),
       rerender: () => self.rt.schedule(self.id),
+      markFocused: (i: number) => void (self.markIndex = Math.max(0, i)),
     };
   }
 

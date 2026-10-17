@@ -47,7 +47,8 @@ export class EditController {
   /** Add (or refresh) the edit overlay on a visual element. */
   decorate(id: string, el: HTMLElement): void {
     el.querySelector(':scope > .pbi-edit')?.remove();
-    const overlay = h('div', { class: 'pbi-edit', 'data-edit-for': id, tabindex: 0, role: 'button', 'aria-label': 'Select visual (drag to move)' });
+    const overlay = h('div', { class: 'pbi-edit', 'data-edit-for': id, tabindex: 0, role: 'button', 'aria-label': 'Select visual (drag, or arrow keys, to move; Shift+arrows to resize)' });
+    overlay.addEventListener('keydown', (e) => this.key(id, e as KeyboardEvent));
     for (const m of HANDLES) {
       const handle = h('i', { class: `pbi-handle pbi-handle-${m}`, 'data-mode': m, 'aria-hidden': 'true' });
       overlay.append(handle);
@@ -83,6 +84,35 @@ export class EditController {
     const { col, row } = this.steps(p);
     p.el.style.setProperty('--pbi-grid-col', `${col}px`);
     p.el.style.setProperty('--pbi-grid-row', `${row}px`);
+  }
+
+  /** Keyboard editing: arrows move one grid cell (with the rest of the selection), Shift+arrows resize. */
+  private key(id: string, e: KeyboardEvent): void {
+    const dx = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    const dy = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    if (!dx && !dy) return;
+    const p = this.host.page();
+    if (!p) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const selection = this.host.selection?.() ?? [];
+    const ids = !e.shiftKey && selection.includes(id) && selection.length > 1 ? selection : [id];
+    const updates: { id: string; layout: VisualLayout }[] = [];
+    for (const vid of ids) {
+      const l = { ...(p.specs.find((s) => s.id === vid)?.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
+      if (e.shiftKey) {
+        l.w = Math.max(1, Math.min(p.cols - l.x, l.w + dx));
+        l.h = Math.max(1, l.h + dy);
+      } else {
+        l.x = Math.max(0, Math.min(p.cols - l.w, l.x + dx));
+        l.y = Math.max(0, l.y + dy);
+      }
+      updates.push({ id: vid, layout: l });
+    }
+    if (updates.length > 1 && this.host.commitLayouts) this.host.commitLayouts(updates);
+    else for (const u of updates) this.host.commitLayout(u.id, u.layout);
+    // re-rendering replaces the overlay: keep keyboard focus on this visual
+    (p.visuals.get(id)?.querySelector(':scope > .pbi-edit') as HTMLElement | null)?.focus();
   }
 
   private start(id: string, mode: Mode | undefined, e: PointerEvent): void {

@@ -203,6 +203,21 @@ report.clearSelection();
 report.reset();               // clear slicers, selection and drill on the current page
 ```
 
+## Keyboard
+
+Everything that works with a mouse also works from the keyboard:
+
+| Where | Keys |
+|---|---|
+| Data points | Each visual is one Tab stop: the last data point you focused, or the first. Arrow keys move between points, and Home / End jump to the ends. Enter or Space selects (Ctrl adds to the selection). Shift+F10 or the context-menu key opens the right-click menu. |
+| Context menu | Up / Down, Home / End, Enter. Escape or Tab closes it, and focus goes back to the data point. |
+| Page tabs | One Tab stop (the current page). Left / Right, Home / End switch pages. |
+| Report | Escape clears the selection, or leaves focus mode. |
+| Table headers | Enter or Space sorts. |
+| Edit mode | Focus a visual to select it. Arrow keys move it one grid cell (with the rest of the selection), and Shift+arrows resize it. |
+
+Data points show their tooltip on focus, and every chart has a plain-language description for screen readers (see `describe()`).
+
 ## Events
 
 | Event | Payload |

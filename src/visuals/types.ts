@@ -73,6 +73,8 @@ export interface TooltipItem {
 }
 
 export interface VisualHostApi {
+  /** Remember which data point holds the visual's tab stop (keyboard navigation). */
+  markFocused?(index: number): void;
   /** Select a data point (cross-filter others). `null` clears. */
   select(identity: DataPointIdentity | null, opts?: { multi?: boolean }): void;
   /** `null` when nothing is selected in this visual. */

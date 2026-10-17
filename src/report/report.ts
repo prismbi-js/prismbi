@@ -1592,10 +1592,21 @@ export class Report implements ReportRuntime {
     this.tabs.replaceChildren();
     this.pages.forEach((p, i) => {
       if (p.def.hidden || p.def.tooltip) return;
-      const b = h('button', { type: 'button', class: 'pbi-tab', role: 'tab', 'aria-selected': String(i === this.current) }, this.translate('page', p.def.id!, p.def.name));
+      // roving tabindex: Tab reaches the current page's tab, arrow keys move between tabs
+      const b = h('button', { type: 'button', class: 'pbi-tab', role: 'tab', 'aria-selected': String(i === this.current), tabindex: i === this.current ? 0 : -1, 'data-page': p.def.id! }, this.translate('page', p.def.id!, p.def.name));
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         if (i !== this.current) this.showPage(i);
+      });
+      b.addEventListener('keydown', (e) => {
+        const tabs = [...this.tabs.querySelectorAll<HTMLButtonElement>('.pbi-tab')];
+        const at = tabs.indexOf(b);
+        const to = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? (at + 1) % tabs.length : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? (at - 1 + tabs.length) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+        if (to < 0) return;
+        e.preventDefault();
+        const id = tabs[to].dataset.page!;
+        this.goToPage(id);
+        this.tabs.querySelector<HTMLButtonElement>(`.pbi-tab[data-page="${id.replace(/"/g, '\\"')}"]`)?.focus();
       });
       this.tabs.append(b);
     });

@@ -28,6 +28,8 @@ export class ContextMenu {
   show(x: number, y: number, items: MenuItem[]): void {
     this.hide();
     if (!items.length) return;
+    // keyboard users get focus back where they were when the menu closes
+    this.returnFocus = document.activeElement instanceof HTMLElement || document.activeElement instanceof SVGElement ? (document.activeElement as HTMLElement) : null;
     this.el.replaceChildren();
     for (const it of items) {
       if (it.separator) this.el.append(h('div', { class: 'pbi-menu-sep', role: 'separator' }));
@@ -51,11 +53,15 @@ export class ContextMenu {
       if (e.key === 'Escape') {
         e.stopPropagation();
         this.hide();
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
         e.preventDefault();
         const btns = [...this.el.querySelectorAll<HTMLButtonElement>('button:not([disabled])')];
         const i = btns.indexOf(document.activeElement as HTMLButtonElement);
-        btns[(i + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length]?.focus();
+        const to = e.key === 'Home' ? 0 : e.key === 'End' ? btns.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length;
+        btns[to]?.focus();
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        this.hide();
       }
     };
     const onScroll = () => this.hide();
@@ -71,10 +77,16 @@ export class ContextMenu {
     };
   }
 
+  private returnFocus: HTMLElement | null = null;
+
   hide(): void {
+    const wasOpen = !this.el.hidden;
     this.el.hidden = true;
     this.cleanup?.();
     this.cleanup = null;
+    const back = this.returnFocus;
+    this.returnFocus = null;
+    if (wasOpen && back?.isConnected && this.el.contains(document.activeElement)) back.focus();
   }
 
   destroy(): void {

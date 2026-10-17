@@ -289,8 +289,29 @@ export function interactive(ctx: RenderContext, el: Element, identity: DataPoint
     const ke = e as KeyboardEvent;
     if (ke.key === 'Enter' || ke.key === ' ') {
       ke.preventDefault();
+      ke.stopPropagation();
       ctx.host.select(identity, { multi: ke.ctrlKey || ke.metaKey });
+      return;
     }
+    if (ke.key === 'ContextMenu' || (ke.key === 'F10' && ke.shiftKey)) {
+      ke.preventDefault();
+      const r = el.getBoundingClientRect();
+      ctx.host.contextMenu(new MouseEvent('contextmenu', { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }), identity);
+      return;
+    }
+    // arrow keys walk the data points of this visual (roving tabindex)
+    const marks = [...ctx.root.querySelectorAll<HTMLElement | SVGElement>('.pbi-mark')];
+    const at = marks.indexOf(el as HTMLElement);
+    const step = ke.key === 'ArrowRight' || ke.key === 'ArrowDown' ? 1 : ke.key === 'ArrowLeft' || ke.key === 'ArrowUp' ? -1 : 0;
+    const to = step ? Math.max(0, Math.min(marks.length - 1, at + step)) : ke.key === 'Home' ? 0 : ke.key === 'End' ? marks.length - 1 : -1;
+    if (to < 0 || at < 0) return;
+    ke.preventDefault();
+    marks[to].focus();
+  });
+  el.addEventListener('focus', () => {
+    const marks = [...ctx.root.querySelectorAll<HTMLElement | SVGElement>('.pbi-mark')];
+    marks.forEach((m) => m.setAttribute('tabindex', m === el ? '0' : '-1'));
+    ctx.host.markFocused?.(marks.indexOf(el as HTMLElement));
   });
   if (ctx.format.tooltip.show) {
     el.addEventListener('mousemove', (e) => {
