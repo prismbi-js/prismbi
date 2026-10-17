@@ -74,6 +74,8 @@ export { registerBoundaries, getBoundaries, featureCentroid, clusterPoints, quan
 export { referenceValue, linearFit } from './visuals/analytics';
 export { timeScale, logScale } from './render/scales';
 export { buildPdf } from './report/pdf';
+export { buildXlsx, resultToSheet, excelFormat, XLSX_MIME } from './report/xlsx';
+export type { XlsxSheet, XlsxColumn } from './report/xlsx';
 
 // report runtime
 export { Report, reviveDates, registerMenuItems, autoMobileLayout } from './report/report';

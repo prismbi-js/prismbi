@@ -509,6 +509,31 @@ export class VisualHost {
     return [head, ...d.rows.map((r) => [...r.keys, ...r.values].map(esc).join(','))].join('\n');
   }
 
+  /** Sheet name for exports: the visual's title, else its type. */
+  get exportName(): string {
+    return this.format().title.text || this.def.displayName || this.spec.type;
+  }
+
+  /** The data currently shown, as a sheet for `buildXlsx` (null for visuals without data). */
+  async xlsxSheet(): Promise<import('./xlsx').XlsxSheet | null> {
+    const d = this.data;
+    if (!d || this.def.static || !(d.groups.length + d.values.length)) return null;
+    const { resultToSheet } = await import('./xlsx');
+    return resultToSheet(d, this.exportName);
+  }
+
+  /** The visual's data as an Excel workbook (formats, dates and totals kept). */
+  async toXlsx(): Promise<Uint8Array> {
+    const { buildXlsx } = await import('./xlsx');
+    const sheet = await this.xlsxSheet();
+    return buildXlsx([sheet ?? { name: this.exportName, columns: [], rows: [] }]);
+  }
+
+  async exportXlsx(filename = `${this.exportName.replace(/[^\w-]+/g, '_')}.xlsx`): Promise<void> {
+    const [{ XLSX_MIME }, bytes] = await Promise.all([import('./xlsx'), this.toXlsx()]);
+    download(new Blob([bytes], { type: XLSX_MIME }), filename);
+  }
+
   exportCsv(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.csv`): void {
     const blob = new Blob([this.toCsv()], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -574,6 +599,7 @@ export class VisualHost {
       const r = b.getBoundingClientRect();
       this.rt.menu(r.left, r.bottom + 4, [
         { label: 'Export data', hint: 'CSV', onClick: () => this.exportCsv() },
+        { label: 'Export data', hint: 'Excel', onClick: () => void this.exportXlsx() },
         { label: 'Export image', hint: 'PNG', onClick: () => void this.exportImage('png') },
         { label: 'Export image', hint: 'SVG', onClick: () => void this.exportImage('svg') },
       ]);

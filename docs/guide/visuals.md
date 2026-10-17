@@ -190,7 +190,7 @@ format: { slicer: { syncGroup: 'year' } }
 Hovering or focusing a visual shows its header icons:
 - **⤢ Focus mode** fills the page. Esc exits.
 - **▦ Show as table** displays the query result as a table.
-- **⇩ Export** opens a menu: data (CSV), image (PNG at 2×), image (SVG). The same is available in code as `report.visual(id).exportCsv()`, `.exportImage('png' | 'svg')` and `.toSvg()`.
+- **⇩ Export** opens a menu: data (CSV or Excel), image (PNG at 2×), image (SVG). The same is available in code as `report.visual(id).exportCsv()`, `.exportXlsx()`, `.exportImage('png' | 'svg')` and `.toSvg()`.
 - **↑ Drill up**, **⇊ Go to next level** and **⤓ Expand all down one level** appear when a drillable role has several fields.
 - **⌫ Clear selections** appears on slicers.
 

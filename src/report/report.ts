@@ -192,6 +192,9 @@ export interface VisualHandle {
   update(patch: Partial<VisualSpec>): void;
   toCsv(): string;
   exportCsv(filename?: string): void;
+  /** The visual's data as an .xlsx workbook (number and date formats kept). */
+  toXlsx(): Promise<Uint8Array>;
+  exportXlsx(filename?: string): Promise<void>;
   /** Current query result. */
   data(): QueryResult | null;
   /** Plain-language summary of what the visual shows (the same text screen readers get). */
@@ -1102,6 +1105,39 @@ export class Report implements ReportRuntime {
     download(new Blob([pdf], { type: 'application/pdf' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pdf`);
   }
 
+  /**
+   * The data of every visual on the current page (or every visible page) as an Excel workbook: one sheet per visual,
+   * in layout order, with number and date formats. Text boxes, images and other visuals without data are skipped.
+   */
+  async toXlsx(opts: { pages?: 'current' | 'all' } = {}): Promise<Uint8Array> {
+    const { buildXlsx } = await import('./xlsx');
+    const start = this.current;
+    const targets = opts.pages === 'all' ? this.pages.map((_, i) => i).filter((i) => !this.pages[i].def.hidden && !this.pages[i].def.tooltip) : [start];
+    const sheets = [];
+    for (const i of targets) {
+      if (i !== this.current) this.showPage(i, false);
+      this.flush();
+      const page = this.pages[i];
+      // reading order: top to bottom, then left to right
+      const pos = (v: VisualSpec) => v.layout ?? { x: 0, y: 0 };
+      const ordered = [...page.def.visuals].sort((a, b) => pos(a).y - pos(b).y || pos(a).x - pos(b).x);
+      for (const v of ordered) {
+        const host = page.hosts.get(v.id!);
+        if (!host || !this.isVisualVisible(v.id!)) continue;
+        const sheet = await host.xlsxSheet();
+        if (sheet) sheets.push(targets.length > 1 ? { ...sheet, name: `${this.translate('page', page.def.id!, page.def.name)} - ${sheet.name}` } : sheet);
+      }
+    }
+    if (this.current !== start) this.showPage(start, false);
+    return buildXlsx(sheets.length ? sheets : [{ name: this.name || 'Report', columns: [], rows: [] }]);
+  }
+
+  /** Download {@link toXlsx} as a file. */
+  async exportXlsx(opts: { pages?: 'current' | 'all'; filename?: string } = {}): Promise<void> {
+    const [{ XLSX_MIME }, { download }, bytes] = await Promise.all([import('./xlsx'), import('./snapshot'), this.toXlsx(opts)]);
+    download(new Blob([bytes], { type: XLSX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.xlsx`);
+  }
+
   domainIndex(table: string, column: string, value: CellValue): number {
     const k = `${table}[${column}]`;
     let m = this.domainCache.get(k);
@@ -1508,6 +1544,8 @@ export class Report implements ReportRuntime {
       update: (patch) => this.updateVisual(id, patch),
       toCsv: () => getHost().toCsv(),
       exportCsv: (name) => getHost().exportCsv(name),
+      toXlsx: () => getHost().toXlsx(),
+      exportXlsx: (name) => getHost().exportXlsx(name),
       data: () => getHost().lastResult,
       describe: () => getHost().describe(),
       drillUp: () => getHost().drillUp(),
@@ -1645,6 +1683,7 @@ export class Report implements ReportRuntime {
     btn('Reset', () => this.reset());
     btn('Edit interactions', () => this.toggleEditInteractions(), this.editingInteractions);
     btn('Export PDF', () => void this.exportPdf());
+    btn('Export Excel', () => void this.exportXlsx());
     if (this.chrome.filterPane) btn('Filters', () => this.toggleFilterPane(), this.paneOpen);
   }
 

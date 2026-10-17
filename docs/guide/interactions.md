@@ -183,8 +183,18 @@ Filters on a dimension column flow to related fact tables. Filters on a fact col
 
 ## Export
 
-- Per visual: header **⇩** → CSV, PNG or SVG. In code: `report.visual(id).exportCsv() / exportImage('png') / toSvg()`.
+- Per visual: header **⇩** → CSV, Excel, PNG or SVG. In code: `report.visual(id).exportCsv() / exportXlsx() / exportImage('png') / toSvg()`.
 - Per page: toolbar **Export PDF**, or `await report.exportPdf({ pages: 'current' | 'all' })`. Each report page becomes one PDF page. The PDF writer has no dependencies and only loads when used.
+- Data to Excel: toolbar **Export Excel**, or `await report.exportXlsx({ pages: 'current' | 'all' })`. Every visual with data becomes one sheet, in reading order (top to bottom, then left to right), named after its title, with `Page - Title` names when exporting all pages. Cells keep their types: numbers, dates and booleans, not text. Measure and column format strings become Excel number formats, and the header row is bold, frozen and filterable. `toXlsx()` returns the bytes instead of downloading, on the report and on each visual.
+- Your own workbooks: `buildXlsx(sheets)` writes any `{ name, columns: [{ header, format, width }], rows }` sheets, and `resultToSheet(model.query(spec), name)` turns a query result into one. Like the PDF writer it has no dependencies; files are stored uncompressed.
+
+```js playground
+import { buildXlsx, resultToSheet } from '@prismbi/prismbi';
+
+const sheet = resultToSheet(model.query({ groupBy: ['Region[Group]'], values: ['Total Sales', 'Orders'], totals: true }), 'By group');
+const bytes = buildXlsx([sheet]); // new Blob([bytes], { type: XLSX_MIME }) to download
+return { columns: sheet.columns, rows: sheet.rows, bytes: bytes.length };
+```
 
 ## Bookmarks
 
