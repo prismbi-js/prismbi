@@ -64,6 +64,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | `@prismbi/prismbi/connectors` | CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh |
 | `@prismbi/prismbi/worker` | Run the model in a Web Worker |
 | `@prismbi/prismbi/ai` | Ask, explain, insights, and agent context and tools (Claude, OpenAI, MCP) |
+| `@prismbi/prismbi/server` | Headless SVG/HTML rendering, measure alerts, scheduled report jobs |
 | `@prismbi/prismbi/files` | Report files for Git, plus diffs (also the `@prismbi/prismbi` CLI) |
 
 ## Lean builds
@@ -101,6 +102,7 @@ import { PrismReport, PrismVisual } from '@prismbi/prismbi/react';
 - [AI: ask, explain, insights, agents](docs/guide/ai.md)
 - [Web components, Vue, Svelte, Angular](docs/guide/frameworks.md)
 - [Report files and version control](docs/guide/files.md)
+- [Server: headless rendering, alerts, schedules](docs/guide/server.md)
 - [Connectors and live data](docs/guide/connectors.md): CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh
 - [Performance and scale](docs/guide/performance.md): the fast query path, rendering at scale, the worker engine, benchmarks
 - [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)

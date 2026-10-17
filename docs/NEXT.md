@@ -13,7 +13,11 @@ Last updated 2026-10-17. Branch `phase-5`; local `master` fast-forwarded to the 
 
 ## Remaining Phase 6 items (do in this order)
 
-### 1. `@prismbi/prismbi/server`: headless rendering, scheduled sends, measure alerts
+### 1. ✅ DONE: `@prismbi/prismbi/server` (src/server.ts, tests/server.test.ts, docs/guide/server.md)
+
+Kept below for reference.
+
+#### Original plan
 
 Create `src/server.ts` as a new entry. Register it in all of these:
 - `tsup.config.ts`
@@ -35,7 +39,7 @@ Contents:
 - **Tests:** run with `// @vitest-environment node` plus `new JSDOM()`. `measureText` already falls back to an estimate under jsdom.
 - **Docs:** `docs/guide/server.md`.
 
-### 2. Collaboration: `@prismbi/prismbi/collab`
+### 2. NEXT: Collaboration: `@prismbi/prismbi/collab`
 
 - **Document:** an operation-based document over report JSON. Visuals and pages are keyed by id, and properties use last-writer-wins with Lamport clocks and a site id.
   - Hook into the Studio history snapshots (`src/studio/history.ts`) and `Report.load` / `definitionChanged`.

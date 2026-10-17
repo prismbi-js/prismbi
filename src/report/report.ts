@@ -94,6 +94,8 @@ export interface ReportOptions extends Partial<ReportDefinition> {
    * model. Visuals render asynchronously; slicers and metadata still use `model`.
    */
   engine?: QueryEngine;
+  /** Explicit pixel size per visual body, for rendering without layout (e.g. `@prismbi/prismbi/server`). */
+  measure?: (visualId: string) => { width: number; height: number } | undefined;
 }
 
 interface PageState {
@@ -213,6 +215,7 @@ export class Report implements ReportRuntime {
     injectStyles(container.ownerDocument);
     this.model = opts.model;
     this.engine = opts.engine;
+    this.measure = opts.measure;
     this.locale = opts.locale;
     this.name = opts.name ?? 'Report';
     this._theme = getTheme(opts.theme);
@@ -263,6 +266,7 @@ export class Report implements ReportRuntime {
   }
   /** Engine running visual queries (see `ReportOptions.engine`). */
   readonly engine?: QueryEngine;
+  readonly measure?: (visualId: string) => { width: number; height: number } | undefined;
 
   get modelVersion(): number {
     return this._modelVersion;

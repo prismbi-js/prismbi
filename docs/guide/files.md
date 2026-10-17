@@ -42,7 +42,7 @@ console.log(formatDiff(diffReports(before, after)));
 
 ## Command line
 
-The package installs a `@prismbi/prismbi` command:
+The package installs a `prismbi` command (`npx @prismbi/prismbi` runs it without installing):
 
 ```bash
 npx @prismbi/prismbi split report.json reports/sales      # write the folder

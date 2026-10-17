@@ -9,6 +9,8 @@
   - Agent support: `getAIContext`, `contextToPrompt`, `createAgentTools`, `runTool`, `toAnthropicTools`, `toOpenAITools`, `toMcpTools`.
 - **`@prismbi/prismbi/elements`:** web components `<prism-report>` and `<prism-visual>`, `registerModel`, and the Svelte actions `prismReport` / `prismVisual`.
 - **`@prismbi/prismbi/files`:** `splitReport`, `joinReport`, `diffReports`, `formatDiff`, and the `prismbi split|join|diff` CLI.
+- **`@prismbi/prismbi/server`:** `renderVisualSvg`, `renderReportHtml`, `withDom`, `watchMeasure`, `scheduleReport`, plus a new `measure` report option for explicit visual sizes.
+- **Package name:** published as `@prismbi/prismbi` (npm rejected the unscoped `prismbi` as too close to `prisma` and `prismjs`).
 - **Core:** `registerMenuItems` (context-menu plugins), plus `Report.reportFilterList` and `Report.currentSelection`.
 
 

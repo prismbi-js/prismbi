@@ -231,7 +231,8 @@ export class VisualHost {
     const t0 = performance.now();
     const f = this.format();
     this.renderHeader(f);
-    this.size = { w: this.body.clientWidth, h: this.body.clientHeight };
+    const fixed = this.rt.measure?.(this.id);
+    this.size = fixed ? { w: fixed.width, h: fixed.height } : { w: this.body.clientWidth, h: this.body.clientHeight };
     let roles: Map<string, RoleBinding>;
     try {
       const built = this.buildQuery();
