@@ -132,6 +132,8 @@ export interface VisualHandle {
   exportCsv(filename?: string): void;
   /** Current query result. */
   data(): QueryResult | null;
+  /** Plain-language summary of what the visual shows (the same text screen readers get). */
+  describe(): string;
   drillUp(): void;
   drillDown(value: CellValue): void;
   /** "Expand all down one level". */
@@ -1250,6 +1252,7 @@ export class Report implements ReportRuntime {
       toCsv: () => getHost().toCsv(),
       exportCsv: (name) => getHost().exportCsv(name),
       data: () => getHost().lastResult,
+      describe: () => getHost().describe(),
       drillUp: () => getHost().drillUp(),
       drillDown: (v) => getHost().drillDown(v),
       expandAll: () => getHost().expandAll(),

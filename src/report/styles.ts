@@ -43,6 +43,7 @@ export const CSS = /* css */ `
 .pbi-visual.is-active{box-shadow:0 0 0 2px color-mix(in srgb,var(--pbi-accent) 35%,transparent)}
 @container (max-width:640px){.pbi-page:not(.is-mobile) .pbi-visual{grid-column:1/-1;grid-row:auto/span var(--h)}}
 .pbi-visual.is-phone-hidden{display:none}
+.pbi-sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .pbi-vh{display:flex;align-items:flex-start;gap:8px;min-height:0;margin-bottom:6px}
 .pbi-vh-text{flex:1;min-width:0}
 .pbi-title{font-size:var(--pbi-title-size);font-weight:600;line-height:1.25;color:var(--pbi-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

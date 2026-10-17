@@ -296,6 +296,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 ## Phase 8: Teams (in progress)
 
 **Done:**
+- [x] **Accessibility:** automatic chart narration (`aria-description` and screen-reader text, `describe()`, `narrate()`), a high-contrast theme, and accessibility tests across chart types
 - [x] **Lineage and impact analysis:** `lineage`, `impactOf`, token-safe `renameModelField` and `model.renameColumn`. The Studio rewrites dependents on rename and shows the impact before a delete.
 
 **Goal:** what an organisation needs to roll PrismBI out.

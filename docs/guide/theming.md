@@ -98,3 +98,17 @@ Format strings apply to columns (`schema.format`), measures (`{ format }`), fiel
 import { formatValue } from '@prismbi/prismbi';
 formatValue(1500000, '$#,0', { displayUnits: 'auto' }); // "$1.5M"
 ```
+
+## Accessibility
+
+- **Chart narration.** Every chart gets a plain-language summary, for example: *"Line chart of Total Sales by MonthYear: 24 values from Jan 2024 to Dec 2025. Highest is Dec 2025 at $1.05M, lowest is Feb 2025 at $450K. Up 113% from first to last."*
+  - **Where it goes:** the visual's `aria-description`, plus a visually hidden paragraph for screen readers that don't support it.
+  - **Content:** it follows the current filters and selection.
+  - **In code:** `report.visual(id).describe()` returns the text (useful for alt text and exports), and `narrate(type, result, options)` builds it from any query result.
+  - **Opting out:** `format: { accessibility: { narration: false } }` on a visual.
+  - **Skipped:** tables, slicers and text, which screen readers already read directly.
+- **High-contrast theme.** `theme: 'high-contrast'` puts bright, distinct series colours, white text and strong outlines on black.
+- **Keyboard and structure.**
+  - Marks are focusable, Enter selects, and tooltips follow focus.
+  - Every chart has `role="img"` with its title.
+  - Every visual offers **Show as table**.

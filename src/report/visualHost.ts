@@ -17,6 +17,7 @@ function portable(spec: QuerySpec): boolean {
   return ok(spec.filters) && ok(spec.highlight);
 }
 import { download, elementToSvg, svgToCanvas } from './snapshot';
+import { narrate } from './narrate';
 
 const asArray = (f: FieldSpec | FieldSpec[] | undefined): FieldSpec[] => (f === undefined ? [] : Array.isArray(f) ? f : [f]);
 const fieldRef = (f: FieldSpec) => (typeof f === 'string' ? f : (f.field ?? f.expression ?? ''));
@@ -305,7 +306,27 @@ export class VisualHost {
       this.renderError(err as Error);
       return;
     }
+    this.applyNarration(f);
     this.rt.emit('rendered', { visualId: this.id, ms: performance.now() - t0 });
+  }
+
+  /** Plain-language summary of what the visual shows (screen readers, alt text). */
+  describe(): string {
+    return narrate(this.spec.type, this.data, { typeName: this.def.displayName, title: this.spec.title ?? this.format().title.text, fmt: (field, v) => formatValue(v, field?.format, { locale: this.rt.locale, displayUnits: typeof v === 'number' && Math.abs(v) >= 10_000 ? 'auto' : 'none' }) });
+  }
+
+  private applyNarration(f: VisualFormat): void {
+    this.body.querySelector(':scope > .pbi-sr-only')?.remove();
+    const off = (f as VisualFormat & { accessibility?: { narration?: boolean } }).accessibility?.narration === false;
+    const text = off ? '' : this.describe();
+    if (!text) {
+      this.body.removeAttribute('aria-description');
+      return;
+    }
+    this.body.setAttribute('aria-description', text);
+    // also as visually hidden text, for screen readers without aria-description support
+    const p = h('p', { class: 'pbi-sr-only' }, text);
+    this.body.append(p);
   }
 
   private request(engine: QueryEngine, spec: QuerySpec, key: string): void {

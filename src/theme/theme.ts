@@ -87,9 +87,33 @@ export const darkTheme: Theme = {
   diverging: ['#3987e5', '#383835', '#e66767'],
 };
 
+/** High contrast: bright, distinct colours on black and strong outlines (WCAG-minded). */
+export const highContrastTheme: Theme = {
+  ...darkTheme,
+  name: 'high-contrast',
+  mode: 'dark',
+  dataColors: ['#ffd400', '#00e5ff', '#ff5ca8', '#7cff4f', '#ff9f1c', '#b39dff', '#ffffff', '#ff4d4d'],
+  otherColor: '#bdbdbd',
+  background: '#000000',
+  surface: '#000000',
+  foreground: '#ffffff',
+  foregroundSecondary: '#f0f0f0',
+  foregroundMuted: '#d0d0d0',
+  gridline: '#5a5a5a',
+  axis: '#d0d0d0',
+  border: 'rgba(255,255,255,0.7)',
+  accent: '#ffd400',
+  good: '#7cff4f',
+  bad: '#ff4d4d',
+  warning: '#ffd400',
+  sequential: ['#1a1a00', '#4d4000', '#806a00', '#b39400', '#e6bf00', '#ffd400', '#fff2a8'],
+  diverging: ['#00e5ff', '#3a3a3a', '#ff5ca8'],
+};
+
 const registry = new Map<string, Theme>([
   ['light', lightTheme],
   ['dark', darkTheme],
+  ['high-contrast', highContrastTheme],
 ]);
 
 export function registerTheme(theme: Theme): void {

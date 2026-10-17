@@ -36,7 +36,8 @@ export type { DaxCompletion, DaxDiagnostic, DaxExplanation, DaxHover, DaxSignatu
 // formatting & theming
 export { formatValue, formatDate, formatCompact, setDefaultLocale, FORMAT_PRESETS } from './format/format';
 export type { DisplayUnits, FormatOptions } from './format/format';
-export { createTheme, darkTheme, fromPowerBITheme, getTheme, lightTheme, registerTheme } from './theme/theme';
+export { createTheme, darkTheme, fromPowerBITheme, getTheme, highContrastTheme, lightTheme, registerTheme } from './theme/theme';
+export { narrate } from './report/narrate';
 export type { PowerBIThemeJson, Theme } from './theme/theme';
 
 // visuals
