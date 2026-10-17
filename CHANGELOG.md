@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (unreleased): Phase 6, in progress
+## 0.6.0 (2026-10-17): Phase 6, in progress
 
 - **`prismbi/ai`:**
   - `ask` / `askSync`, with an optional `llm` hook.
