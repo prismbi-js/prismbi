@@ -116,6 +116,33 @@ The `narrative` visual writes a short summary of its measures that updates with 
 - **Rewording with a language model:** `setNarrativeWriter(async (facts) => callYourLLM(facts))`. The rule-based text shows immediately, and the reworded version replaces it when it arrives. Results are cached per filter state. Set `format.narrative.llm: false` to keep a visual rule-based.
 - **Outside a visual:** `writeNarrative(model, { measures, filters, breakdown?, insights?, template? })` returns `{ text, sentences }`. Each sentence is a list of parts, with `{ value }` parts for the emphasised numbers and names.
 
+## DAX copilot
+
+Write measures from plain English, and explain existing ones:
+
+```ts
+import { writeDax, writeDaxSync, explainDax, daxCopilot } from '@prismbi/prismbi/ai';
+
+writeDaxSync(model, 'sales year to date');
+// { expression: 'TOTALYTD([Total Sales], Date[Date])', name: 'Total Sales YTD', value: …, note: 'Understood: …', source: 'rules' }
+writeDaxSync(model, 'sales yoy % for bikes');   // VAR Prev = … RETURN DIVIDE(…) inside CALCULATE(…, Product[Category] = "Bikes"), format 0.0%
+writeDaxSync(model, 'profit per order');        // DIVIDE([Total Profit], [Orders])
+explainDax(model, 'CALCULATE([Orders], ALL(Product), Product[Color] = "Red")');
+// "Calculates [Orders], ignoring filters on Product and where Product[Color] is "Red".
+[Orders] is the number of distinct Sales[OrderNumber]."
+```
+
+- **What the rules understand:**
+  - The model's measures, numeric columns with an aggregation ("average quantity"), and values as filters ("for bikes in 2025").
+  - Ratios: "X per Y", "X divided by Y", "X margin".
+  - Time intelligence: YTD, QTD, MTD, last year, year-over-year change and %, running total, and share of total.
+- **Validation:** every suggestion is checked by evaluating it, so a broken expression never comes back.
+- **With a language model:** `writeDax(model, text, { llm })` asks the model for JSON (`daxPrompt` builds the prompt from the model context). It validates the answer and retries once with the error. If both attempts fail, it falls back to the rules, and the `note` says why.
+- **In the Studio:** pass `copilot: daxCopilot(model, { llm? })` to `new Studio(…)`, or call `studio.setCopilot(…)`.
+  - The measure editor gains a "Describe it" box with **✦ Write DAX** and **Explain**.
+  - The suggestion fills in the expression, name and format.
+  - The usual live preview and checks run before saving.
+
 ## Agents
 
 Agent frameworks need two things: context about the data, and tools to act on it.

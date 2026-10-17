@@ -14,6 +14,7 @@ registerBuiltinVisuals();
 
 export { Studio, emptyModelState } from './studio/studio';
 export type { StudioDocument, StudioEvents, StudioModelState, StudioOptions } from './studio/studio';
+export type { ExpressionCopilot } from './studio/dialogs';
 export { autoReport } from './studio/autoReport';
 export type { AutoReportOptions } from './studio/autoReport';
 export { assignField, autoVisualFor, defaultSize, fieldKind, removeField, retargetFields } from './studio/assign';

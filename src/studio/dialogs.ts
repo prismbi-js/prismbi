@@ -43,7 +43,13 @@ export function openDialog(host: HTMLElement, title: string, body: HTMLElement, 
 
 const field = (label: string, control: HTMLElement) => h('div', { class: 'pbs-row' }, h('label', {}, label), control);
 
-function formatSelect(current?: string): { el: HTMLElement; value: () => string | undefined } {
+/** Writes and explains expressions from plain language (see `daxCopilot` in `@prismbi/prismbi/ai`). */
+export interface ExpressionCopilot {
+  write(request: string, ctx: { kind: 'measure' | 'column'; table?: string }): Promise<{ expression: string; name?: string; format?: string; note?: string }>;
+  explain?(expression: string): string | Promise<string>;
+}
+
+function formatSelect(current?: string): { el: HTMLElement; value: () => string | undefined; set: (v: string | undefined) => void } {
   const presets: [string, string][] = [
     ['', 'General'],
     ['#,0', 'Whole number (1,234)'],
@@ -62,11 +68,17 @@ function formatSelect(current?: string): { el: HTMLElement; value: () => string 
   custom.hidden = sel.value !== '__custom__';
   sel.addEventListener('change', () => (custom.hidden = sel.value !== '__custom__'));
   void FORMAT_PRESETS;
-  return { el: h('div', { class: 'pbs-row2' }, sel, custom), value: () => (sel.value === '__custom__' ? custom.value.trim() || undefined : sel.value || undefined) };
+  const set = (v: string | undefined) => {
+    const preset = presets.some((p) => p[0] === (v ?? ''));
+    sel.value = preset ? (v ?? '') : '__custom__';
+    custom.value = v ?? '';
+    custom.hidden = preset;
+  };
+  return { el: h('div', { class: 'pbs-row2' }, sel, custom), value: () => (sel.value === '__custom__' ? custom.value.trim() || undefined : sel.value || undefined), set };
 }
 
 /** Create or edit a measure. Calls `onSave` with the definition (and the previous name when renamed). */
-export function measureDialog(host: HTMLElement, model: DataModel, existing: MeasureDef | null, onSave: (def: MeasureDef, previousName?: string) => void): void {
+export function measureDialog(host: HTMLElement, model: DataModel, existing: MeasureDef | null, onSave: (def: MeasureDef, previousName?: string) => void, copilot?: ExpressionCopilot): void {
   const name = h('input', { type: 'text', value: existing?.name ?? '', placeholder: 'Total Sales', 'aria-label': 'Measure name' }) as HTMLInputElement;
   const table = h('select', { 'aria-label': 'Home table' }) as HTMLSelectElement;
   for (const t of model.tableNames()) table.append(h('option', { value: t, selected: (existing?.table ?? model.tableNames()[0]) === t }, t));
@@ -91,10 +103,52 @@ export function measureDialog(host: HTMLElement, model: DataModel, existing: Mea
   editor.onChange = update;
   fmt.el.addEventListener('change', update);
   update();
+  let assist: HTMLElement | string = '';
+  if (copilot) {
+    const ask = h('input', { type: 'text', placeholder: 'Describe it: “sales year to date”, “profit margin”, “sales last year for bikes”', 'aria-label': 'Describe the measure' }) as HTMLInputElement;
+    const note = h('div', { class: 'pbs-copilot-note', role: 'status' });
+    const write = h('button', { type: 'button', class: 'pbs-btn' }, '✦ Write DAX') as HTMLButtonElement;
+    const explainBtn = h('button', { type: 'button', class: 'pbs-btn' }, 'Explain') as HTMLButtonElement;
+    explainBtn.hidden = !copilot.explain;
+    const run = async () => {
+      if (!ask.value.trim()) return void (note.textContent = 'Describe the measure first.');
+      write.disabled = true;
+      note.textContent = 'Writing…';
+      try {
+        const r = await copilot.write(ask.value.trim(), { kind: 'measure', table: table.value });
+        editor.value = r.expression;
+        if (!name.value.trim() && r.name) name.value = r.name;
+        if (r.format !== undefined) fmt.set(r.format);
+        update();
+        note.textContent = r.note ?? 'Check the expression and the value below, then save.';
+      } catch (e) {
+        note.textContent = (e as Error).message;
+      } finally {
+        write.disabled = false;
+      }
+    };
+    write.addEventListener('click', () => void run());
+    ask.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        void run();
+      }
+    });
+    explainBtn.addEventListener('click', async () => {
+      if (!editor.value.trim()) return void (note.textContent = 'Nothing to explain yet.');
+      try {
+        note.textContent = await copilot.explain!(editor.value);
+      } catch (e) {
+        note.textContent = (e as Error).message;
+      }
+    });
+    assist = h('div', { class: 'pbs-copilot' }, h('div', { class: 'pbs-copilot-row' }, ask, write, explainBtn), note);
+  }
   const body = h(
     'div',
     { style: 'display:flex;flex-direction:column;gap:10px' },
     h('div', { class: 'pbs-row2' }, field('Name', name), field('Home table', table)),
+    assist,
     field('Expression', editor.el),
     h('div', { class: 'pbs-row2' }, field('Format', fmt.el), field('Display folder', folder)),
     preview,

@@ -177,6 +177,11 @@ export const STUDIO_CSS = /* css */ `
 .pbs-suggest li[aria-selected=true]{background:color-mix(in srgb,var(--pbi-accent) 18%,transparent)}
 .pbs-diag{font-size:12px}.pbs-diag .error{color:var(--pbi-bad)}.pbs-diag .ok{color:var(--pbi-fg-3)}
 .pbs-sig{font:11.5px ui-monospace,Consolas,monospace;color:var(--pbi-fg-3);min-height:16px}
+.pbs-copilot{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px dashed var(--pbi-accent);border-radius:8px}
+.pbs-copilot-row{display:flex;gap:6px}
+.pbs-copilot-row input{flex:1;min-width:0}
+.pbs-copilot-note{font-size:12px;color:var(--pbi-fg-2);white-space:pre-line}
+.pbs-copilot-note:empty{display:none}
 .pbs-preview{font-size:12.5px;padding:8px 10px;border-radius:8px;background:var(--pbi-bg);border:1px solid var(--pbs-line)}
 .pbs-preview b{font-size:16px}
 .pbs .pbi-fpane{width:auto;border-left:0;background:transparent}

@@ -79,6 +79,10 @@ Model changes are stored as a diff against the model the studio was opened with.
 
 `assignField`, `retargetFields`, `autoVisualFor`, `defaultSize`, `fieldKind`, `autoReport`, `History`, `sectionsFor` / `COMMON_SECTIONS` / `TYPE_SECTIONS` (the format schema) and `ExpressionEditor` are all exported. You can build a custom editor shell or add your own sections to the format schema.
 
+## DAX copilot
+
+`new Studio(el, { model, copilot: daxCopilot(model) })` (from `@prismbi/prismbi/ai`) adds a plain-English box to the measure editor: **✦ Write DAX** fills in the expression, name and format, and **Explain** describes the current expression. Any object with `write(request)` and an optional `explain(expression)` works, so you can plug in your own service. See [AI](ai.md#dax-copilot).
+
 ## Phone layouts
 
 Press **📱 Phone** in the top bar to arrange the current page for phones:

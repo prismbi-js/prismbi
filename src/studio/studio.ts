@@ -21,7 +21,7 @@ import { assignField, autoVisualFor, defaultSize, retargetFields } from './assig
 import { autoReport } from './autoReport';
 import type { StudioContext } from './context';
 import { FIELD_MIME } from './context';
-import type { CalcColumnDef } from './dialogs';
+import type { CalcColumnDef, ExpressionCopilot } from './dialogs';
 import { columnDialog, confirmDialog, measureDialog } from './dialogs';
 import { renderFormat } from './formatPane';
 import { History } from './history';
@@ -72,6 +72,8 @@ export interface StudioOptions {
   locale?: string;
   /** Start in preview (view) mode. */
   preview?: boolean;
+  /** Plain-language help in the measure editor, e.g. `daxCopilot(model)` from `@prismbi/prismbi/ai`. */
+  copilot?: ExpressionCopilot;
 }
 
 export interface StudioEvents {
@@ -117,6 +119,7 @@ export class Studio implements StudioContext {
   private storageKey?: string;
   private dirty = false;
   private offs: (() => void)[] = [];
+  private copilot?: ExpressionCopilot;
 
   constructor(
     readonly container: HTMLElement,
@@ -125,6 +128,7 @@ export class Studio implements StudioContext {
     injectStudioStyles(container.ownerDocument);
     this.model = opts.model;
     this.storageKey = opts.storageKey;
+    this.copilot = opts.copilot;
     this.baseline = this.captureBaseline();
     this.root = h('div', { class: 'pbs', tabindex: -1 });
     this.menu = new ContextMenu(this.root);
@@ -234,6 +238,11 @@ export class Studio implements StudioContext {
     b.addEventListener('click', onClick);
     this.els.top.insertBefore(b, this.els.schedBtn);
     return b;
+  }
+
+  /** Set (or clear) the measure editor's copilot. */
+  setCopilot(copilot: ExpressionCopilot | undefined): void {
+    this.copilot = copilot;
   }
 
   get canUndo(): boolean {
@@ -362,7 +371,7 @@ export class Studio implements StudioContext {
       this.model.addMeasure(def);
       this.commit();
       this.toast(existing ? `Saved measure ${def.name}` : `Created measure ${def.name}`);
-    });
+    }, this.copilot);
   }
 
   deleteMeasure(name: string): void {

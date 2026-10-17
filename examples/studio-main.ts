@@ -1,6 +1,6 @@
 import { Studio } from '@prismbi/prismbi/studio';
 import { broadcastChannelTransport, connectReport } from '@prismbi/prismbi/collab';
-import { agentPanel, anthropicLLM } from '@prismbi/prismbi/ai';
+import { agentPanel, anthropicLLM, daxCopilot } from '@prismbi/prismbi/ai';
 import { buildModel } from './model';
 
 const model = buildModel();
@@ -13,6 +13,7 @@ const studio = new Studio(document.getElementById('studio')!, {
   model,
   storageKey: room ? `prismbi-studio-room-${room}` : 'prismbi-studio-demo',
   theme: dark ? 'dark' : 'light',
+  copilot: daxCopilot(model), // "✦ Write DAX" and "Explain" in the measure editor
 });
 
 studio.on('change', (doc) => console.debug('document changed', doc));

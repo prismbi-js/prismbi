@@ -19,6 +19,8 @@ export type { Narrative, NarrativeOptions, NarrativePart } from './ai/narrative'
 export { runAgent, anthropicLLM, openAILLM, ruleBasedLLM, planPrompt, WRITE_TOOLS, AGENT_SYSTEM } from './ai/run';
 export type { AgentLLM, AgentMessage, AgentReply, AgentRun, AgentStep, AgentToolCall, RunAgentOptions, HttpLLMOptions } from './ai/run';
 export { agentPanel, describeCall } from './ai/panel';
+export { writeDax, writeDaxSync, explainDax, daxCopilot, daxPrompt, dateColumn } from './ai/copilot';
+export type { DaxSuggestion, DaxCopilotOptions } from './ai/copilot';
 export type { AgentPanel, AgentPanelOptions } from './ai/panel';
 
 import { registerAI } from './ai/visuals';
