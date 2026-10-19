@@ -3,7 +3,7 @@
 // No CI: run it by hand. `node scripts/deploy-pages.mjs --dry` builds into node_modules/.pages/site and stops before committing.
 // Served from https://prismbi-js.github.io/ (docs at /docs/). The source lives in prismbi-js/prismbi; the built site in
 // prismbi-js/prismbi-js.github.io, which GitHub serves at the domain root.
-import { cpSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -27,6 +27,12 @@ run('npx', ['vite', 'build', '--config', 'examples/vite.config.ts', '--outDir', 
 // 3. the static docs (relative links, so they work under any base) and no Jekyll processing
 cpSync(join(root, 'examples', 'docs'), join(site, 'docs'), { recursive: true });
 writeFileSync(join(site, '.nojekyll'), '');
+// old addresses (the repo's first Pages URL was …/PrismBI/) redirect to the root
+const redirect = '<!doctype html><meta charset="utf-8"><title>PrismBI</title><meta http-equiv="refresh" content="0; url=/"><link rel="canonical" href="/"><a href="/">PrismBI</a>';
+for (const dir of ['prismbi', 'PrismBI']) {
+  mkdirSync(join(site, dir), { recursive: true });
+  writeFileSync(join(site, dir, 'index.html'), redirect);
+}
 console.log(`\nSite built in ${site}`);
 if (dry) process.exit(0);
 
