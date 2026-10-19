@@ -363,7 +363,9 @@ describe('scatter renderers', () => {
     const m = new DataModel().addTable('T', rows).addMeasure('X', 'SUM(T[x])').addMeasure('Y', 'SUM(T[y])');
     const el = document.createElement('div');
     document.body.append(el);
-    // jsdom has neither WebGL nor a 2D canvas: the scatter still renders, as SVG
+    // a browser without WebGL or a 2D canvas returns null from getContext; the scatter still renders, as SVG
+    // (stubbed because jsdom throws a noisy "not implemented" instead)
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     const v = createVisual(el, { id: 'sc', model: m, type: 'scatter', fields: { details: 'T[id]', x: 'X', y: 'Y' }, format: { scatter: { renderer: 'webgl' } } } as never);
     v.flush();
     expect(el.querySelector('.pbi-error')).toBeNull();
@@ -373,5 +375,6 @@ describe('scatter renderers', () => {
     expect(el.querySelectorAll('circle.pbi-mark').length).toBe(4000);
     v.destroy();
     el.remove();
+    getContext.mockRestore();
   });
 });
