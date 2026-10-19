@@ -8,7 +8,7 @@
 |---|---|---|
 | ![PrismBI Studio](docs/images/studio.png) | ![The Studio agent panel](docs/images/studio-agent.png) | ![The live playground](docs/images/playground.png) |
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 75 KB min+gzip for the core (model, DAX engine, report runtime), about 94 KB for a dashboard with five visuals, and about 117 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 80 KB min+gzip for the core (model, DAX engine, report runtime), about 99 KB for a dashboard with five visuals, and about 122 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install @prismbi/prismbi

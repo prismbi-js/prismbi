@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased: Phases 8 and 9
+## 0.9.0 (2026-10-19): Phases 7, 8 and 9
 
 - **Excel export:** `report.exportXlsx({ pages })` / `toXlsx()` (one sheet per visual, toolbar **Export Excel**), `visual.exportXlsx()` / `toXlsx()` (visual menu **Export data · Excel**), and `buildXlsx`, `resultToSheet`, `excelFormat`, `XLSX_MIME` from the core. Typed cells, format strings as Excel number formats, frozen bold header with filters; a dependency-free writer loaded on demand.
-- **Size check:** `npm run size` (also run by `prepublishOnly`) bundles each entry from `dist` like an app would and fails over budget (`scripts/size.mjs`). Size figures in the README, roadmap and contributing guide are corrected: the core is about 75 KB min+gzip, not 60 KB.
+- **Size check:** `npm run size` (also run by `prepublishOnly`) bundles each entry from `dist` like an app would and fails over budget (`scripts/size.mjs`). Budgets raised by 3 KB for the core and full scenarios to cover Phases 7–9 (core about 90 KB api, 80 KB app). Size figures in the README, roadmap and contributing guide are corrected: the core is about 80 KB min+gzip, not 60 KB.
 - **Streaming refresh:** `appendRows` and `maxRows` windows extend or shift the table caches (numeric views, dictionaries, indexes, bitmaps) instead of rebuilding them. `model.onChange` listeners receive a `ModelChange` (`{ tables }`) for data-only changes, and reports re-query only the visuals whose fields, filters, format or measures can reach those tables. Row-local calculated columns compute appended rows with the row-expression compiler, and the visible-rows cache is bounded by total row indices as well as entries.
 - **Numeric group keys:** multi-column fast-path groupings use mixed-radix numeric keys (dense table up to 4M combinations) instead of per-row strings.
 - **Lazy rendering:** scheduled re-renders skip visuals more than 300 px outside the viewport until they scroll into view; `report.flush()` and exports still render everything.
@@ -38,8 +38,6 @@
 - **Usage analytics:** `ReportOptions.onUsage` with `UsageEvent` records.
 
 - **Power BI import:** `@prismbi/prismbi/powerbi` with `importPowerBI`, `parseTmdl`, `parseModelBim`, `buildModelFrom`, `mapPbirReport`, `mapLegacyReport`; the `prismbi pbip <dir> [report.json]` CLI.
-
-## 0.7.0 (unreleased): Phase 7, analyst essentials
 
 - **Visual calculations:** `{ visualCalc: 'RUNNINGSUM([Total Sales])', reset? }` on value fields, evaluated over the visual's rows after sorting and Top N.
 - **DAX window functions:** `OFFSET`, `INDEX`, `WINDOW`, `RANK`, `ROWNUMBER`, `ORDERBY`, `PARTITIONBY` (also in the DAX catalog and language service).
