@@ -187,11 +187,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/prismbi/prismbi.github.io.git"
+    "url": "git+https://github.com/prismbi-js/prismbi-js.github.io.git"
   },
-  "homepage": "https://prismbi.github.io/",
+  "homepage": "https://prismbi-js.github.io/",
   "bugs": {
-    "url": "https://github.com/prismbi/prismbi.github.io/issues"
+    "url": "https://github.com/prismbi-js/prismbi-js.github.io/issues"
   },
   "publishConfig": {
     "access": "public"

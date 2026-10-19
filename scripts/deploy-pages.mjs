@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds the demo, studio, playground and docs site for GitHub Pages and pushes it to the orphan `gh-pages` branch.
 // No CI: run it by hand. `node scripts/deploy-pages.mjs --dry` builds into .pages/site and stops before committing.
-// Served from https://prismbi.github.io/ (docs at /docs/); the repo is prismbi/prismbi.github.io, so the site is at the root.
+// Served from https://prismbi-js.github.io/ (docs at /docs/); the repo is prismbi-js/prismbi-js.github.io, so the site is at the root.
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +44,7 @@ try {
   else {
     git(['commit', '-m', `deploy: site from ${source}`], tree);
     git(['push', 'origin', 'gh-pages'], tree);
-    console.log('Pushed gh-pages. https://prismbi.github.io/');
+    console.log('Pushed gh-pages. https://prismbi-js.github.io/');
   }
 } finally {
   git(['worktree', 'remove', '--force', tree]);

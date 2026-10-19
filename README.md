@@ -2,7 +2,7 @@
 
 **Power BI-style data modeling and interactive reports for the web, written in TypeScript.**
 
-[Live demo](https://prismbi.github.io/) · [Docs](https://prismbi.github.io/docs/) · [Playground](https://prismbi.github.io/playground.html) · [Studio](https://prismbi.github.io/studio.html)
+[Live demo](https://prismbi-js.github.io/) · [Docs](https://prismbi-js.github.io/docs/) · [Playground](https://prismbi-js.github.io/playground.html) · [Studio](https://prismbi-js.github.io/studio.html)
 
 ![A PrismBI report: slicers, KPI cards and cross-filtering charts](docs/images/report-overview.png)
 
