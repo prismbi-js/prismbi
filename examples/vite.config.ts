@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 const src = (p: string) => fileURLToPath(new URL(`../src/${p}`, import.meta.url));
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
-// PRISMBI_BASE is set by scripts/deploy-pages.mjs for the GitHub Pages build (served from /PrismBI/); dev keeps /.
+// PRISMBI_BASE sets a sub-path base for builds served below the domain root (the Pages site at prismbi.github.io is at /).
 export default defineConfig({
   root: here('.'),
   base: process.env.PRISMBI_BASE ?? '/',

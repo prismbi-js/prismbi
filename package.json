@@ -187,11 +187,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/santhoshkumarhari/PrismBI.git"
+    "url": "git+https://github.com/prismbi/prismbi.github.io.git"
   },
-  "homepage": "https://github.com/santhoshkumarhari/PrismBI#readme",
+  "homepage": "https://prismbi.github.io/",
   "bugs": {
-    "url": "https://github.com/santhoshkumarhari/PrismBI/issues"
+    "url": "https://github.com/prismbi/prismbi.github.io/issues"
   },
   "publishConfig": {
     "access": "public"

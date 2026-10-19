@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds the demo, studio, playground and docs site for GitHub Pages and pushes it to the orphan `gh-pages` branch.
 // No CI: run it by hand. `node scripts/deploy-pages.mjs --dry` builds into .pages/site and stops before committing.
-// Served from https://santhoshkumarhari.github.io/PrismBI/ (docs at /PrismBI/docs/).
+// Served from https://prismbi.github.io/ (docs at /docs/); the repo is prismbi/prismbi.github.io, so the site is at the root.
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,9 +18,9 @@ const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'ut
 // 1. docs/guide/*.md → examples/docs/
 run('node', ['scripts/build-docs.mjs']);
 
-// 2. the Vite pages, with the /PrismBI/ base
+// 2. the Vite pages
 rmSync(work, { recursive: true, force: true });
-run('npx', ['vite', 'build', '--config', 'examples/vite.config.ts', '--outDir', site, '--emptyOutDir'], { env: { ...process.env, PRISMBI_BASE: '/PrismBI/' } });
+run('npx', ['vite', 'build', '--config', 'examples/vite.config.ts', '--outDir', site, '--emptyOutDir']);
 
 // 3. the static docs (relative links, so they work under any base) and no Jekyll processing
 cpSync(join(root, 'examples', 'docs'), join(site, 'docs'), { recursive: true });
@@ -44,7 +44,7 @@ try {
   else {
     git(['commit', '-m', `deploy: site from ${source}`], tree);
     git(['push', 'origin', 'gh-pages'], tree);
-    console.log('Pushed gh-pages. https://santhoshkumarhari.github.io/PrismBI/');
+    console.log('Pushed gh-pages. https://prismbi.github.io/');
   }
 } finally {
   git(['worktree', 'remove', '--force', tree]);
