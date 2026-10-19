@@ -4,11 +4,11 @@
 
 [Live demo](https://prismbi-js.github.io/) · [Docs](https://prismbi-js.github.io/docs/) · [Playground](https://prismbi-js.github.io/playground.html) · [Studio](https://prismbi-js.github.io/studio.html)
 
-![A PrismBI report: slicers, KPI cards and cross-filtering charts](docs/images/report-overview.png)
+![A PrismBI report: slicers, KPI cards and cross-filtering charts](https://prismbi-js.github.io/docs/images/report-overview.png)
 
 | Studio | Agent panel | Playground |
 |---|---|---|
-| ![PrismBI Studio](docs/images/studio.png) | ![The Studio agent panel](docs/images/studio-agent.png) | ![The live playground](docs/images/playground.png) |
+| ![PrismBI Studio](https://prismbi-js.github.io/docs/images/studio.png) | ![The Studio agent panel](https://prismbi-js.github.io/docs/images/studio-agent.png) | ![The live playground](https://prismbi-js.github.io/docs/images/playground.png) |
 
 PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 80 KB min+gzip for the core (model, DAX engine, report runtime), about 99 KB for a dashboard with five visuals, and about 122 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
 
@@ -106,29 +106,29 @@ import { PrismReport, PrismVisual } from '@prismbi/prismbi/react';
 
 ## Documentation
 
-- [Getting started](docs/guide/getting-started.md)
-- [Transforms: clean and reshape data](docs/guide/transforms.md)
-- [Importing Power BI projects (.pbip)](docs/guide/powerbi.md)
-- [Data modeling](docs/guide/data-model.md): tables, relationships, measures, calculated columns, date tables
-- [Advanced modeling](docs/guide/advanced-modeling.md): relationships, calculation groups, parameters, hierarchies, RLS
-- [Expressions (DAX) reference](docs/guide/expressions.md)
-- [DAX tooling](docs/guide/tooling.md): language service, formatter, dependency explanation
-- [Visuals reference](docs/guide/visuals.md): every visual, its data roles and format options
-- [Slicing, filtering and interactions](docs/guide/interactions.md)
-- [Theming and formatting](docs/guide/theming.md)
-- [Studio (report editor)](docs/guide/studio.md)
-- [React](docs/guide/react.md)
-- [Custom visuals](docs/guide/custom-visuals.md)
-- [AI: ask, explain, insights, agents](docs/guide/ai.md)
-- [Web components, Vue, Svelte, Angular](docs/guide/frameworks.md)
-- [Report files and version control](docs/guide/files.md)
-- [Server: headless rendering, alerts, schedules](docs/guide/server.md)
-- [Collaboration: co-editing, presence, comments](docs/guide/collab.md)
-- [Plugins: signed visuals, themes, connectors](docs/guide/plugins.md)
-- [Connectors and live data](docs/guide/connectors.md): CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh
-- [SQL pushdown: DuckDB, Postgres, SQLite](docs/guide/sql.md)
-- [Performance and scale](docs/guide/performance.md): the fast query path, rendering at scale, the worker engine, benchmarks
-- [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
+- [Getting started](https://prismbi-js.github.io/docs/getting-started.html)
+- [Transforms: clean and reshape data](https://prismbi-js.github.io/docs/transforms.html)
+- [Importing Power BI projects (.pbip)](https://prismbi-js.github.io/docs/powerbi.html)
+- [Data modeling](https://prismbi-js.github.io/docs/data-model.html): tables, relationships, measures, calculated columns, date tables
+- [Advanced modeling](https://prismbi-js.github.io/docs/advanced-modeling.html): relationships, calculation groups, parameters, hierarchies, RLS
+- [Expressions (DAX) reference](https://prismbi-js.github.io/docs/expressions.html)
+- [DAX tooling](https://prismbi-js.github.io/docs/tooling.html): language service, formatter, dependency explanation
+- [Visuals reference](https://prismbi-js.github.io/docs/visuals.html): every visual, its data roles and format options
+- [Slicing, filtering and interactions](https://prismbi-js.github.io/docs/interactions.html)
+- [Theming and formatting](https://prismbi-js.github.io/docs/theming.html)
+- [Studio (report editor)](https://prismbi-js.github.io/docs/studio.html)
+- [React](https://prismbi-js.github.io/docs/react.html)
+- [Custom visuals](https://prismbi-js.github.io/docs/custom-visuals.html)
+- [AI: ask, explain, insights, agents](https://prismbi-js.github.io/docs/ai.html)
+- [Web components, Vue, Svelte, Angular](https://prismbi-js.github.io/docs/frameworks.html)
+- [Report files and version control](https://prismbi-js.github.io/docs/files.html)
+- [Server: headless rendering, alerts, schedules](https://prismbi-js.github.io/docs/server.html)
+- [Collaboration: co-editing, presence, comments](https://prismbi-js.github.io/docs/collab.html)
+- [Plugins: signed visuals, themes, connectors](https://prismbi-js.github.io/docs/plugins.html)
+- [Connectors and live data](https://prismbi-js.github.io/docs/connectors.html): CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh
+- [SQL pushdown: DuckDB, Postgres, SQLite](https://prismbi-js.github.io/docs/sql.html)
+- [Performance and scale](https://prismbi-js.github.io/docs/performance.html): the fast query path, rendering at scale, the worker engine, benchmarks
+- [Architecture](https://github.com/prismbi-js/prismbi/blob/master/docs/ARCHITECTURE.md) · [Roadmap](https://github.com/prismbi-js/prismbi/blob/master/docs/ROADMAP.md) · [Contributing](https://github.com/prismbi-js/prismbi/blob/master/CONTRIBUTING.md)
 
 ## Develop
 

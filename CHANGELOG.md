@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1 (2026-10-19)
+
+- **New home:** source at https://github.com/prismbi-js/prismbi, docs and live demo at https://prismbi-js.github.io/. The package `repository`, `homepage` and `bugs` links point there.
+- **README:** links and images are absolute, so they work on npm.
+- **Site:** a shared menu on every page (demo, docs, playground, Studio, gallery, web components, performance); docs links to files outside the guides open on GitHub; the docs fit phone screens.
+
 ## 0.9.0 (2026-10-19): Phases 7, 8 and 9
 
 - **Excel export:** `report.exportXlsx({ pages })` / `toXlsx()` (one sheet per visual, toolbar **Export Excel**), `visual.exportXlsx()` / `toXlsx()` (visual menu **Export data · Excel**), and `buildXlsx`, `resultToSheet`, `excelFormat`, `XLSX_MIME` from the core. Typed cells, format strings as Excel number formats, frozen bold header with filters; a dependency-free writer loaded on demand.
