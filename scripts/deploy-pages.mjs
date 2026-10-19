@@ -3,7 +3,7 @@
 // No CI: run it by hand. `node scripts/deploy-pages.mjs --dry` builds into node_modules/.pages/site and stops before committing.
 // Served from https://prismbi-js.github.io/ (docs at /docs/). The source lives in prismbi-js/prismbi; the built site in
 // prismbi-js/prismbi-js.github.io, which GitHub serves at the domain root.
-import { cpSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -27,12 +27,15 @@ run('npx', ['vite', 'build', '--config', 'examples/vite.config.ts', '--outDir', 
 // 3. the static docs (relative links, so they work under any base) and no Jekyll processing
 cpSync(join(root, 'examples', 'docs'), join(site, 'docs'), { recursive: true });
 writeFileSync(join(site, '.nojekyll'), '');
-// old addresses (the repo's first Pages URL was …/PrismBI/) redirect to the root
-const redirect = '<!doctype html><meta charset="utf-8"><title>PrismBI</title><meta http-equiv="refresh" content="0; url=/"><link rel="canonical" href="/"><a href="/">PrismBI</a>';
-for (const dir of ['prismbi', 'PrismBI']) {
-  mkdirSync(join(site, dir), { recursive: true });
-  writeFileSync(join(site, dir, 'index.html'), redirect);
-}
+// 404 page: old addresses (the first Pages site was …/PrismBI/…) redirect to the same page at the root, in any letter
+// case (Pages paths are case-sensitive, Windows folders are not, so folders can't cover both); anything else gets a
+// not-found page with the site menu
+writeFileSync(join(site, '404.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Page not found · PrismBI</title>
+<script>const m = /^\\/prismbi(\\/.*)?$/i.exec(location.pathname); if (m) location.replace((m[1] || '/') + location.search + location.hash);</script>
+<style>body{margin:0;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;background:#14171c;color:#e4e7ec}main{max-width:560px;margin:15vh auto;padding:0 16px}a{color:#6aa0ff}</style>
+<script type="module" src="/docs/site-nav.js"></script></head>
+<body><main><h1>Page not found</h1><p>Try the <a href="/">demo</a>, the <a href="/docs/">docs</a> or the <a href="/playground.html">playground</a>.</p></main></body></html>`);
 console.log(`\nSite built in ${site}`);
 if (dry) process.exit(0);
 
