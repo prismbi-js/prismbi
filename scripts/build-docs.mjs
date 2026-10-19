@@ -3,19 +3,27 @@
 // Code blocks fenced as ```js playground get a "Run" link that opens them in /playground.html.
 // Zero dependencies: a small Markdown renderer covering what the guides use.
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const guideDir = join(root, 'docs', 'guide');
 const out = join(root, 'examples', 'docs');
-const REPO = 'https://github.com/prismbi-js/prismbi';
-const NPM = 'https://www.npmjs.com/package/@prismbi/prismbi';
 
 // reading order (the README's), then any other guide alphabetically
 const ORDER = ['getting-started', 'data-model', 'expressions', 'advanced-modeling', 'tooling', 'visuals', 'interactions', 'theming', 'studio', 'react', 'frameworks', 'custom-visuals', 'ai', 'transforms', 'connectors', 'sql', 'performance', 'files', 'server', 'collab', 'plugins', 'powerbi'];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Links between guides become site pages; links to other repo files (../ROADMAP.md, ../../src/…) go to GitHub.
+const REPO_BLOB = 'https://github.com/prismbi-js/prismbi/blob/master';
+function siteHref(href) {
+  if (/^([a-z]+:|#)/i.test(href)) return href;
+  const [path, hash = ''] = href.split(/(?=#)/);
+  const file = posix.normalize(posix.join('docs/guide', path));
+  if (file.startsWith('docs/guide/') && file.endsWith('.md') && !file.slice(11).includes('/')) return `${file.slice(11, -3)}.html${hash}`;
+  return `${REPO_BLOB}/${file}${hash}`;
+}
+
 export const slug = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 
 function inline(text) {
@@ -26,7 +34,7 @@ function inline(text) {
     .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => `<img src="${src.replace(/^\.\.\/images\//, 'images/')}" alt="${alt}" loading="lazy">`)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^\w*])\*([^*\s][^*]*)\*(?!\w)/g, '$1<em>$2</em>')
-    .replace(/(?<!<img[^>]*)\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => `<a href="${esc(href.replace(/^(?!https?:)([\w./-]+)\.md(#.*)?$/, (_m, p, h) => `${p.split('/').pop()}.html${h ?? ''}`))}">${label}</a>`);
+    .replace(/(?<!<img[^>]*)\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => `<a href="${esc(siteHref(href))}">${label}</a>`);
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[Number(i)])}</code>`);
 }
 
@@ -145,14 +153,14 @@ const CSS = `
 :root{--bg:#fff;--fg:#1d2330;--fg2:#5b6475;--line:#e3e6ec;--side:#f6f7f9;--accent:#2f6fde;--code:#f3f4f7;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#14171c;--fg:#e4e7ec;--fg2:#9aa3b2;--line:#2a2f38;--side:#191d23;--accent:#6aa0ff;--code:#1e232b;color-scheme:dark}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}
-nav{background:var(--side);border-right:1px solid var(--line);padding:16px;position:sticky;top:0;height:100vh;overflow:auto}
-nav .brand{font-weight:700;font-size:16px;display:block;margin-bottom:12px;color:var(--fg);text-decoration:none}
-nav input{width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;margin-bottom:10px}
-nav ul{list-style:none;margin:0;padding:0}
-nav li a{display:block;padding:4px 8px;border-radius:6px;color:var(--fg2);text-decoration:none;font-size:14px}
-nav li a:hover,nav li a[aria-current]{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--fg)}
-nav .results a small{display:block;color:var(--fg2);font-size:12px}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;grid-template-columns:260px minmax(0,1fr);min-height:calc(100vh - 40px)}
+.guides{background:var(--side);border-right:1px solid var(--line);padding:16px;position:sticky;top:40px;height:calc(100vh - 40px);overflow:auto}
+.guides .brand{font-weight:700;font-size:16px;display:block;margin-bottom:12px;color:var(--fg);text-decoration:none}
+.guides input{width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;margin-bottom:10px}
+.guides ul{list-style:none;margin:0;padding:0}
+.guides li a{display:block;padding:4px 8px;border-radius:6px;color:var(--fg2);text-decoration:none;font-size:14px}
+.guides li a:hover,.guides li a[aria-current]{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--fg)}
+.guides .results a small{display:block;color:var(--fg2);font-size:12px}
 main{padding:32px 48px 80px;max-width:920px}
 h1{font-size:30px;margin:0 0 16px}h2{margin-top:36px;padding-top:8px;border-top:1px solid var(--line)}h3{margin-top:26px}
 .anchor{opacity:0;text-decoration:none;color:var(--fg2);font-weight:400}h2:hover .anchor,h3:hover .anchor{opacity:1}
@@ -168,7 +176,7 @@ blockquote{margin:14px 0;padding:8px 14px;border-left:3px solid var(--accent);co
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:0;list-style:none}
 .cards a{display:block;padding:14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--fg)}.cards a:hover{border-color:var(--accent)}
 .cards small{display:block;color:var(--fg2);margin-top:4px}
-@media (max-width:760px){body{grid-template-columns:1fr}nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding:20px 16px 60px}}
+@media (max-width:760px){body{grid-template-columns:minmax(0,1fr)}.guides{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding:20px 16px 60px}}
 `;
 
 const SEARCH = `
@@ -184,11 +192,11 @@ res.hidden=false;list.hidden=true});
 function page(title, body, nav, current) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · PrismBI docs</title><link rel="stylesheet" href="docs.css"></head>
-<body><nav aria-label="Guides"><a class="brand" href="index.html">PrismBI docs</a>
+<title>${esc(title)} · PrismBI docs</title><link rel="stylesheet" href="docs.css"><script type="module" src="site-nav.js"></script></head>
+<body><nav class="guides" aria-label="Guides"><a class="brand" href="index.html">PrismBI docs</a>
 <input id="q" type="search" placeholder="Search the guides" aria-label="Search the guides">
 <ul id="results" class="results" hidden></ul>
-<ul id="nav-list">${nav.map((g) => `<li><a href="${g.file}.html"${g.file === current ? ' aria-current="page"' : ''}>${esc(g.title)}</a></li>`).join('')}<li><a href="../playground.html">▶ Playground</a></li><li><a href="../index.html">Live demo</a></li><li><a href="${REPO}">GitHub</a></li><li><a href="${NPM}">npm</a></li></ul></nav>
+<ul id="nav-list">${nav.map((g) => `<li><a href="${g.file}.html"${g.file === current ? ' aria-current="page"' : ''}>${esc(g.title)}</a></li>`).join('')}</ul></nav>
 <main>${body}</main><script>${SEARCH}</script></body></html>`;
 }
 
@@ -199,6 +207,7 @@ export function buildDocs() {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'docs.css'), CSS);
+  cpSync(join(root, 'examples', 'site-nav.js'), join(out, 'site-nav.js')); // the shared site menu
   const images = join(root, 'docs', 'images');
   if (existsSync(images)) cpSync(images, join(out, 'images'), { recursive: true });
   const search = [];
