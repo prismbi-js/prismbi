@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url';
 const src = (p: string) => fileURLToPath(new URL(`../src/${p}`, import.meta.url));
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
+// PRISMBI_BASE is set by scripts/deploy-pages.mjs for the GitHub Pages build (served from /PrismBI/); dev keeps /.
 export default defineConfig({
   root: here('.'),
+  base: process.env.PRISMBI_BASE ?? '/',
   resolve: {
     alias: [
       { find: /^@prismbi\/prismbi$/, replacement: src('index.ts') },
@@ -26,6 +28,6 @@ export default defineConfig({
       { find: /^@prismbi\/prismbi\/powerbi$/, replacement: src('powerbi.ts') },
     ],
   },
-  build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html'), perf: here('./perf.html'), elements: here('./elements.html'), gallery: here('./gallery.html') } } },
+  build: { rollupOptions: { input: { main: here('./index.html'), studio: here('./studio.html'), perf: here('./perf.html'), elements: here('./elements.html'), gallery: here('./gallery.html'), playground: here('./playground.html') } } },
   server: { port: 5173, open: false },
 });

@@ -40,14 +40,11 @@ Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forw
 
 Agreed on 2026-10-17 to be done later, in this order. Before starting, check with any other session working in the repo and claim files (two sessions edited the same tree on 2026-10-17).
 
-### 1. Docs site and playground on GitHub Pages
+### 1. Docs site and playground on GitHub Pages (done 2026-10-19)
 
-- **Build:** add multi-page inputs to `examples/vite.config.ts` (`index`, `studio`, `perf`, `elements`, `gallery`, `playground`), and set `base: '/PrismBI/'` only for the Pages build (an env flag), so `npm run dev` keeps `/`.
-- **Docs:** run `scripts/build-docs.mjs` first, so `examples/docs/` (with `docs/images`) goes into the build.
-- **Publish without CI** (the owner wants no workflow): a new `scripts/deploy-pages.mjs` builds into a temp folder, commits it to an orphan `gh-pages` branch through a git worktree, and pushes.
-- **Turn Pages on once:** Settings › Pages › branch `gh-pages`. The GitHub CLI isn't installed here, so the owner does this in the browser.
-- **Check:** links in the generated docs are relative; the playground loads `docs/guide/*.md` through `import.meta.glob` (bundled at build time); the perf page's 1M-row option still works.
-- **Outward-facing:** confirm with the owner before the first push.
+- `npm run deploy:pages` (`scripts/deploy-pages.mjs`) builds the docs, then the Vite pages with `PRISMBI_BASE=/PrismBI/`, copies `examples/docs/` to `docs/`, and pushes the result to the orphan `gh-pages` branch through a worktree. `--dry` builds into `node_modules/.pages/site` only. No CI; redeploy by hand after doc or demo changes.
+- Live at https://santhoshkumarhari.github.io/PrismBI/ (docs at `/docs/`), once Pages is turned on in Settings › Pages › branch `gh-pages`.
+- The README links the live site; the npm page picks that up with the next published version.
 
 ### 2. Real-world validation
 
