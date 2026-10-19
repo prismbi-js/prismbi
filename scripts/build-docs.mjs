@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const guideDir = join(root, 'docs', 'guide');
 const out = join(root, 'examples', 'docs');
+const REPO = 'https://github.com/prismbi-js/prismbi';
+const NPM = 'https://www.npmjs.com/package/@prismbi/prismbi';
 
 // reading order (the README's), then any other guide alphabetically
 const ORDER = ['getting-started', 'data-model', 'expressions', 'advanced-modeling', 'tooling', 'visuals', 'interactions', 'theming', 'studio', 'react', 'frameworks', 'custom-visuals', 'ai', 'transforms', 'connectors', 'sql', 'performance', 'files', 'server', 'collab', 'plugins', 'powerbi'];
@@ -186,7 +188,7 @@ function page(title, body, nav, current) {
 <body><nav aria-label="Guides"><a class="brand" href="index.html">PrismBI docs</a>
 <input id="q" type="search" placeholder="Search the guides" aria-label="Search the guides">
 <ul id="results" class="results" hidden></ul>
-<ul id="nav-list">${nav.map((g) => `<li><a href="${g.file}.html"${g.file === current ? ' aria-current="page"' : ''}>${esc(g.title)}</a></li>`).join('')}<li><a href="../playground.html">▶ Playground</a></li></ul></nav>
+<ul id="nav-list">${nav.map((g) => `<li><a href="${g.file}.html"${g.file === current ? ' aria-current="page"' : ''}>${esc(g.title)}</a></li>`).join('')}<li><a href="../playground.html">▶ Playground</a></li><li><a href="../index.html">Live demo</a></li><li><a href="${REPO}">GitHub</a></li><li><a href="${NPM}">npm</a></li></ul></nav>
 <main>${body}</main><script>${SEARCH}</script></body></html>`;
 }
 

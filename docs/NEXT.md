@@ -1,6 +1,6 @@
 # Where work stopped (handoff)
 
-Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi-js.github.io). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
+Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
 
 ## State
 
@@ -42,8 +42,8 @@ Agreed on 2026-10-17 to be done later, in this order. Before starting, check wit
 
 ### 1. Docs site and playground on GitHub Pages (done 2026-10-19)
 
-- `npm run deploy:pages` (`scripts/deploy-pages.mjs`) builds the docs, then the Vite pages, copies `examples/docs/` to `docs/`, and pushes the result to the orphan `gh-pages` branch through a worktree. `--dry` builds into `node_modules/.pages/site` only. No CI; redeploy by hand after doc or demo changes.
-- Live at https://prismbi-js.github.io/ (docs at `/docs/`). The repo lives in the GitHub organization `prismbi-js` as `prismbi-js.github.io` (moved from santhoshkumarhari/PrismBI on 2026-10-19); Pages serves the `gh-pages` branch.
+- `npm run deploy:pages` (`scripts/deploy-pages.mjs`) builds the docs, then the Vite pages, copies `examples/docs/` to `docs/`, and pushes the result to the site repo's `main`. `--dry` builds into `node_modules/.pages/site` only. No CI; redeploy by hand after doc or demo changes.
+- Live at https://prismbi-js.github.io/ (docs at `/docs/`). Source: https://github.com/prismbi-js/prismbi (moved from santhoshkumarhari/PrismBI on 2026-10-19). The built site is pushed to a separate repo, `prismbi-js/prismbi-js.github.io` (branch `main`), which Pages serves at the root.
 - The README links the live site; the npm page picks that up with the next published version.
 
 ### 2. Real-world validation

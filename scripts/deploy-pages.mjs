@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Builds the demo, studio, playground and docs site for GitHub Pages and pushes it to the orphan `gh-pages` branch.
-// No CI: run it by hand. `node scripts/deploy-pages.mjs --dry` builds into .pages/site and stops before committing.
-// Served from https://prismbi-js.github.io/ (docs at /docs/); the repo is prismbi-js/prismbi-js.github.io, so the site is at the root.
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+// Builds the demo, studio, playground and docs site for GitHub Pages and pushes it to the site repo (SITE_REPO, branch main).
+// No CI: run it by hand. `node scripts/deploy-pages.mjs --dry` builds into node_modules/.pages/site and stops before committing.
+// Served from https://prismbi-js.github.io/ (docs at /docs/). The source lives in prismbi-js/prismbi; the built site in
+// prismbi-js/prismbi-js.github.io, which GitHub serves at the domain root.
+import { cpSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -12,6 +13,7 @@ const work = join(root, 'node_modules', '.pages');
 const site = join(work, 'site');
 const tree = join(work, 'tree');
 const dry = process.argv.includes('--dry');
+const SITE_REPO = 'https://github.com/prismbi-js/prismbi-js.github.io.git';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, stdio: 'inherit', shell: process.platform === 'win32', ...opts });
 const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
@@ -28,24 +30,16 @@ writeFileSync(join(site, '.nojekyll'), '');
 console.log(`\nSite built in ${site}`);
 if (dry) process.exit(0);
 
-// 4. commit to gh-pages through a worktree (created as an orphan branch the first time) and push
+// 4. commit to the site repo's main branch (a fresh clone each time; it holds only the built site) and push
 const source = git(['rev-parse', '--short', 'HEAD']);
-const remoteHas = git(['ls-remote', '--heads', 'origin', 'gh-pages']) !== '';
-if (remoteHas) git(['fetch', 'origin', 'gh-pages:gh-pages']);
-git(['worktree', 'prune']);
-if (remoteHas || git(['branch', '--list', 'gh-pages']) !== '') git(['worktree', 'add', tree, 'gh-pages']);
-else git(['worktree', 'add', '--orphan', '-b', 'gh-pages', tree]);
-try {
-  for (const f of readdirSync(tree)) if (f !== '.git') rmSync(join(tree, f), { recursive: true, force: true });
-  mkdirSync(tree, { recursive: true });
-  cpSync(site, tree, { recursive: true });
-  git(['add', '-A'], tree);
-  if (git(['status', '--porcelain'], tree) === '') console.log('No changes to deploy.');
-  else {
-    git(['commit', '-m', `deploy: site from ${source}`], tree);
-    git(['push', 'origin', 'gh-pages'], tree);
-    console.log('Pushed gh-pages. https://prismbi-js.github.io/');
-  }
-} finally {
-  git(['worktree', 'remove', '--force', tree]);
+git(['clone', '--depth', '1', SITE_REPO, tree]);
+for (const f of readdirSync(tree)) if (f !== '.git') rmSync(join(tree, f), { recursive: true, force: true });
+cpSync(site, tree, { recursive: true });
+git(['add', '-A'], tree);
+if (git(['status', '--porcelain'], tree) === '') console.log('No changes to deploy.');
+else {
+  git(['commit', '-m', `deploy: site from prismbi-js/prismbi@${source}`], tree);
+  git(['push', 'origin', 'HEAD:main'], tree);
+  console.log('Pushed the site. https://prismbi-js.github.io/');
 }
+rmSync(tree, { recursive: true, force: true });
