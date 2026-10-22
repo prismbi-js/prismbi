@@ -47,6 +47,7 @@ const QUERIES: [string, QuerySpec, number][] = [
   ['product × region, CALCULATE filter', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['C1 Sales'], filters: year }, 300],
   ['day × YTD (time intelligence)', { groupBy: ['Date[Date]'], values: ['YTD'], filters: year }, 150],
   ['month × last year, growth', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Total Sales', 'LY', 'Growth'], totals: true }, 300],
+  ['product × month, YTD and last year', { groupBy: ['Product[Name]', 'Date[MonthNumber]'], values: ['Total Sales', 'YTD', 'LY'], filters: year }, 600],
 ];
 
 it('scale benchmark', () => {

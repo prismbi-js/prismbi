@@ -449,23 +449,84 @@ interface Prepared {
   predTests: (((r: number) => boolean) | null)[];
 }
 
+/** Fold one aggregation list's values per slot: aggregation i of slot s lives at i * S + s; negative slots are skipped. */
+function accumulate(prep: Prepared, slot: Int32Array, S: number, list: ArrayLike<number> | null) {
+  const { aggs, cols, nums, rowFns, predTests } = prep;
+  const count = slot.length;
+  const n = aggs.length * S;
+  const sum = new Float64Array(n);
+  const cnt = new Float64Array(n);
+  const mn = new Float64Array(n).fill(Infinity);
+  const mx = new Float64Array(n).fill(-Infinity);
+  aggs.forEach((a, i) => {
+    const o = i * S;
+    const pt = predTests[i];
+    const v = nums[i];
+    if (v && !pt) {
+      // the common case, a plain column aggregation: one tight loop
+      for (let j = 0; j < count; j++) {
+        const p = slot[j];
+        if (p < 0) continue;
+        const x = v[list ? list[j] : j];
+        if (x !== x) continue;
+        const q = o + p;
+        sum[q] += x;
+        cnt[q]++;
+        if (x < mn[q]) mn[q] = x;
+        if (x > mx[q]) mx[q] = x;
+      }
+      return;
+    }
+    const col = cols[i];
+    const fn = rowFns[i];
+    for (let j = 0; j < count; j++) {
+      const p = slot[j];
+      if (p < 0) continue;
+      const r = list ? list[j] : j;
+      if (pt && !pt(r)) continue;
+      const q = o + p;
+      if (a.kind === 'rows') cnt[q]++;
+      else if (a.kind === 'count') {
+        const x = col![r];
+        if (x !== null && x !== '') cnt[q]++;
+      } else {
+        // unlike stored columns, NaN from a row expression is a computed value (0/0), not BLANK
+        const x = fn ? fn(r) : v![r];
+        if (x === null || (!fn && x !== x)) continue;
+        sum[q] += x;
+        cnt[q]++;
+        if (x < mn[q]) mn[q] = x;
+        if (x > mx[q]) mx[q] = x;
+      }
+    }
+  });
+  return { sum, cnt, mn, mx };
+}
+
+type Partials = ReturnType<typeof accumulate>;
+
 /**
  * Per-date partial aggregates for the time-intelligence nodes, in one pass over the fact rows the date filters don't
  * restrict. Each group's date set comes from its visible dates by the same rules as the evaluator (dax/timeIntel) and
- * combines the partials of those dates: period-to-date and parallel periods are ranges of the sorted dates. Null
- * when the query doesn't fit.
+ * combines the partials of those dates: period-to-date and parallel periods are ranges of the sorted dates. Groupings
+ * by columns outside the date table (product × month) keep partials per group and date. Null when the query doesn't
+ * fit.
  */
-function timeIntelligence(model: DataModel, fact: string, nodes: TiNode[], mainAggs: Agg[], groupCols: ColumnRef[], base: Filter[], highlight: Filter[] | undefined, prepare: (aggs: Agg[]) => Prepared | null) {
+function timeIntelligence(model: DataModel, fact: string, nodes: TiNode[], mainAggs: Agg[], groupCols: ColumnRef[], keyCodes: Int32Array[], dicts: CellValue[][], base: Filter[], highlight: Filter[] | undefined, prepare: (aggs: Agg[]) => Prepared | null) {
   const dt = nodes[0].date.table;
   const dc = nodes[0].date.column;
-  if (highlight || nodes.some((n) => n.date.table !== dt || n.date.column !== dc) || groupCols.some((c) => c.table !== dt) || fact === dt) return null;
+  if (highlight || nodes.some((n) => n.date.table !== dt || n.date.column !== dc) || fact === dt) return null;
   // filters flowing back to the date table would change which dates are visible
   if (model.relationships().some((r) => r.active && r.crossFilter === 'both')) return null;
   const map = model.relatedRows(fact, dt);
   if (!map) return null;
+  const exp = model.expanded(dt);
+  // group columns outside the date table split the partials; they must not filter the dates themselves
+  const other = groupCols.flatMap((c, j) => (c.table === dt ? [] : [j]));
+  if (other.some((j) => exp.has(groupCols[j].table))) return null;
+  const dateCols = groupCols.flatMap((c, j) => (c.table === dt ? [j] : []));
   // the query's other aggregations come from the same partials, summed over each group's own dates, when they
   // merge (not distinct counts) and the date table's filters are only its own
-  const exp = model.expanded(dt);
   const withMain = mainAggs.length > 0 && exp.size === 1 && !mainAggs.some((a) => a.kind === 'distinct');
   const sets: { aggs: Agg[]; rule: TiNode['rule'] | { fn: 'same' } }[] = nodes.map((n) => ({ aggs: n.sub.aggs, rule: n.rule }));
   if (withMain) sets.push({ aggs: mainAggs, rule: { fn: 'same' } });
@@ -489,74 +550,84 @@ function timeIntelligence(model: DataModel, fact: string, nodes: TiNode[], mainA
     }
     return lo;
   };
+  const P = sorted.length;
+  // fact rows without a dated date-table row: only a date set nothing restricts (no date filter or group) sees them
+  const ORPHAN = P;
+  const S1 = P + 1;
 
   // the date set replaces every filter within the date table's expanded table (CALCULATE's clearTable)
   const kept = base.filter((f) => f.kind === 'rel' || !(f.kind === 'rows' ? exp.has(f.table) : f.columns.every((c) => exp.has(c.table))));
+  const datesFiltered = kept.length < base.length;
   // with nothing left to filter (and no security roles) every fact row counts: no row list needed
   const list = kept.length || model.activeRoleNames.length ? model.rowsOf(fact, kept) : null;
   const count = list ? list.length : map.length;
   const at = new Int32Array(count); // date position of each counted row
   for (let j = 0; j < count; j++) {
     const d = map[list ? list[j] : j];
-    at[j] = d < 0 ? -1 : rowPos[d];
+    at[j] = d < 0 || rowPos[d] < 0 ? ORPHAN : rowPos[d];
   }
-  // partials per node: aggregation i of date position p lives at i * P + p
-  const P = sorted.length;
-  const parts = preps.map((prep) => {
-    const { aggs, cols, nums, rowFns, predTests } = prep!;
-    const n = aggs.length * P;
-    const sum = new Float64Array(n);
-    const cnt = new Float64Array(n);
-    const mn = new Float64Array(n).fill(Infinity);
-    const mx = new Float64Array(n).fill(-Infinity);
-    aggs.forEach((a, i) => {
-      const o = i * P;
-      const pt = predTests[i];
-      const v = nums[i];
-      if (v && !pt) {
-        // the common case, a plain column aggregation: one tight loop
-        for (let j = 0; j < count; j++) {
-          const p = at[j];
-          if (p < 0) continue;
-          const x = v[list ? list[j] : j];
-          if (x !== x) continue;
-          const q = o + p;
-          sum[q] += x;
-          cnt[q]++;
-          if (x < mn[q]) mn[q] = x;
-          if (x > mx[q]) mx[q] = x;
-        }
-        return;
-      }
-      const col = cols[i];
-      const fn = rowFns[i];
-      for (let j = 0; j < count; j++) {
-        const p = at[j];
-        if (p < 0) continue;
-        const r = list ? list[j] : j;
-        if (pt && !pt(r)) continue;
-        const q = o + p;
-        if (a.kind === 'rows') cnt[q]++;
-        else if (a.kind === 'count') {
-          const x = col![r];
-          if (x !== null && x !== '') cnt[q]++;
-        } else {
-          // unlike stored columns, NaN from a row expression is a computed value (0/0), not BLANK
-          const x = fn ? fn(r) : v![r];
-          if (x === null || (!fn && x !== x)) continue;
-          sum[q] += x;
-          cnt[q]++;
-          if (x < mn[q]) mn[q] = x;
-          if (x > mx[q]) mx[q] = x;
-        }
-      }
-    });
-    return { sum, cnt, mn, mx };
-  });
 
-  // visible dates per group (and for the totals): the date-table rows under the query's filters
-  const keyOf = (keys: CellValue[]) => keys.map((v) => String(valueKey(v))).join('');
-  const groupVals = groupCols.map((c) => dtab.column(c.column).values);
+  // with groups outside the date table, each counted row feeds the cell of its group key and date. Keys are
+  // mixed-radix numbers over the codes (BLANK = digit 0); key `space` collects rows with no related group row.
+  const radix = other.map((j) => dicts[j].length + 1);
+  const space = radix.reduce((a, b) => a * b, 1);
+  let cellOf: ((k: number, p: number) => number) | null = null;
+  let slot = at;
+  let S = S1;
+  const cellPos: number[] = [];
+  if (other.length) {
+    if ((space + 1) * S1 > Number.MAX_SAFE_INTEGER) return null;
+    const oc = other.map((j) => keyCodes[j]);
+    const dense = (space + 1) * S1 <= DENSE_GROUPS ? new Int32Array((space + 1) * S1).fill(-1) : null;
+    const sparse = dense ? null : new Map<number, number>();
+    slot = new Int32Array(count);
+    for (let j = 0; j < count; j++) {
+      const r = list ? list[j] : j;
+      let k = 0;
+      for (let x = 0; x < oc.length; x++) {
+        const c = oc[x][r];
+        if (c === UNMATCHED) {
+          k = space;
+          break;
+        }
+        k = k * radix[x] + c + 1;
+      }
+      const key = k * S1 + at[j];
+      let cell = dense ? dense[key] : (sparse!.get(key) ?? -1);
+      if (cell < 0) {
+        cell = cellPos.length;
+        cellPos.push(at[j]);
+        if (dense) dense[key] = cell;
+        else sparse!.set(key, cell);
+      }
+      slot[j] = cell;
+    }
+    S = cellPos.length;
+    cellOf = (k, p) => (k !== k ? -1 : dense ? dense[k * S1 + p] : (sparse!.get(k * S1 + p) ?? -1));
+  }
+  const parts = preps.map((prep) => accumulate(prep!, slot, S, list));
+  // the totals' partials per date: the cells folded together
+  const totals: Partials[] = cellOf
+    ? parts.map((c, s) => {
+        const A = sets[s].aggs.length;
+        const t = { sum: new Float64Array(A * S1), cnt: new Float64Array(A * S1), mn: new Float64Array(A * S1).fill(Infinity), mx: new Float64Array(A * S1).fill(-Infinity) };
+        for (let i = 0; i < A; i++)
+          for (let e = 0; e < S; e++) {
+            const q = i * S + e;
+            if (!c.cnt[q]) continue;
+            const u = i * S1 + cellPos[e];
+            t.sum[u] += c.sum[q];
+            t.cnt[u] += c.cnt[q];
+            if (c.mn[q] < t.mn[u]) t.mn[u] = c.mn[q];
+            if (c.mx[q] > t.mx[u]) t.mx[u] = c.mx[q];
+          }
+        return t;
+      })
+    : parts;
+
+  // visible dates per date-table key (and for the totals): the date-table rows under the query's filters
+  const keyOf = (keys: CellValue[]) => keys.map((v) => String(valueKey(v))).join('');
+  const groupVals = dateCols.map((j) => dtab.column(groupCols[j].column).values);
   const visible = new Map<string, number[]>();
   const all: number[] = [];
   for (const r of model.rowsOf(dt, base)) {
@@ -568,48 +639,74 @@ function timeIntelligence(model: DataModel, fact: string, nodes: TiNode[], mainA
     if (list) list.push(p);
     else visible.set(k, [p]);
   }
-  const values = (ps: number[] | undefined): { ti: CellValue[]; main?: CellValue[] } => {
-    const out = sets.map((n, k) => {
+  // each set's date positions, resolved once per date-table key: every product of a month shares the month's
+  const resolved = sets.map(() => new Map<string, number[]>());
+  const totalPositions: (number[] | undefined)[] = [];
+  const positions = (s: number, ps: number[] | undefined, unrestricted: boolean): number[] => {
+    const out: number[] = [];
+    if (!ps?.length) return out;
+    let first = Infinity;
+    let last = -Infinity;
+    for (const p of ps) (first = Math.min(first, p)), (last = Math.max(last, p));
+    const rule = sets[s].rule;
+    if (rule.fn === 'same') {
+      out.push(...new Set(ps));
+      if (unrestricted) out.push(ORPHAN);
+    } else if (rule.fn === 'td') for (let p = lowerBound(periodStart(new Date(sorted[last]), rule.period, rule.yearEnd).getTime()); p <= last; p++) out.push(p);
+    else if (rule.fn === 'parallel') {
+      const [start, end] = parallelPeriod(new Date(sorted[first]), rule.unit, rule.n);
+      for (let p = lowerBound(start.getTime()); p < sorted.length && sorted[p] <= end.getTime(); p++) out.push(p);
+    } else
+      for (const d of shiftDates(
+        ps.map((p) => new Date(sorted[p])),
+        existing,
+        rule.n,
+        rule.unit,
+      ))
+        out.push(posOf.get(d.getTime())!);
+    return out;
+  };
+  /** `k` is the group key over the columns outside the date table (NaN: no rows), or null for the totals. */
+  const values = (dkey: string | null, k: number | null): { ti: CellValue[]; main?: CellValue[] } => {
+    const out = sets.map((n, s) => {
+      let ps = dkey === null ? totalPositions[s] : resolved[s].get(dkey);
+      if (!ps) {
+        ps = dkey === null ? positions(s, all, !datesFiltered) : positions(s, visible.get(dkey), !datesFiltered && !dateCols.length);
+        if (dkey === null) totalPositions[s] = ps;
+        else resolved[s].set(dkey, ps);
+      }
       const acc = new Acc(n.aggs);
-      const { sum, cnt, mn, mx } = parts[k];
+      const { sum, cnt, mn, mx } = k === null ? totals[s] : parts[s];
+      const stride = k === null ? S1 : S;
       const A = n.aggs.length;
-      const add = (p: number) => {
-        for (let i = 0, q = p; i < A; i++, q += P) {
+      for (const p of ps) {
+        const c = k === null ? p : cellOf!(k, p);
+        if (c < 0) continue;
+        for (let i = 0, q = c; i < A; i++, q += stride) {
           if (!cnt[q]) continue;
           acc.sum[i] += sum[q];
           acc.cnt[i] += cnt[q];
           if (mn[q] < acc.min[i]) acc.min[i] = mn[q];
           if (mx[q] > acc.max[i]) acc.max[i] = mx[q];
         }
-      };
-      if (ps?.length) {
-        let first = Infinity;
-        let last = -Infinity;
-        for (const p of ps) (first = Math.min(first, p)), (last = Math.max(last, p));
-        const rule = n.rule;
-        if (rule.fn === 'same') for (const p of new Set(ps)) add(p);
-        else if (rule.fn === 'td') for (let p = lowerBound(periodStart(new Date(sorted[last]), rule.period, rule.yearEnd).getTime()); p <= last; p++) add(p);
-        else if (rule.fn === 'parallel') {
-          const [start, end] = parallelPeriod(new Date(sorted[first]), rule.unit, rule.n);
-          for (let p = lowerBound(start.getTime()); p < sorted.length && sorted[p] <= end.getTime(); p++) add(p);
-        } else
-          for (const d of shiftDates(
-            ps.map((p) => new Date(sorted[p])),
-            existing,
-            rule.n,
-            rule.unit,
-          ))
-            add(posOf.get(d.getTime())!);
       }
       return acc.result(n.aggs);
     });
-    return { ti: nodes.map((n, k) => evalTree(n.tree, out[k])), main: withMain ? out[nodes.length] : undefined };
+    return { ti: nodes.map((n, s) => evalTree(n.tree, out[s])), main: withMain ? out[nodes.length] : undefined };
   };
+  const codeOf = other.map((j) => new Map(dicts[j].map((v, c) => [valueKey(v), c])));
   return {
     /** The query's own aggregations come with the groups' values (no separate pass needed). */
     merged: withMain,
-    group: (keys: CellValue[]) => values(visible.get(keyOf(keys))),
-    total: () => values(all),
+    group: (keys: CellValue[]) => {
+      let k = 0;
+      other.forEach((j, x) => {
+        const v = keys[j];
+        k = k * radix[x] + (v === null ? -1 : (codeOf[x].get(valueKey(v)) ?? NaN)) + 1;
+      });
+      return values(keyOf(dateCols.map((j) => keys[j])), other.length ? k : null);
+    },
+    total: () => values(null, null),
   };
 }
 
@@ -714,7 +811,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   const prep = prepare(plan.aggs);
   if (!prep) return null;
   const feed = feeder(prep);
-  const ti = plan.ti!.length ? timeIntelligence(model, fact, plan.ti!, plan.aggs, groupCols, base, highlight, prepare) : undefined;
+  const ti = plan.ti!.length ? timeIntelligence(model, fact, plan.ti!, plan.aggs, groupCols, kc, dicts, base, highlight, prepare) : undefined;
   if (ti === null) return null;
 
   // Group keys are mixed-radix numbers over the codes (BLANK = digit 0), so no strings are built per row. Small key

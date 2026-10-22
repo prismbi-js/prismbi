@@ -4,6 +4,7 @@ import type { QuerySpec } from '../src/index';
 import { fastGroupQuery } from '../src/data/fastQuery';
 import { groupCombos, resolveGroupField, resolveValueField } from '../src/data/query';
 import { buildModel } from '../examples/model';
+import { makeSales } from '../examples/data';
 
 const model = buildModel()
   .addMeasure('Sales QTD', 'TOTALQTD([Total Sales], Date[Date])')
@@ -51,6 +52,9 @@ const CASES: [string, QuerySpec][] = [
   ['a distinct count keeps its own pass', { groupBy: ['Date[Year]', 'Date[Quarter]'], values: ['Orders', 'Sales LY'], totals: true }],
   ['IF guards around time intelligence and plain measures', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Guarded LY', 'Small Months Sales', 'Growth Or Same'], totals: true }],
   ['SUMX under TOTALYTD', { groupBy: ['Date[MonthNumber]'], values: ['Profit YTD'], filters: y2025 }],
+  ['product × month: partials per group and date', { groupBy: ['Product[Name]', 'Date[MonthShort]'], values: ['Total Sales', 'Sales YTD', 'Sales LY', 'Growth'], filters: y2025, totals: true }],
+  ['groups outside the date table only', { groupBy: ['Product[Category]'], values: ['Total Sales', 'Sales LY', 'Sales YTD', 'Prev Quarter Units'], totals: true }],
+  ['two dimensions, a CALCULATE filter and a distinct count', { groupBy: ['Region[Country]', 'Product[Subcategory]', 'Date[Year]'], values: ['Orders', 'Bike Sales LY', 'Avg Line LY'], filters: [{ target: 'Date[Quarter]', op: 'in', values: ['Q1', 'Q3'] }], totals: true }],
 ];
 
 const norm = (v: unknown) => (v instanceof Date ? v.getTime() : typeof v === 'number' ? Number(v.toPrecision(9)) : v);
@@ -67,9 +71,26 @@ describe('time intelligence in the single-pass grouped path', () => {
     });
   }
 
-  it('falls back where it would differ: highlights, groups outside the date table, distinct counts', () => {
+  it('counts fact rows whose date is missing from the date table where no date restricts them', () => {
+    const sales = makeSales();
+    sales.push({ ...sales[0], OrderDate: new Date(2030, 0, 5), SalesAmount: 1e6 });
+    const m = buildModel(sales);
+    for (const spec of [
+      { groupBy: ['Date[Year]'], values: ['Total Sales', 'Sales LY'], totals: true },
+      { groupBy: ['Product[Category]'], values: ['Total Sales', 'Sales YTD'], totals: true },
+    ] as QuerySpec[]) {
+      setFastQuery('always');
+      const fast = m.query(spec);
+      setFastQuery('off');
+      m.evaluator.clearCache?.();
+      const slow = m.query(spec);
+      expect(fast.rows.map((r) => r.values.map(norm))).toEqual(slow.rows.map((r) => r.values.map(norm)));
+      expect(fast.totals?.map(norm)).toEqual(slow.totals?.map(norm));
+    }
+  });
+
+  it('falls back where it would differ: highlights, distinct counts', () => {
     model.addMeasure('Customers LY', 'CALCULATE(DISTINCTCOUNT(Sales[OrderNumber]), SAMEPERIODLASTYEAR(Date[Date]))');
-    expect(fastAnswers({ groupBy: ['Product[Category]'], values: ['Sales LY'] })).toBe(false);
     expect(fastAnswers({ groupBy: ['Date[Year]'], values: ['Customers LY'] })).toBe(false);
     const spec: QuerySpec = { groupBy: ['Date[Year]'], values: ['Sales LY'], highlight: [{ target: 'Region[Country]', op: 'eq', value: 'Canada' }] };
     const fast = run(spec, 'always');

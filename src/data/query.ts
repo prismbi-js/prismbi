@@ -334,8 +334,34 @@ export function groupCombos(model: DataModel, cols: ColumnRef[], ctx: Filter[], 
   };
 
   const fromAnchor = (anchor: string): CellValue[][] => {
-    const rs = cols.map((c) => resolver(model, anchor, c));
     const rows = model.rowsOf(anchor, ctx);
+    // distinct tuples by dictionary codes: a mixed-radix number per row (BLANK = digit 0) instead of a string key
+    const coded = cols.map((c) => ({ ...model.table(c.table).codes(c.column), map: c.table === anchor ? null : model.relatedRows(anchor, c.table) }));
+    const radix = coded.map((c) => c.dict.length + 1);
+    const space = radix.reduce((a, b) => a * b, 1);
+    if (space <= Number.MAX_SAFE_INTEGER && coded.every((c, j) => cols[j].table === anchor || c.map)) {
+      const dense = space <= 1 << 22 ? new Uint8Array(space) : null;
+      const seen = new Set<number>();
+      const out: CellValue[][] = [];
+      const code = (j: number, r: number) => {
+        const { codes, map } = coded[j];
+        const t = map ? map[r] : r;
+        return t < 0 ? -1 : codes[t];
+      };
+      for (const r of rows) {
+        let k = 0;
+        for (let j = 0; j < coded.length; j++) k = k * radix[j] + code(j, r) + 1;
+        if (dense ? dense[k] : seen.has(k)) continue;
+        if (dense) dense[k] = 1;
+        else seen.add(k);
+        out.push(coded.map((c, j) => {
+          const x = code(j, r);
+          return x < 0 ? null : c.dict[x];
+        }));
+      }
+      return out;
+    }
+    const rs = cols.map((c) => resolver(model, anchor, c));
     function* gen() {
       for (const r of rows) yield rs.map((f) => f(r));
     }
