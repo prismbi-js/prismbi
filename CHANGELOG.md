@@ -12,6 +12,7 @@
 - **Virtualized matrix:** above 500 visible rows (expanded children and subtotal rows count) the matrix renders only the rows in view, like the table; `format.matrix.virtualize`. Expanding or collapsing keeps the scroll position.
 - **Lighter Studio undo:** each of the 200 undo steps stores the splice between neighbouring report states instead of a full JSON snapshot (`History.stored` reports the characters held).
 - **Worker: packed columns.** `engine.addColumns(name, columns, schema?, { transfer })` sends numbers and dates as `Float64Array`s and text as dictionary codes in transferred buffers (shared when they live in a `SharedArrayBuffer`); the worker adopts them as its numeric and dictionary views. About 10× faster than `addTable` with row objects at 1M rows. `model.addColumns(name, columns, schema?)` builds a table from column arrays in process. `packColumn`, `addPackedTable`; `PortLike.postMessage` takes a transfer list.
+- **Fix (SQL): bidirectional relationships.** Filter-context SQL ignored `crossFilter: 'both'` and silently returned unfiltered dimension measures (a product count by country counted every product). Filters on the "many" side now flow back as semi-joins, matching the in-memory engine (verified on SQLite and DuckDB).
 - **Fix:** plugin signing and verification work on Node 18, which has no global `crypto` (falls back to `node:crypto` `webcrypto`).
 
 ## 0.9.1 (2026-10-19)

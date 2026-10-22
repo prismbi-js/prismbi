@@ -485,7 +485,7 @@ class ContextTranslator {
   private membership(s: Scope, table: string, row: { table: string; column: string }[], inner: CtxEntry[], cond: (y: Scope) => string): string {
     const y = this.scope(table, inner);
     const keys = row.map((c) => y.col(c));
-    const preds = [...this.applicable(table, inner).filter((e) => !e.rel).map((e) => e.build(y)), cond(y)];
+    const preds = [...this.filterPreds(table, inner, y), cond(y)];
     const lhs = row.length === 1 ? s.col(row[0]) : `(${row.map((c) => s.col(c)).join(', ')})`;
     if (this.hoistTo !== 'groups') return `${lhs} IN (SELECT ${keys.join(', ')}\n${y.from()}\nWHERE ${preds.join(' AND ')})`;
     const g = Array.from({ length: this.groupCount }, (_, i) => i);
@@ -527,11 +527,31 @@ class ContextTranslator {
     return ctx.filter((e) => this.reaches(table, e));
   }
 
+  /**
+   * The predicates that filter `table` in scope `s`: the entries reaching it along many-to-one relationships, plus,
+   * for each bidirectional relationship whose "one" side is in its expanded table, the filters that reach the "many"
+   * side but not `table`, flowing back as `key IN (SELECT foreign key FROM many side WHERE …)`.
+   */
+  filterPreds(table: string, ctx: CtxEntry[], s: Scope, seen: ReadonlySet<string> = new Set([table])): string[] {
+    const out = this.applicable(table, ctx).filter((e) => !e.rel).map((e) => e.build(s));
+    const exp = this.model.expanded(table);
+    for (const r of this.model.relationships()) {
+      if (!r.active || r.crossFilter !== 'both' || !exp.has(r.toTable) || seen.has(r.fromTable)) continue;
+      if (!ctx.some((e) => !e.rel && this.reaches(r.fromTable, e) && !this.reaches(table, e))) continue;
+      const y = this.scope(r.fromTable, ctx);
+      const inner = this.filterPreds(r.fromTable, ctx, y, new Set([...seen, r.fromTable]));
+      out.push(`${s.col({ table: r.toTable, column: r.toColumn })} IN (SELECT ${y.col({ table: r.fromTable, column: r.fromColumn })}
+${y.from()}
+WHERE ${inner.join(' AND ')})`);
+    }
+    return out;
+  }
+
   /** `(SELECT <select> FROM table … WHERE <filters in ctx that reach table>)`. */
   subquery(table: string, select: (s: Scope) => string, ctx: CtxEntry[], extra: ((s: Scope) => string)[] = []): string {
     const s = this.scope(table, ctx);
     const sel = select(s);
-    const preds = [...this.applicable(table, ctx).filter((e) => !e.rel).map((e) => e.build(s)), ...extra.map((f) => f(s))];
+    const preds = [...this.filterPreds(table, ctx, s), ...extra.map((f) => f(s))];
     return `(SELECT ${sel}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
   }
 
@@ -571,7 +591,7 @@ class ContextTranslator {
     const set = (select: (x: string) => string, more: (x: string) => string[] = () => []) => {
       const s = this.scope(date.table, ctx);
       const x = s.col(date);
-      const preds = [...this.applicable(date.table, ctx).filter((e) => !e.rel).map((e) => e.build(s)), ...more(x)];
+      const preds = [...this.filterPreds(date.table, ctx, s), ...more(x)];
       return `(SELECT ${select(x)}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
     };
     const direct = set((x) => this.shift(x, n, unit));

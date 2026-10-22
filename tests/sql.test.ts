@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqlUnsupportedError, sqlEngine, toSql } from '@prismbi/prismbi/sql';
 import type { SqlRunner } from '@prismbi/prismbi/sql';
+import { DataModel } from '@prismbi/prismbi';
 import type { CellValue, QueryResult, QuerySpec } from '@prismbi/prismbi';
 import { buildModel } from '../examples/model';
 
@@ -277,5 +278,43 @@ describe('one round trip and result cache', () => {
     await plain.query(q);
     await plain.query(q);
     expect(runs).toBe(5);
+  });
+});
+
+// a bidirectional relationship: filters on sales (dates, regions) flow back to products
+const both = (() => {
+  const m = new DataModel();
+  for (const name of ['Sales', 'Product', 'Region', 'Date']) m.addTable(name, model.table(name));
+  return m
+    .addRelationship({ from: 'Sales[ProductKey]', to: 'Product[ProductKey]', crossFilter: 'both' })
+    .addRelationship({ from: 'Sales[RegionKey]', to: 'Region[RegionKey]' })
+    .addRelationship({ from: 'Sales[OrderDate]', to: 'Date[Date]' })
+    .addMeasure('Total Sales', 'SUM(Sales[SalesAmount])')
+    .addMeasure('Product Count', 'COUNTROWS(Product)')
+    .addMeasure('Max List Price', 'MAX(Product[ListPrice])');
+})();
+const day = { target: 'Date[Date]', op: 'eq' as const, value: new Date(2025, 2, 3) };
+const BOTH_CASES: [string, QuerySpec][] = [
+  ['products sold per country on one day', { groupBy: ['Region[Country]'], values: ['Product Count', 'Max List Price'], filters: [day], totals: true }],
+  ['categories under region and date filters', { groupBy: ['Product[Category]'], values: ['Product Count', 'Total Sales'], filters: [day, { target: 'Region[Country]', op: 'eq', value: 'Canada' }] }],
+  ['products per year and region group', { groupBy: ['Date[Year]', 'Region[Group]'], values: ['Product Count'] }],
+];
+
+describe.skipIf(!sqliteOk)('sqlEngine on SQLite: bidirectional relationships', () => {
+  const e = sqlEngine(both, { run, dialect: 'sqlite', columns: { Sales: { ShipDate: 'ShipDate' } } });
+  for (const [name, spec] of BOTH_CASES) {
+    it(`matches the in-memory engine: ${name}`, async () => {
+      expectSame(await e.query(spec), both.query(spec));
+    });
+  }
+});
+
+describe('bidirectional relationships in SQL', () => {
+  it('flow filters from the many side back as a semi-join', () => {
+    const plan = toSql(both, { groupBy: ['Region[Country]'], values: ['Product Count'], filters: [day] });
+    expect(plan.mode).toBe('context');
+    expect(plan.sql).toMatch(/"ProductKey" IN \(SELECT q\d+_0\."ProductKey"\nFROM "Sales" AS q\d+_0/);
+    // without the relationship marked both, products ignore those filters (no semi-join)
+    expect(toSql(model, { groupBy: ['Region[Country]'], values: ['Product Count'], filters: [day] }).sql).not.toMatch(/"ProductKey" IN \(SELECT/);
   });
 });
