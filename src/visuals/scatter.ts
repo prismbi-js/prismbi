@@ -5,6 +5,7 @@ import { drawValueAxisY, emptyState, identityOf, interactive, markOpacity, rende
 import type { DataPointIdentity, RenderContext } from './types';
 import type { CellValue } from '../data/types';
 import { drawReferenceLines, linearFit } from './analytics';
+import { rasterOverlay } from './raster';
 
 /** Above this many points marks are painted on a canvas instead of one SVG element each... */
 const CANVAS_MIN = 3000;
@@ -166,12 +167,6 @@ function paint2d(ctx: RenderContext, canvas: HTMLCanvasElement, pts: CanvasPoint
 
 /** Lay the canvas over the SVG axes, with a grid index so tooltips, selection, the context menu and drill work. */
 function overlay(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGElement, canvas: HTMLCanvasElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, width: number, height: number): boolean {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = `position:relative;width:${width}px;height:${height}px`;
-  svg.style.display = 'block';
-  svg.replaceWith(wrap);
-  wrap.append(svg, canvas);
-
   // spatial grid for hit testing
   const cell = 24;
   const grid = new Map<number, number[]>();
@@ -200,40 +195,7 @@ function overlay(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGElement, 
         }
     return best;
   };
-  const hit = s('rect', { x: clip.x, y: clip.y, width: Math.max(0, clip.w), height: Math.max(0, clip.h), fill: 'transparent', class: 'pbi-hit' });
-  hitLayer.append(hit);
-  const at = (e: MouseEvent) => {
-    const r = svg.getBoundingClientRect();
-    return nearest(((e.clientX - r.left) * width) / (r.width || width), ((e.clientY - r.top) * height) / (r.height || height));
-  };
-  hit.addEventListener('mousemove', (e) => {
-    const p = at(e);
-    (hit as SVGElement).style.cursor = p ? 'pointer' : '';
-    if (!p) return ctx.host.hideTooltip();
-    if (ctx.format.tooltip.show) {
-      const t = p.tooltip();
-      ctx.host.showTooltip(e, t.items, t.title, p.identity);
-    }
-  });
-  hit.addEventListener('mouseleave', () => ctx.host.hideTooltip());
-  hit.addEventListener('click', (e) => {
-    const p = at(e);
-    if (!p) return;
-    e.stopPropagation();
-    ctx.host.select(p.identity, { multi: e.ctrlKey || e.metaKey });
-    ctx.host.emit('dataPointClick', { keys: p.keys, identity: p.identity, event: e });
-  });
-  hit.addEventListener('contextmenu', (e) => {
-    const p = at(e);
-    if (!p) return;
-    e.preventDefault();
-    e.stopPropagation();
-    ctx.host.contextMenu(e, p.identity);
-  });
-  hit.addEventListener('dblclick', (e) => {
-    const p = at(e);
-    if (p && ctx.host.drill.levels > 1 && ctx.host.drill.level < ctx.host.drill.levels - 1) ctx.host.drillDown(p.keys[p.keys.length - 1]);
-  });
+  rasterOverlay(ctx, svg, hitLayer, canvas, clip, width, height, nearest);
   return true;
 }
 

@@ -181,6 +181,10 @@ format: { map: {
 // scatter: force a renderer (auto: SVG, canvas above 3,000 points, WebGL above 50,000)
 format: { scatter: { renderer: 'auto' | 'svg' | 'canvas' | 'webgl' } }
 
+// heatmap and calendar: canvas above 3,000 cells (auto), with the same tooltips, selection and drill; SVG without a 2D canvas
+format: { heatmap: { renderer: 'auto' | 'svg' | 'canvas' } }
+format: { calendar: { renderer: 'auto' | 'svg' | 'canvas' } }
+
 // slicer sync group (any style)
 format: { slicer: { syncGroup: 'year' } }
 ```

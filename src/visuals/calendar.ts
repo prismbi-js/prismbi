@@ -3,6 +3,7 @@ import { ramp } from '../render/color';
 import { defineVisual } from './registry';
 import { emptyState, identityOf, interactive, markOpacity } from './common';
 import { valueColor } from './analytics';
+import { paintRects, useRaster, type RasterRect } from './raster';
 
 const DAY = 86_400_000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -59,8 +60,13 @@ export const calendarHeatmap = /* @__PURE__ */ defineVisual({
     const monthName = (m: number) => (measureText(MONTHS[m], monthFs, t.fontFamily) <= 4.2 * step ? MONTHS[m] : MONTHS[m][0]);
     const svg = s('svg', { width: Math.max(ctx.width, width), height: Math.max(ctx.height, years.length * bandH), class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Calendar heatmap' });
     const monday = (d: Date) => (d.getDay() + 6) % 7;
+    // many years of days paint on a canvas, hit-tested by band, week and weekday
+    const raster = useRaster(ctx, 'calendar', years.length * 366);
+    const rects: RasterRect[] = [];
+    const marks = new Map<number, RasterRect>();
+    const bandTop = (yi: number) => offsetY + yi * bandH + fs + 6;
     years.forEach((year, yi) => {
-      const top = offsetY + yi * bandH + fs + 6;
+      const top = bandTop(yi);
       const jan1 = new Date(year, 0, 1);
       const startOffset = monday(jan1);
       svg.append(s('text', { x: gutter, y: top - 6 - (showWeekdays ? 0 : monthFs + 2), class: 'pbi-tick', fill: t.foregroundSecondary, 'font-weight': 600 }, String(year)));
@@ -75,6 +81,17 @@ export const calendarHeatmap = /* @__PURE__ */ defineVisual({
         const x = gutter + Math.floor(idx / 7) * step;
         const y = top + monday(d) * step;
         const entry = days.get(d.getTime());
+        if (raster) {
+          const r: RasterRect = { x, y, w: cell - gap, h: cell - gap, fill: entry ? colorOf(entry.value) : t.gridline, alpha: 0.5, identity: identityOf([dField], [d]), keys: [d], tooltip: () => ({ items: [] }) };
+          if (entry) {
+            r.identity = identityOf([dField], [entry.date]);
+            r.alpha = markOpacity(ctx, r.identity);
+            r.tooltip = () => ({ title: ctx.fmt(dField, entry.date) || entry.date.toDateString(), items: [{ label: vField.name, value: ctx.fmt(vField, entry.value) }] });
+            marks.set(yi * 400 + idx, r);
+          }
+          rects.push(r);
+          continue;
+        }
         const rect = s('rect', { x, y, width: cell - gap, height: cell - gap, rx: Math.min(3, cell / 4), fill: entry ? colorOf(entry.value) : t.gridline, opacity: entry ? 1 : 0.5 });
         if (entry) {
           const identity = identityOf([dField], [entry.date]);
@@ -85,5 +102,20 @@ export const calendarHeatmap = /* @__PURE__ */ defineVisual({
       }
     });
     ctx.root.replaceChildren(svg);
+    if (!raster) return;
+    const find = (px: number, py: number) => {
+      const yi = years.findIndex((_, i) => py >= bandTop(i) && py < bandTop(i) + 7 * step);
+      const wk = Math.floor((px - gutter) / step);
+      return yi < 0 || wk < 0 || wk > 53 ? undefined : marks.get(yi * 400 + wk * 7 + Math.floor((py - bandTop(yi)) / step));
+    };
+    if (!paintRects(ctx, svg, rects, Number(svg.getAttribute('width')), Number(svg.getAttribute('height')), cell >= 8 ? Math.min(3, cell / 4) : 0, find)) {
+      // no 2D canvas (headless export): fall back to SVG cells
+      const live = new Set(marks.values());
+      for (const r of rects) {
+        const rect = s('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx: Math.min(3, cell / 4), fill: r.fill, opacity: r.alpha });
+        if (live.has(r)) interactive(ctx, rect, r.identity, r.tooltip, r.keys);
+        svg.append(rect);
+      }
+    }
   },
 });
