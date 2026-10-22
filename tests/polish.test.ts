@@ -143,3 +143,34 @@ describe('virtualized matrix', () => {
     el.remove();
   });
 });
+
+describe('Studio undo history', () => {
+  it('stores splices, not snapshots, and walks back and forth exactly', async () => {
+    const { History } = await import('../src/studio/history');
+    const doc = { pages: [{ visuals: Array.from({ length: 300 }, (_, i) => ({ id: `v${i}`, type: 'bar', x: i, y: 0, title: `Visual ${i}` })) }] };
+    const h = new History<typeof doc>(200);
+    h.reset(doc);
+    const states: string[] = [JSON.stringify(doc)];
+    for (let k = 0; k < 150; k++) {
+      const next = JSON.parse(states[states.length - 1]) as typeof doc;
+      if (k % 10 === 9) next.pages[0].visuals.splice(k, 1); // a deletion
+      else next.pages[0].visuals[k].title = `Renamed ${k}`;
+      expect(h.push(next)).toBe(true);
+      states.push(JSON.stringify(next));
+    }
+    expect(h.push(JSON.parse(states[states.length - 1]))).toBe(false);
+    // far less than 150 copies of a ~20 KB document
+    expect(states[0].length).toBeGreaterThan(15_000);
+    expect(h.stored).toBeLessThan(states[0].length);
+    for (let k = states.length - 2; k >= 0; k--) expect(JSON.stringify(h.undo())).toBe(states[k]);
+    expect(h.undo()).toBeUndefined();
+    for (let k = 1; k < states.length; k++) expect(JSON.stringify(h.redo())).toBe(states[k]);
+    expect(h.canRedo).toBe(false);
+    // the limit drops the oldest steps
+    const small = new History<number[]>(3);
+    small.reset([0]);
+    for (let k = 1; k <= 5; k++) small.push([k]);
+    expect(small.size).toBe(3);
+    expect([small.undo(), small.undo(), small.undo(), small.undo()]).toEqual([[4], [3], [2], undefined]);
+  });
+});
