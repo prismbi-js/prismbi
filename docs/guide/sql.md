@@ -56,7 +56,7 @@ Queries that a single `GROUP BY` can't answer switch to filter-context mode auto
 | `SAMEPERIODLASTYEAR`, `DATEADD`, `DATESYTD` / `QTD` / `MTD`, `TOTALYTD` / `QTD` / `MTD`, `PREVIOUSYEAR` / `QUARTER` / `MONTH`, `DATESBETWEEN` | date ranges derived from the dates in context, with DAX month-end handling (Feb 28, 2025 a year back covers Feb 29, 2024) |
 | A dimension measure by another dimension (`MAX(Product[ListPrice])` by region), `COUNTROWS(Product)`, `COUNTROWS(FILTER(...))`, iterators over `FILTER` | evaluated over their own table, with only the filters that reach it (single-direction relationships) |
 
-Filters reach a table only along its many-to-one relationships, as in DAX. Group combinations follow the in-memory engine: one dimension lists its values, several list the combinations present in the fact table. Results are checked against the in-memory engine on SQLite in the tests. DuckDB and Postgres decorrelate these subqueries well; SQLite is slower, but contiguous date contexts (years, months, ranges) use range checks.
+Filters reach a table only along its many-to-one relationships, as in DAX. Group combinations follow the in-memory engine: one dimension lists its values, several list the combinations present in the fact table. Results are checked against the in-memory engine on SQLite in the tests. DuckDB and Postgres decorrelate these subqueries well; SQLite is slower: contiguous date contexts (years, months, ranges) use range checks, and other date sets that depend on the group are materialized once per group.
 
 Also handled in filter-context mode:
 
