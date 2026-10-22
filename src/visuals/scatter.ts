@@ -5,7 +5,7 @@ import { drawValueAxisY, emptyState, identityOf, interactive, markOpacity, rende
 import type { DataPointIdentity, RenderContext } from './types';
 import type { CellValue } from '../data/types';
 import { drawReferenceLines, linearFit } from './analytics';
-import { rasterOverlay } from './raster';
+import { context2d, rasterOverlay, sizedCanvas } from './raster';
 
 /** Above this many points marks are painted on a canvas instead of one SVG element each... */
 const CANVAS_MIN = 3000;
@@ -118,26 +118,14 @@ function drawWebGL(canvas: HTMLCanvasElement, pts: CanvasPoint[], clip: { x: num
   return true;
 }
 
-function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
-  try {
-    return canvas.getContext('2d');
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Paint points on a canvas laid over the SVG axes; a grid index finds the point under the pointer so tooltips,
  * selection, the context menu and drill keep working.
  */
 function paintCanvas(ctx: RenderContext, svg: SVGSVGElement, hitLayer: SVGGElement, pts: CanvasPoint[], clip: { x: number; y: number; w: number; h: number }, width: number, height: number, webgl = false): boolean {
-  const canvas = document.createElement('canvas');
-  const dpr = Math.min(3, globalThis.devicePixelRatio || 1);
-  canvas.width = Math.round(width * dpr);
-  canvas.height = Math.round(height * dpr);
-  canvas.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;pointer-events:none`;
+  const { canvas, dpr } = sizedCanvas(width, height);
   const gl = webgl && drawWebGL(canvas, pts, clip, height, dpr);
-  canvas.className = gl ? 'pbi-canvas pbi-webgl' : 'pbi-canvas';
+  if (gl) canvas.classList.add('pbi-webgl');
   if (!gl && !paint2d(ctx, canvas, pts, clip, dpr)) return false;
   return overlay(ctx, svg, hitLayer, canvas, pts, clip, width, height);
 }

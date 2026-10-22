@@ -1,5 +1,6 @@
 import { s } from '../render/svg';
 import type { CellValue } from '../data/types';
+import { interactive } from './common';
 import type { DataPointIdentity, RenderContext } from './types';
 
 /** Above this many marks, grid visuals (heatmap, calendar) paint on a canvas instead of one SVG element each. */
@@ -19,6 +20,8 @@ export interface RasterRect extends RasterMark {
   h: number;
   fill: string;
   alpha: number;
+  /** Painted but not a data point (an empty calendar day). */
+  inert?: boolean;
 }
 
 /** `'auto'` (default): SVG, then canvas above {@link RASTER_MIN} marks. */
@@ -30,23 +33,24 @@ export function useRaster(ctx: RenderContext, visual: string, count: number): bo
   return r === 'canvas' || (r === 'auto' && count > RASTER_MIN);
 }
 
-/** A device-pixel canvas the size of the visual, absolutely positioned; null without a 2D context (headless exports). */
-export function rasterCanvas(width: number, height: number): { canvas: HTMLCanvasElement; g2: CanvasRenderingContext2D } | null {
+/** A device-pixel canvas the size of the visual, absolutely positioned over it. */
+export function sizedCanvas(width: number, height: number): { canvas: HTMLCanvasElement; dpr: number } {
   const canvas = document.createElement('canvas');
   const dpr = Math.min(3, globalThis.devicePixelRatio || 1);
   canvas.width = Math.round(width * dpr);
   canvas.height = Math.round(height * dpr);
   canvas.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;pointer-events:none`;
   canvas.className = 'pbi-canvas';
-  let g2: CanvasRenderingContext2D | null = null;
+  return { canvas, dpr };
+}
+
+/** The canvas's 2D context, or null where there is none (headless exports, jsdom). */
+export function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
   try {
-    g2 = canvas.getContext('2d');
+    return canvas.getContext('2d');
   } catch {
-    /* no 2D canvas */
+    return null;
   }
-  if (!g2) return null;
-  g2.scale(dpr, dpr);
-  return { canvas, g2 };
 }
 
 /** Text painted over the rectangles (centred on x). */
@@ -57,11 +61,24 @@ export interface RasterLabel {
   fill: string;
 }
 
-/** Paint rectangles (rounded by `radius`) and labels; false when there is no 2D canvas, so the caller keeps its SVG. */
-export function paintRects(ctx: RenderContext, svg: SVGSVGElement, rects: RasterRect[], width: number, height: number, radius: number, find: (x: number, y: number) => RasterMark | undefined, labels: RasterLabel[] = []): boolean {
-  const c = rasterCanvas(width, height);
-  if (!c) return false;
-  const { g2 } = c;
+/**
+ * Paint rectangles (rounded by `radius`) and labels on a canvas over `svg`. Without a 2D canvas (headless exports)
+ * they become SVG elements instead, before any `<defs>`.
+ */
+export function paintRects(ctx: RenderContext, svg: SVGSVGElement, rects: RasterRect[], width: number, height: number, radius: number, find: (x: number, y: number) => RasterMark | undefined, labels: RasterLabel[] = []): void {
+  const { canvas, dpr } = sizedCanvas(width, height);
+  const g2 = context2d(canvas);
+  if (!g2) {
+    const before = svg.querySelector('defs');
+    for (const r of rects) {
+      const el = s('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx: radius, fill: r.fill, opacity: r.alpha });
+      if (!r.inert) interactive(ctx, el, r.identity, r.tooltip, r.keys);
+      svg.insertBefore(el, before);
+    }
+    for (const l of labels) svg.insertBefore(s('text', { x: l.x, y: l.y, 'text-anchor': 'middle', class: 'pbi-label', fill: l.fill }, l.text), before);
+    return;
+  }
+  g2.scale(dpr, dpr);
   const rounded = radius > 0 && typeof g2.roundRect === 'function';
   for (const r of rects) {
     g2.globalAlpha = r.alpha;
@@ -79,8 +96,7 @@ export function paintRects(ctx: RenderContext, svg: SVGSVGElement, rects: Raster
     g2.fillStyle = l.fill;
     g2.fillText(l.text, l.x, l.y);
   }
-  rasterOverlay(ctx, svg, svg, c.canvas, { x: 0, y: 0, w: width, h: height }, width, height, find);
-  return true;
+  rasterOverlay(ctx, svg, svg, canvas, { x: 0, y: 0, w: width, h: height }, width, height, find);
 }
 
 /**

@@ -7,6 +7,7 @@
 - **Canvas heatmaps and calendars:** above 3,000 cells they paint on a canvas hit-tested by row and column (tooltips, selection, context menu and drill unchanged); `format.heatmap.renderer` / `format.calendar.renderer` (`auto` | `svg` | `canvas`). Exports and canvas-less environments keep SVG.
 - **Virtualized matrix:** above 500 visible rows (expanded children and subtotal rows count) the matrix renders only the rows in view, like the table; `format.matrix.virtualize`. Expanding or collapsing keeps the scroll position.
 - **Lighter Studio undo:** each of the 200 undo steps stores the splice between neighbouring report states instead of a full JSON snapshot (`History.stored` reports the characters held).
+- **Worker: packed columns.** `engine.addColumns(name, columns, schema?, { transfer })` sends numbers and dates as `Float64Array`s and text as dictionary codes in transferred buffers (shared when they live in a `SharedArrayBuffer`); the worker adopts them as its numeric and dictionary views. About 10× faster than `addTable` with row objects at 1M rows. `packColumn`, `addPackedTable`; `PortLike.postMessage` takes a transfer list.
 - **Fix:** plugin signing and verification work on Node 18, which has no global `crypto` (falls back to `node:crypto` `webcrypto`).
 
 ## 0.9.1 (2026-10-19)

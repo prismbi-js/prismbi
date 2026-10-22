@@ -98,15 +98,7 @@ export const heatmap = /* @__PURE__ */ defineVisual({
       const i = Math.floor((py - top) / ch);
       return j >= 0 && j < colKeys.length && i >= 0 && i < rowKeys.length ? rects[i * colKeys.length + j] : undefined;
     };
-    if (raster && !paintRects(ctx, svg, rects, W, H, cw >= 6 && ch >= 6 ? 2 : 0, find, labels)) {
-      // no 2D canvas (headless export): fall back to SVG cells
-      for (const r of rects) {
-        const rect = s('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx: 2, fill: r.fill, opacity: r.alpha });
-        interactive(ctx, rect, r.identity, r.tooltip, r.keys);
-        svg.insertBefore(rect, svg.querySelector('defs'));
-      }
-      for (const l of labels) svg.insertBefore(s('text', { x: l.x, y: l.y, 'text-anchor': 'middle', class: 'pbi-label', fill: l.fill }, l.text), svg.querySelector('defs'));
-    }
+    if (raster) paintRects(ctx, svg, rects, W, H, cw >= 6 && ch >= 6 ? 2 : 0, find, labels);
     void h;
   },
 });

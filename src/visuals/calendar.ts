@@ -82,7 +82,7 @@ export const calendarHeatmap = /* @__PURE__ */ defineVisual({
         const y = top + monday(d) * step;
         const entry = days.get(d.getTime());
         if (raster) {
-          const r: RasterRect = { x, y, w: cell - gap, h: cell - gap, fill: entry ? colorOf(entry.value) : t.gridline, alpha: 0.5, identity: identityOf([dField], [d]), keys: [d], tooltip: () => ({ items: [] }) };
+          const r: RasterRect = { x, y, w: cell - gap, h: cell - gap, fill: entry ? colorOf(entry.value) : t.gridline, alpha: 0.5, identity: identityOf([dField], [d]), keys: [d], tooltip: () => ({ items: [] }), inert: !entry };
           if (entry) {
             r.identity = identityOf([dField], [entry.date]);
             r.alpha = markOpacity(ctx, r.identity);
@@ -108,14 +108,6 @@ export const calendarHeatmap = /* @__PURE__ */ defineVisual({
       const wk = Math.floor((px - gutter) / step);
       return yi < 0 || wk < 0 || wk > 53 ? undefined : marks.get(yi * 400 + wk * 7 + Math.floor((py - bandTop(yi)) / step));
     };
-    if (!paintRects(ctx, svg, rects, Number(svg.getAttribute('width')), Number(svg.getAttribute('height')), cell >= 8 ? Math.min(3, cell / 4) : 0, find)) {
-      // no 2D canvas (headless export): fall back to SVG cells
-      const live = new Set(marks.values());
-      for (const r of rects) {
-        const rect = s('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx: Math.min(3, cell / 4), fill: r.fill, opacity: r.alpha });
-        if (live.has(r)) interactive(ctx, rect, r.identity, r.tooltip, r.keys);
-        svg.append(rect);
-      }
-    }
+    paintRects(ctx, svg, rects, Number(svg.getAttribute('width')), Number(svg.getAttribute('height')), Math.min(3, cell / 4), find);
   },
 });

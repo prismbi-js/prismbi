@@ -48,7 +48,7 @@ Pre-aggregated results can differ from a row-by-row scan in the last floating-po
 
 ## Off the main thread
 
-`@prismbi/prismbi/worker` (about 1.3 KB) runs the model in a Web Worker. Build or load the model inside the worker, then talk to it from the page:
+`@prismbi/prismbi/worker` (about 2 KB) runs the model in a Web Worker. Build or load the model inside the worker, then talk to it from the page:
 
 ```ts
 // model.worker.ts
@@ -77,6 +77,7 @@ The engine API is asynchronous, and every method returns a promise:
 | `evaluate(expression, filters?, signal?)` | Evaluates a scalar expression. |
 | `evaluateTable(expression, filters?, signal?)` | Evaluates a table expression (DAX `EVALUATE`). |
 | `addTable(name, rows, schema?)`, `refreshTable(...)`, `appendRows(name, rows, options?)` | Changes table data. |
+| `addColumns(name, columns, schema?, { transfer? })` | Adds a table from column arrays, moving numbers, dates and text codes to the worker as transferred buffers (see below). |
 | `addMeasure(def)` | Adds a measure. |
 | `setRoles(roles, options?)` | Switches row-level security roles. |
 | `metadata()` | Returns tables, columns, measures and relationships, without rows. |
@@ -85,6 +86,18 @@ The engine API is asynchronous, and every method returns a promise:
 Filters must be filter specs (`{ target, op, value }`), because compiled filters can't be copied to another thread. Requests run in order. Aborting a request rejects it at once with an `AbortError`, and the worker skips it if it hasn't started.
 
 `createLocalEngine(model)` has the same API on the current thread, for tests, server rendering or small models.
+
+**Large tables: send columns, not rows.** `addTable` copies every row object to the worker (structured clone). `addColumns` packs number and date columns as `Float64Array`s and text as `Int32Array` codes plus a dictionary, and *transfers* the buffers, so nothing is copied; the worker adopts them as the table's numeric and dictionary views, which also makes the first query faster. In Node, loading 1M rows of four columns over a `MessageChannel` took about 1.2 s instead of 11.5 s, and the first grouped query about 250 ms instead of 600 ms.
+
+```ts
+await engine.addColumns('Sales', {
+  Amount: amounts,            // Float64Array or number[]
+  Region: regions,            // string[] → codes + dictionary
+  OrderDate: dates,           // Date[] → epoch ms
+});
+```
+
+Typed arrays you pass are moved, and are empty afterwards; pass `{ transfer: false }` to send a copy instead. Arrays backed by a `SharedArrayBuffer` (available when the page is `crossOriginIsolated`) are shared rather than moved. `packColumn` and `addPackedTable` are exported for building the same tables yourself.
 
 ### Reports on the worker
 

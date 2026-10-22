@@ -176,6 +176,11 @@ export class DataModel {
   }
 
   /** Replace a table's rows (e.g. on refresh), keeping calculated columns. Calculated tables are recomputed. */
+  /** Add (or replace) a table from column arrays of equal length: faster than row objects for large data. */
+  addColumns(name: string, columns: Record<string, unknown[]>, schema?: Record<string, ColumnSchema>): this {
+    return this.addTable(name, DataTable.fromColumns(name, columns, schema));
+  }
+
   refreshTable(name: string, rows: Row[], schema?: Record<string, ColumnSchema>): this {
     // a transformed table treats new rows as its source and replays its steps
     const tf = this.transforms.get(name);

@@ -185,6 +185,16 @@ export class DataTable {
     return a;
   }
 
+  /**
+   * Adopt prebuilt views of a column (packed columns sent to a worker) instead of building them from its values.
+   * `numeric` must hold NaN for BLANK; `codes` -1 for BLANK, indexing `dict`.
+   * @internal
+   */
+  adoptViews(column: string, views: { numeric?: Float64Array; codes?: Int32Array; dict?: CellValue[] }): void {
+    if (views.numeric) this.numericCache.set(column, views.numeric);
+    if (views.codes && views.dict) this.codesCache.set(column, { codes: views.codes, dict: views.dict, seen: new Map(views.dict.map((v, i) => [valueKey(v), i])) });
+  }
+
   /** Dictionary encoding of a column: a code per row (-1 for BLANK) and the distinct values by code. Cached. */
   codes(column: string): { codes: Int32Array; dict: CellValue[] } {
     let c = this.codesCache.get(column);

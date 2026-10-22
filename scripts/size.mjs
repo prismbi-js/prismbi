@@ -28,13 +28,13 @@ const PACKAGE_ALIASES = Object.fromEntries(
 const SCENARIOS = [
   ['core (api)', `export * from '${dist}/core.js';`, 91],
   ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 80],
-  ['full (api)', `export * from '${dist}/index.js';`, 129],
+  ['full (api)', `export * from '${dist}/index.js';`, 130],
   ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 123],
   ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 124],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 87],
   ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 100],
   ['connectors', `export * from '${dist}/connectors.js';`, 4],
-  ['worker', `export * from '${dist}/worker.js';`, 2],
+  ['worker', `export * from '${dist}/worker.js';`, 3],
   ['ai (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/ai.js';`, 27, 'full (api)'],
   ['sql (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/sql.js';`, 12, 'full (api)'],
 ];
