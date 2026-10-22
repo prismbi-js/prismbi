@@ -421,6 +421,8 @@ interface CtxEntry {
   kind: 'base' | 'group' | 'calc' | 'security';
   /** USERELATIONSHIP: join along this relationship instead (not a predicate). */
   rel?: RelSwap;
+  /** CROSSFILTER: whether this relationship filters both ways here (not a predicate). */
+  cross?: { fromTable: string; toTable: string; both: boolean };
   cols: string[];
   tables: string[];
   build: (s: Scope) => string;
@@ -533,11 +535,14 @@ class ContextTranslator {
    * side but not `table`, flowing back as `key IN (SELECT foreign key FROM many side WHERE …)`.
    */
   filterPreds(table: string, ctx: CtxEntry[], s: Scope, seen: ReadonlySet<string> = new Set([table])): string[] {
-    const out = this.applicable(table, ctx).filter((e) => !e.rel).map((e) => e.build(s));
+    const pred = (e: CtxEntry) => !e.rel && !e.cross;
+    const out = this.applicable(table, ctx).filter(pred).map((e) => e.build(s));
     const exp = this.model.expanded(table);
     for (const r of this.model.relationships()) {
-      if (!r.active || r.crossFilter !== 'both' || !exp.has(r.toTable) || seen.has(r.fromTable)) continue;
-      if (!ctx.some((e) => !e.rel && this.reaches(r.fromTable, e) && !this.reaches(table, e))) continue;
+      // CROSSFILTER in CALCULATE overrides the model's direction (the innermost one wins)
+      const over = ctx.filter((e) => e.cross?.fromTable === r.fromTable && e.cross.toTable === r.toTable).pop()?.cross;
+      if (!r.active || !(over ? over.both : r.crossFilter === 'both') || !exp.has(r.toTable) || seen.has(r.fromTable)) continue;
+      if (!ctx.some((e) => pred(e) && this.reaches(r.fromTable, e) && !this.reaches(table, e))) continue;
       const y = this.scope(r.fromTable, ctx);
       const inner = this.filterPreds(r.fromTable, ctx, y, new Set([...seen, r.fromTable]));
       out.push(`${s.col({ table: r.toTable, column: r.toColumn })} IN (SELECT ${y.col({ table: r.fromTable, column: r.fromColumn })}
@@ -777,7 +782,16 @@ WHERE ${inner.join(' AND ')})`);
         const rel: RelSwap = { fromTable: r.fromTable, fromColumn: r.fromColumn, toTable: r.toTable, toColumn: r.toColumn };
         return [...ctx.filter((e) => !(e.rel && e.rel.fromTable === rel.fromTable && e.rel.toTable === rel.toTable)), { kind: 'calc', cols: [], tables: [], rel, build: () => 'TRUE' }];
       }
-      if (n === 'CROSSFILTER') return unsupported(`${n} is not pushed down to SQL`);
+      if (n === 'CROSSFILTER') {
+        const [x, y, d] = a;
+        if (x?.type !== 'column' || y?.type !== 'column') return unsupported('CROSSFILTER needs two columns');
+        const dir = d?.type === 'table' || d?.type === 'varRef' ? d.name.toUpperCase() : d?.type === 'string' ? d.value.toUpperCase() : '';
+        // NONE would also have to stop the relationship's own joins and filter flow
+        if (dir === 'NONE') return unsupported('CROSSFILTER(…, NONE) is not pushed down to SQL');
+        const hit = (r: RelSwap, p: { table: string; column: string }, q: { table: string; column: string }) => r.fromTable === p.table && r.fromColumn === p.column && r.toTable === q.table && r.toColumn === q.column;
+        const r = this.model.relationships().find((rr) => rr.active && (hit(rr, x, y) || hit(rr, y, x))) ?? unsupported(`CROSSFILTER: no active relationship between ${x.table}[${x.column}] and ${y.table}[${y.column}]`);
+        return [...ctx, { kind: 'calc', cols: [], tables: [], cross: { fromTable: r.fromTable, toTable: r.toTable, both: dir === 'BOTH' }, build: () => 'TRUE' }];
+      }
       if (TIME_FILTERS.has(n)) return this.timeFilter(n, a, ctx);
       return unsupported(`${n}() as a CALCULATE filter is not pushed down to SQL`);
     }

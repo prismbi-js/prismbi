@@ -105,7 +105,8 @@ model
   .addMeasure('Sales MTD', 'TOTALMTD([Total Sales], Date[Date])')
   .addMeasure('Sales QTD', 'TOTALQTD([Total Sales], Date[Date])')
   .addMeasure('Big Product Sales', 'CALCULATE([Total Sales], FILTER(VALUES(Product[Name]), [Total Sales] > 400000))')
-  .addMeasure('Big Products', 'COUNTROWS(FILTER(VALUES(Product[Name]), [Total Sales] > 400000))');
+  .addMeasure('Big Products', 'COUNTROWS(FILTER(VALUES(Product[Name]), [Total Sales] > 400000))')
+  .addMeasure('Products Sold', 'CALCULATE(COUNTROWS(Product), CROSSFILTER(Sales[ProductKey], Product[ProductKey], BOTH))');
 
 const y2025 = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
 const CONTEXT_CASES: [string, QuerySpec][] = [
@@ -122,6 +123,7 @@ const CONTEXT_CASES: [string, QuerySpec][] = [
   ['no grouping', { values: ['Sales LY', 'Sales YTD'], filters: y2025 }],
   ['USERELATIONSHIP (sales by ship date)', { groupBy: ['Date[Year]', 'Date[Quarter]'], values: ['Total Sales', 'Sales by Ship Date'] }],
   ['measures inside FILTER conditions (context transition)', { groupBy: ['Product[Category]'], values: ['Big Product Sales', 'Big Products'], filters: y2025 }],
+  ['CROSSFILTER(…, BOTH) on a single-direction relationship', { groupBy: ['Region[Country]'], values: ['Products Sold', 'Product Count'], filters: [{ target: 'Date[Date]', op: 'eq', value: new Date(2025, 2, 3) }] }],
   ['highlights in context mode', { groupBy: ['Product[Category]'], values: ['Sales LY'], highlight: [{ target: 'Region[Country]', op: 'eq', value: 'Canada' }], filters: y2025 }],
 ];
 
@@ -198,11 +200,11 @@ describe('toSql', () => {
   });
 
   it('reports what it cannot push down, and can fall back to the model', async () => {
-    // time intelligence and ALLSELECTED now translate (filter-context mode); USERELATIONSHIP still doesn't
+    // time intelligence and ALLSELECTED now translate (filter-context mode); CROSSFILTER(…, NONE) still doesn't
     expect(toSql(model, { values: ['Sales LY'] }).mode).toBe('context');
     expect(toSql(model, { values: ['Total Sales'] }).mode).toBe('aggregate');
     const m = buildModel().addMeasure('No Cross', 'CALCULATE([Total Sales], CROSSFILTER(Sales[ProductKey], Product[ProductKey], NONE))');
-    expect(() => toSql(m, { values: ['No Cross'] })).toThrow(/CROSSFILTER is not pushed down/);
+    expect(() => toSql(m, { values: ['No Cross'] })).toThrow(/CROSSFILTER\(…, NONE\) is not pushed down/);
     const strict = sqlEngine(m, { run: async () => [] });
     await expect(strict.query({ values: ['No Cross'] })).rejects.toThrow(SqlUnsupportedError);
     const lenient = sqlEngine(m, { run: async () => [], fallback: 'model' });
@@ -291,13 +293,15 @@ const both = (() => {
     .addRelationship({ from: 'Sales[OrderDate]', to: 'Date[Date]' })
     .addMeasure('Total Sales', 'SUM(Sales[SalesAmount])')
     .addMeasure('Product Count', 'COUNTROWS(Product)')
-    .addMeasure('Max List Price', 'MAX(Product[ListPrice])');
+    .addMeasure('Max List Price', 'MAX(Product[ListPrice])')
+    .addMeasure('All Products', 'CALCULATE(COUNTROWS(Product), CROSSFILTER(Sales[ProductKey], Product[ProductKey], ONEWAY))');
 })();
 const day = { target: 'Date[Date]', op: 'eq' as const, value: new Date(2025, 2, 3) };
 const BOTH_CASES: [string, QuerySpec][] = [
   ['products sold per country on one day', { groupBy: ['Region[Country]'], values: ['Product Count', 'Max List Price'], filters: [day], totals: true }],
   ['categories under region and date filters', { groupBy: ['Product[Category]'], values: ['Product Count', 'Total Sales'], filters: [day, { target: 'Region[Country]', op: 'eq', value: 'Canada' }] }],
   ['products per year and region group', { groupBy: ['Date[Year]', 'Region[Group]'], values: ['Product Count'] }],
+  ['CROSSFILTER(…, ONEWAY) turns the flow back off', { groupBy: ['Region[Country]'], values: ['Product Count', 'All Products'], filters: [day] }],
 ];
 
 describe.skipIf(!sqliteOk)('sqlEngine on SQLite: bidirectional relationships', () => {

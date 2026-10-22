@@ -60,7 +60,7 @@ Filters reach a table only along its many-to-one relationships, as in DAX. Group
 
 Also handled in filter-context mode:
 
-- **Bidirectional relationships** (`crossFilter: 'both'`): filters on the "many" side flow back to the "one" side as `key IN (SELECT foreign key FROM many side WHERE …)`, so a product count by country counts the products sold there, as in memory.
+- **Bidirectional relationships** (`crossFilter: 'both'`): filters on the "many" side flow back to the "one" side as `key IN (SELECT foreign key FROM many side WHERE …)`, so a product count by country counts the products sold there, as in memory. `CROSSFILTER(…, BOTH)` and `CROSSFILTER(…, ONEWAY)` in `CALCULATE` turn this on or off for that calculation.
 - **`USERELATIONSHIP`:** joins along the inactive relationship for that calculation (e.g. sales by ship date).
 - **Measures inside `FILTER` conditions:** `FILTER(VALUES(Product[Name]), [Total Sales] > 400000)` evaluates the measure per row with the row's key as a filter (context transition).
 - **Row-level security:** the active roles' rules become filters on their tables. Roles are unioned per table, as in memory, and `USERNAME()` / `CUSTOMDATA()` resolve to the values passed to `setRoles`. `ALL` and `REMOVEFILTERS` can't remove them.
@@ -69,7 +69,7 @@ Also handled in filter-context mode:
 
 These throw a `SqlUnsupportedError` that names the cause:
 
-- `CROSSFILTER` inside `CALCULATE` (relationships marked bidirectional in the model are pushed down).
+- `CROSSFILTER(…, NONE)`. (`BOTH` and `ONEWAY` are pushed down, as are relationships marked bidirectional in the model.)
 - Compiled row-set filters passed in a query (filter specs work).
 - `MEDIAN` outside DuckDB, and DAX functions without an SQL equivalent.
 
