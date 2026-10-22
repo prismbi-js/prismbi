@@ -272,6 +272,23 @@ import '@prismbi/prismbi/geo';
 - **Labels:** month names collapse to initials when space is tight, and weekday labels appear when the cells are large enough.
 - **Interaction:** clicking a day cross-filters the page like any data point.
 
+## Sunburst
+
+`type: 'sunburst'` shows a hierarchy as rings, the first level innermost. Each ring is evaluated at its own level, like a matrix's subtotals, so ratios such as a margin stay right; children split their parent's angle by value. Labels follow the arc and turn along the radius on narrow slices. The total sits in the middle, and clicking any ring selects that level (a category, or a category and subcategory).
+
+![A sunburst of sales by category and subcategory](../images/visuals/sunburst.png)
+
+```js playground
+import { createVisual } from '@prismbi/prismbi';
+
+return createVisual(el, {
+  model,
+  type: 'sunburst',
+  title: 'Sales by category and subcategory',
+  fields: { category: ['Product[Category]', 'Product[Subcategory]'], values: 'Total Sales' },
+});
+```
+
 ## Axis zoom
 
 `format.categoryAxis.zoom: true` adds a range slider under line and area charts. Dragging its thumbs narrows the visible part of the axis, and **Reset** shows everything again. The zoom is view state kept per visual, so it doesn't change filters or re-query.

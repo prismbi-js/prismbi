@@ -40,6 +40,23 @@ Generating and loading 1M rows takes about 0.75 s. Warm queries (same filters ag
 
 Pre-aggregated results can differ from a row-by-row scan in the last floating-point digits, because the same values are added in a different order. Displayed values are unaffected.
 
+Compare the two paths yourself; they return the same rows:
+
+```js playground
+import { setFastQuery } from '@prismbi/prismbi';
+
+const spec = { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Total Sales', 'Sales LY', 'Sales YTD'], totals: true };
+const run = (mode) => {
+  setFastQuery(mode);
+  const t = performance.now();
+  const r = model.query(spec);
+  return { ms: Math.round(performance.now() - t), rows: r.rows.length, first: r.rows[0] };
+};
+const result = { singlePass: run('always'), perGroup: run('off') };
+setFastQuery('auto');
+return result;
+```
+
 ## Rendering at scale
 
 ![The scale demo: 250,000 rows, a dense line chart, 8,000 scatter points and a virtualized table](../images/performance.png)
