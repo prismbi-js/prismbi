@@ -239,7 +239,7 @@ describe('geo upgrades', () => {
     const [lon, lat] = featureCentroid(france)!;
     expect(Math.abs(lon - 2.5)).toBeLessThan(2);
     expect(Math.abs(lat - 46.6)).toBeLessThan(2);
-  });
+  }, 30_000); // imports the boundary data, slow when the suite runs in parallel
 
   it('filled maps use built-in boundaries, match names, codes and aliases, and show classed legends', async () => {
     await import('@prismbi/prismbi/geo');

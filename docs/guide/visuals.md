@@ -143,7 +143,7 @@ format: { table: {
 } }
 
 // matrix
-format: { matrix: { expandAll: false, columnTotals: true, conditional: { /* as table */ } } }
+format: { matrix: { expandAll: false, columnTotals: true, virtualize: undefined /* auto above 500 visible rows */, conditional: { /* as table */ } } }
 
 // slicer
 format: { slicer: {

@@ -43,6 +43,8 @@ Pre-aggregated results can differ from a row-by-row scan in the last floating-po
 - **Scatter charts** with more than 3,000 points paint on a canvas laid over the SVG axes. A spatial grid finds the point under the pointer, so tooltips, click to select and cross-filter, the context menu and drill keep working. From 50,000 points they draw with WebGL (one draw call of anti-aliased point sprites) when the browser supports it, falling back to canvas. Without canvas support, for example in SSR or jsdom, they fall back to SVG. `format.scatter.renderer: 'auto' | 'svg' | 'canvas' | 'webgl'` forces one. Image exports embed the canvas pixels.
 - **Off-screen visuals** wait. When filters, selections or data change, visuals more than 300 px outside the viewport skip their re-render until they are scrolled into view (an `IntersectionObserver`). `report.flush()` and exports still render everything.
 - **Tables** with more than 500 rows render only the rows in view, plus a margin, between spacer rows. Sorting, selection and banding behave as before. `format.table.virtualize` forces windowing on or off, and wrapping text turns it off because rows then vary in height.
+- **Matrices** window their visible rows the same way once more than 500 are expanded; parent rows carrying subtotals count as rows. Expanding or collapsing keeps the scroll position. `format.matrix.virtualize` forces it on or off.
+- **Heatmaps and calendars** with more than 3,000 cells paint on a canvas and find the cell under the pointer from its row and column, with the same tooltips, selection, context menu and drill. `format.heatmap.renderer` / `format.calendar.renderer`: `'auto' | 'svg' | 'canvas'`. They fall back to SVG without canvas support.
 
 ## Off the main thread
 

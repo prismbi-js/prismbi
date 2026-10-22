@@ -44,6 +44,57 @@ const VIRTUAL_MIN = 500;
 const OVERSCAN = 12;
 const raf = (cb: () => void): void => void (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(cb) : setTimeout(cb, 16));
 
+/** Render only the rows in view of `scroller`: spacer rows stand in for everything outside the viewport. */
+function windowRows(scroller: HTMLElement, tbody: HTMLElement, count: number, colspan: number, rowEl: (i: number) => HTMLElement): void {
+  let rowH = 0;
+  const spacer = (height: number) => {
+    const tr = h('tr', { class: 'pbi-spacer', 'aria-hidden': 'true' });
+    const td = h('td', { colspan });
+    td.style.height = `${height}px`;
+    tr.append(td);
+    return tr;
+  };
+  let range = '';
+  const update = () => {
+    const est = rowH || 28;
+    const view = scroller.clientHeight || est * 40;
+    let first = Math.max(0, Math.floor(scroller.scrollTop / est) - OVERSCAN);
+    // keep zebra banding stable: with a top spacer the first data row must have an odd index
+    if (first > 0 && first % 2 === 0) first--;
+    const last = Math.min(count, first + Math.ceil(view / est) + OVERSCAN * 2);
+    if (`${first}:${last}` === range) return;
+    range = `${first}:${last}`;
+    const els: HTMLElement[] = [];
+    if (first > 0) els.push(spacer(first * est));
+    for (let ri = first; ri < last; ri++) els.push(rowEl(ri));
+    if (last < count) els.push(spacer((count - last) * est));
+    tbody.replaceChildren(...els);
+    if (!rowH) {
+      const measured = (els.find((e) => !e.classList.contains('pbi-spacer')) as HTMLElement | undefined)?.offsetHeight ?? 0;
+      if (measured) {
+        rowH = measured;
+        range = '';
+        update();
+      }
+    }
+  };
+  update();
+  let pending = false;
+  scroller.addEventListener('scroll', () => {
+    if (pending) return;
+    pending = true;
+    raf(() => {
+      pending = false;
+      update();
+    });
+  });
+  // measure real row heights once attached
+  raf(() => {
+    range = '';
+    update();
+  });
+}
+
 function isGroupField(f: FieldSpec): boolean {
   if (typeof f === 'string') return isColumnRefString(f);
   return !!f.field && isColumnRefString(f.field) && !f.aggregation && !f.expression;
@@ -223,55 +274,8 @@ export const table = /* @__PURE__ */ defineVisual({
     }
     const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);
     if (virtual) {
-      // windowing: spacer rows stand in for everything outside the viewport
-      let rowH = 0;
-      const spacer = (height: number) => {
-        const tr = h('tr', { class: 'pbi-spacer', 'aria-hidden': 'true' });
-        const td = h('td', { colspan: cols.length });
-        td.style.height = `${height}px`;
-        tr.append(td);
-        return tr;
-      };
-      let range = '';
-      const update = () => {
-        const est = rowH || 28;
-        const view = scroller.clientHeight || est * 40;
-        let first = Math.max(0, Math.floor(scroller.scrollTop / est) - OVERSCAN);
-        // keep zebra banding stable: with a top spacer the first data row must have an odd index
-        if (first > 0 && first % 2 === 0) first--;
-        const last = Math.min(rows.length, first + Math.ceil(view / est) + OVERSCAN * 2);
-        if (`${first}:${last}` === range) return;
-        range = `${first}:${last}`;
-        const els: HTMLElement[] = [];
-        if (first > 0) els.push(spacer(first * est));
-        for (let ri = first; ri < last; ri++) els.push(rowEl(ri));
-        if (last < rows.length) els.push(spacer((rows.length - last) * est));
-        tbody.replaceChildren(...els);
-        if (!rowH) {
-          const measured = (els.find((e) => !e.classList.contains('pbi-spacer')) as HTMLElement | undefined)?.offsetHeight ?? 0;
-          if (measured) {
-            rowH = measured;
-            range = '';
-            update();
-          }
-        }
-      };
-      update();
-      let pending = false;
-      scroller.addEventListener('scroll', () => {
-        if (pending) return;
-        pending = true;
-        raf(() => {
-          pending = false;
-          update();
-        });
-      });
+      windowRows(scroller, tbody, rows.length, cols.length, rowEl);
       ctx.root.replaceChildren(scroller);
-      // measure real row heights once attached
-      raf(() => {
-        range = '';
-        update();
-      });
       return;
     }
     // incremental rendering: append the next page when scrolled near the bottom
@@ -296,6 +300,8 @@ interface MatrixFormat {
   expandAll?: boolean;
   stepped?: boolean;
   conditional?: Record<string, ConditionalFormat>;
+  /** Render only the rows in view (default: automatic above 500 visible rows; subtotal rows count). */
+  virtualize?: boolean;
 }
 
 export const matrix = /* @__PURE__ */ defineVisual({
@@ -414,16 +420,16 @@ export const matrix = /* @__PURE__ */ defineVisual({
       } else emit(keyOf(path));
     };
 
-    const addRows = (lvl: number, parent: CellValue[]) => {
-      const kids = lvl === 0 ? [[]] : childrenOf.get(JSON.stringify(parent.map(valueKey))) ?? [];
-      if (lvl === 0) {
-        (childrenOf.get(JSON.stringify([])) ?? []).forEach((p) => addRow(1, p));
-        return;
-      }
-      kids.forEach((p) => addRow(lvl + 1, p));
-    };
-    const addRow = (lvl: number, path: CellValue[]) => {
+    // the visible rows, depth first: a parent row (carrying its subtotals) then its children when expanded
+    const visible: { lvl: number; path: CellValue[]; pk: string }[] = [];
+    const walk = (lvl: number, path: CellValue[]) => {
       const pk = JSON.stringify(path.map(valueKey));
+      visible.push({ lvl, path, pk });
+      if (lvl < rowFields.length && isExpanded(pk)) for (const p of childrenOf.get(pk) ?? []) walk(lvl + 1, p);
+    };
+    if (rowFields.length) for (const p of childrenOf.get(JSON.stringify([])) ?? []) walk(1, p);
+    const rowEl = (i: number): HTMLElement => {
+      const { lvl, path, pk } = visible[i];
       const hasKids = lvl < rowFields.length;
       const open = hasKids && isExpanded(pk);
       const tr = h('tr', { class: `pbi-level-${lvl}${hasKids ? ' has-children' : ''}` });
@@ -456,11 +462,10 @@ export const matrix = /* @__PURE__ */ defineVisual({
         e.stopPropagation();
         ctx.host.contextMenu(e, identity);
       });
-      tbody.append(tr);
-      if (open) (childrenOf.get(pk) ?? []).forEach((p) => addRow(lvl + 1, p));
-      else if (!hasKids) void 0;
+      return tr;
     };
-    if (rowFields.length) addRows(0, []);
+    const virtual = mf.virtualize ?? visible.length > VIRTUAL_MIN;
+    if (!virtual) for (let i = 0; i < visible.length; i++) tbody.append(rowEl(i));
     tableEl.append(tbody);
     const tfoot = h('tfoot');
     const tr = h('tr');
@@ -468,6 +473,15 @@ export const matrix = /* @__PURE__ */ defineVisual({
     cells(tr, 0, []);
     tfoot.append(tr);
     tableEl.append(tfoot);
-    ctx.root.replaceChildren(h('div', { class: 'pbi-table-scroll' }, tableEl));
+    // expanding or collapsing re-renders: keep the reader where they were
+    const prevTop = (ctx.root.querySelector('.pbi-table-scroll') as HTMLElement | null)?.scrollTop ?? 0;
+    const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);
+    const colspan = 1 + valueFields.length * (colField ? colKeys.length + (mf.columnTotals !== false ? 1 : 0) : 1);
+    if (virtual) windowRows(scroller, tbody, visible.length, colspan, rowEl);
+    ctx.root.replaceChildren(scroller);
+    if (prevTop) {
+      scroller.scrollTop = prevTop;
+      if (virtual) scroller.dispatchEvent(new Event('scroll'));
+    }
   },
 });

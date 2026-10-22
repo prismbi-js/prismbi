@@ -101,3 +101,45 @@ describe('canvas heatmaps and calendars', () => {
     }
   });
 });
+
+describe('virtualized matrix', () => {
+  const tree = () =>
+    new DataModel()
+      .addTable('T', Array.from({ length: 2000 }, (_, i) => ({ a: `a${String(Math.floor(i / 10)).padStart(3, '0')}`, b: `b${i % 10}`, v: i })))
+      .addMeasure('V', 'SUM(T[v])');
+
+  it('windows expanded rows, counting subtotal rows, and keeps expand state', () => {
+    const el = mount();
+    const r = createVisual(el, { model: tree(), type: 'matrix', fields: { rows: ['T[a]', 'T[b]'], values: 'V' }, format: { matrix: { expandAll: true } } as never });
+    r.flush();
+    const body = () => el.querySelector('tbody')!;
+    const data = () => [...body().children].filter((tr) => !tr.classList.contains('pbi-spacer'));
+    // 200 parents + 2000 children = 2200 rows, only a window of them in the DOM
+    expect(data().length).toBeGreaterThan(10);
+    expect(data().length).toBeLessThan(200);
+    expect(body().querySelectorAll('tr.pbi-spacer')).toHaveLength(1);
+    expect(data()[0].classList.contains('pbi-level-1')).toBe(true);
+    expect(data()[1].classList.contains('pbi-level-2')).toBe(true);
+    // collapse the first parent: its children leave the list
+    (data()[0].querySelector('.pbi-expander') as HTMLElement).click();
+    r.flush();
+    expect(data()[1].classList.contains('pbi-level-1')).toBe(true);
+    expect(data()[1].textContent).toContain('a001');
+    r.destroy();
+    el.remove();
+  });
+
+  it('renders small matrices in full, and virtualize forces either way', () => {
+    const el = mount();
+    const r = createVisual(el, { model: tree(), type: 'matrix', fields: { rows: ['T[a]', 'T[b]'], values: 'V' } });
+    r.flush();
+    // collapsed: 200 rows, under the threshold
+    expect(el.querySelectorAll('tbody tr:not(.pbi-spacer)')).toHaveLength(200);
+    r.destroy();
+    const v = createVisual(el, { model: tree(), type: 'matrix', fields: { rows: ['T[a]', 'T[b]'], values: 'V' }, format: { matrix: { virtualize: true } } as never });
+    v.flush();
+    expect(el.querySelectorAll('tbody tr.pbi-spacer')).toHaveLength(1);
+    v.destroy();
+    el.remove();
+  });
+});
