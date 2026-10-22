@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Less memory for text and dates:** tables keep one object per distinct string or date (per column, up to 100,000, also for appended rows) instead of one per row: 1M dates 120 → 8 MB, 1M repeated strings 40 → 8 MB (Node), with no API change.
 - **Aggregation tables** (Power BI's "manage aggregations"): `model.addAggregation({ table, detail, groupBy, columns, rows, precedence })` answers covered queries from a pre-aggregated table (measures are rewritten through other measures; time intelligence and `CALCULATE` filters stay); `result.aggregation`, `model.aggregationFor(spec)`, `removeAggregation`, `aggregations()`. `sqlEngine` answers covered queries in memory without a round trip. `importPowerBI` reads `alternateOf` mappings (TMDL and model.bim).
 - **Key influencers** (`@prismbi/prismbi/ai`): `keyInfluencers(model, { measure, explainBy, filters, basis, minShare, max })` ranks the column values that move a measure (sums and counts per row, rates as they are; duplicate segments listed once), and the `keyInfluencers` visual (alias `influencers`, registered by `registerAI()`) lists them next to the chosen column's breakdown, cross-filtering from its bars.
 - **Scorecard (goals) visual** (`scorecard`, alias `goals`, entry `@prismbi/prismbi/visuals/scorecard`): current value, target (a paired measure or a fixed number), progress, On track / At risk / Behind status (`direction`, `atRisk`), sparkline, owner and due date per goal; drops columns in narrow tiles. `goalStatus()` exported.

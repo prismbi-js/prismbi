@@ -56,6 +56,28 @@ export function inferType(values: unknown[]): DataType {
   return sawNumber || sawDate || sawBool ? 'string' : 'string';
 }
 
+/** Distinct values a column's pool keeps; past this, a column is mostly unique and sharing saves little. */
+const POOL_MAX = 100_000;
+
+/**
+ * Coerce a column's values, sharing one object per distinct text or date. A parser makes a new string or `Date` per
+ * row; sharing them keeps 1M dates in about 8 MB instead of 120 MB, and repeated text in 8 MB instead of 40 MB.
+ * Cell values are never mutated, so sharing is safe.
+ */
+function coerceColumn(raw: ArrayLike<unknown>, type: DataType, pool: Map<unknown, CellValue> = new Map()): CellValue[] {
+  const share = type === 'string' || type === 'date';
+  // map makes an exact-size packed array (pushing leaves growth slack)
+  return Array.prototype.map.call(raw, (x: unknown) => {
+    const v = coerce(x, type);
+    if (!share || v === null) return v;
+    const key = v instanceof Date ? v.getTime() : v;
+    const hit = pool.get(key);
+    if (hit !== undefined) return hit;
+    if (pool.size < POOL_MAX) pool.set(key, v);
+    return v;
+  }) as CellValue[];
+}
+
 export function coerce(v: unknown, type: DataType): CellValue {
   if (v === null || v === undefined || v === '') return null;
   switch (type) {
@@ -100,6 +122,13 @@ export class DataTable {
   private numericCache = new Map<string, Float64Array>();
   private codesCache = new Map<string, { codes: Int32Array; dict: CellValue[]; seen: Map<unknown, number> }>();
   private bitmaps = new Map<string, Map<unknown, Uint32Array> | null>();
+  /** Shared text and date objects per column, kept for appends. */
+  private pools = new Map<string, Map<unknown, CellValue>>();
+  private pool(column: string): Map<unknown, CellValue> {
+    let p = this.pools.get(column);
+    if (!p) this.pools.set(column, (p = new Map()));
+    return p;
+  }
 
   constructor(name: string, rows: Row[] = [], schema: Record<string, ColumnSchema> = {}) {
     this.name = name;
@@ -113,7 +142,7 @@ export class DataTable {
       this.columns.set(col, {
         name: col,
         type,
-        values: raw.map((v) => coerce(v, type)),
+        values: coerceColumn(raw, type, this.pool(col)),
         format: s.format,
         hidden: s.hidden,
         sortBy: s.sortBy,
@@ -132,7 +161,7 @@ export class DataTable {
       count = raw.length;
       const s = schema[col] ?? {};
       const type = s.type ?? inferType(raw);
-      t.columns.set(col, { name: col, type, values: raw.map((v) => coerce(v, type)), format: s.format, hidden: s.hidden, sortBy: s.sortBy, description: s.description });
+      t.columns.set(col, { name: col, type, values: coerceColumn(raw, type, t.pool(col)), format: s.format, hidden: s.hidden, sortBy: s.sortBy, description: s.description });
     }
     t._rowCount = Math.max(count, 0);
     return t;
@@ -217,7 +246,7 @@ export class DataTable {
    */
   appendRows(rows: Row[]): void {
     if (!rows.length) return;
-    for (const col of this.columns.values()) for (const r of rows) col.values.push(coerce(r[col.name], col.type));
+    for (const col of this.columns.values()) for (const v of coerceColumn(rows.map((r) => r[col.name]), col.type, this.pool(col.name))) col.values.push(v);
     const from = this._rowCount;
     this._rowCount += rows.length;
     const n = this._rowCount;

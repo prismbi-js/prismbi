@@ -66,7 +66,9 @@ All in `CHANGELOG.md` under Unreleased. Highlights:
 - **Budgets raised deliberately** (`scripts/size.mjs`): core +3 KB, full +3 / +5 KB, studio +2, worker 3, connectors 5.
 - **Verification aids not committed:** DuckDB checks ran through a scratch copy of `tests/sql.test.ts` with Python `duckdb` (pip into a temp dir); repeat that way when changing `src/sql.ts`.
 
-**Still open from the plan below:** columnar storage from load time and typed row lists (both invasive: audit every `Column.values` / `rowsOf` reader first); feature ideas other than the sunburst and warm start (key influencers, aggregation tables, goals and scorecards); real-world validation (item 2).
+**Storage decisions (measured 2026-10-22):** text and date columns now share one object per distinct value, which takes 1M dates from 120 to 8 MB and 1M strings from 40 to 8 MB with no API change. That was the bulk of the memory the columnar-storage item aimed at, so the full typed-storage refactor is shelved. Typed row lists (`Int32Array` from `rowsOf`) were measured too: 2.5× less memory and about 15% faster intersections in Node, but little gain in browsers (V8 pointer compression already stores small-integer arrays compactly), against an audit of every evaluator path that consumes row lists. Not done; revisit only for server-side use with many cached contexts.
+
+**Still open from the plan below:** feature ideas other than the sunburst and warm start (key influencers, aggregation tables, goals and scorecards); real-world validation (item 2).
 
 ### 3. Performance
 

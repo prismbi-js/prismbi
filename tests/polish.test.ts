@@ -266,3 +266,17 @@ describe('scorecard (goals)', () => {
     el.remove();
   });
 });
+
+describe('shared text and date values', () => {
+  it('keeps one object per distinct string or date, also across appends', () => {
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ d: new Date(2025, 0, 1 + (i % 10)), s: ['a', 'b', 'c'][i % 3].split('').join(''), n: i }));
+    const m = new DataModel().addTable('T', rows);
+    const d = m.table('T').column('d').values as Date[];
+    expect(d[0]).toBe(d[10]);
+    expect(d[10]).not.toBe(rows[10].d); // later rows share the first occurrence's object
+    expect(new Set(d).size).toBe(10);
+    m.appendRows('T', [{ d: new Date(2025, 0, 1), s: 'a', n: 1 }]);
+    expect(m.table('T').column('d').values[1000]).toBe(d[0]);
+    expect(m.query({ groupBy: ['T[s]'], values: [{ field: 'T[n]', aggregation: 'countRows' }] }).rows.map((r) => r.values[0])).toEqual([335, 333, 333]);
+  });
+});
