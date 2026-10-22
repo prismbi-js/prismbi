@@ -16,6 +16,7 @@ describe('ask', () => {
     ['average quantity by channel', { fields: { category: 'Sales[Channel]', values: [{ field: 'Sales[Quantity]', aggregation: 'avg' }] } }],
     ['share of sales by region group', { type: 'donut', fields: { legend: 'Region[Group]', values: 'Total Sales' } }],
     ['sales and profit by category and year', { fields: { values: ['Total Sales', 'Total Profit'] } }],
+    ['sunburst of sales by category and subcategory', { type: 'sunburst', fields: { category: ['Product[Category]', 'Product[Subcategory]'], values: 'Total Sales' } }],
   ];
   it.each(cases)('%s', (q, expected) => {
     const r = askSync(model, q);
