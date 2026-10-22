@@ -1,11 +1,11 @@
 # Where work stopped (handoff)
 
-Last updated 2026-10-17. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
+Last updated 2026-10-22. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
 
 ## State
 
 - **Phases 1–9 are done**, including the items deferred along the way.
-- **Tests:** 350+ pass (`npm test`). `npm run test:visual` covers 78 screenshot baselines. `npm run typecheck` and `npm run build` are clean.
+- **Tests:** 440+ pass (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 88 screenshot baselines. `npm run bench` has per-query time budgets. `npm run typecheck` and `npm run build` are clean.
 - **Entries:**
   - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (22).
   - UI and frameworks: `/studio`, `/react`, `/elements`.
@@ -56,6 +56,18 @@ Agreed on 2026-10-17 to be done later, in this order. Before starting, check wit
   - run `sqlEngine` against DuckDB (or SQLite) and diff the results with the in-memory engine;
   - time page loads.
 - **Output:** a list of breakages and gaps, fixed one by one, each with a test.
+
+### Done on 2026-10-22 (session reactbi-8c)
+
+All in `CHANGELOG.md` under Unreleased. Highlights:
+
+- **Fixed:** plugin signing on Node 18 (no global `crypto`); SQL silently ignored bidirectional relationships (now semi-joins; `CROSSFILTER` BOTH/ONEWAY pushed down).
+- **Performance:** time intelligence in the single-pass path (`src/data/fastQuery.ts` + shared calendar rules in `src/dax/timeIntel.ts`; day × YTD at 1M rows 193 → 21 ms); SQL totals via `GROUPING SETS` and an optional result cache; canvas heatmaps/calendars (`src/visuals/raster.ts`); virtualized matrix; undo history as splices; worker `addColumns` with transferred typed buffers (`src/data/packed.ts`); faster `allRows`.
+- **Features:** sunburst visual; warm start (`cachedTables` etc. in connectors, IndexedDB).
+- **Budgets raised deliberately** (`scripts/size.mjs`): core +3 KB, full +3 / +5 KB, studio +2, worker 3, connectors 5.
+- **Verification aids not committed:** DuckDB checks ran through a scratch copy of `tests/sql.test.ts` with Python `duckdb` (pip into a temp dir); repeat that way when changing `src/sql.ts`.
+
+**Still open from the plan below:** columnar storage from load time and typed row lists (both invasive: audit every `Column.values` / `rowsOf` reader first); `CROSSFILTER(…, NONE)` in SQL; SQLite on non-contiguous date contexts; feature ideas other than the sunburst and warm start (key influencers, aggregation tables, goals and scorecards); real-world validation (item 2).
 
 ### 3. Performance
 
