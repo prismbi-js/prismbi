@@ -44,7 +44,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | ![slicer-list](../images/visuals/slicer-list.png) `slicer-list` | ![slicer-range](../images/visuals/slicer-range.png) `slicer-range` | ![slicer-tiles](../images/visuals/slicer-tiles.png) `slicer-tiles` |
 | ![stackedArea](../images/visuals/stackedArea.png) `stackedArea` | ![stackedBar](../images/visuals/stackedBar.png) `stackedBar` | ![stackedColumn](../images/visuals/stackedColumn.png) `stackedColumn` |
 | ![table](../images/visuals/table.png) `table` | ![text](../images/visuals/text.png) `text` | ![treemap](../images/visuals/treemap.png) `treemap` |
-| ![waterfall](../images/visuals/waterfall.png) `waterfall` |  |  |
+| ![waterfall](../images/visuals/waterfall.png) `waterfall` | ![sunburst](../images/visuals/sunburst.png) `sunburst` |  |
 
 ## Catalogue
 
@@ -59,6 +59,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `waterfall` | `category`* (drillable) · `values`* | Running total with connectors, increase / decrease / total colours, optional total bar |
 | `pie`, `donut` | `legend`* (drillable) · `values`* | Folds slices past the palette into "Other". Donut shows a centre total |
 | `treemap` | `category`* (drillable) · `values`* | Squarified layout |
+| `sunburst` | `category`* (multiple: one ring per level, first innermost) · `values`* | Each level is a real measure evaluation (ratios stay right); children split their parent's angle by value; centre total; click any ring to select that level |
 | `funnel` | `category`* · `values`* | Shows % of first stage |
 | `scatter` (`bubble`) | `details`* · `legend` · `x`* · `y`* · `size` | Bubble area ∝ size. Cross-highlight, trend line |
 | `heatmap` | `rows`* · `columns`* · `values`* | Sequential single-hue ramp, gradient legend, cell labels when they fit |

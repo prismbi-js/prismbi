@@ -14,6 +14,7 @@ import { decompositionTree } from './decomposition';
 import { boxPlot, histogram } from './distribution';
 import { bullet, radar, ribbon, sankey } from './more';
 import { bubbleMap, filledMap } from './map';
+import { sunburst } from './sunburst';
 
 export const builtinVisuals = {
   clusteredColumn,
@@ -29,6 +30,7 @@ export const builtinVisuals = {
   pieChart,
   donutChart,
   treemap,
+  sunburst,
   funnel,
   scatter,
   card,
@@ -56,7 +58,7 @@ export const builtinVisuals = {
 
 /** Register every built-in visual (idempotent). Called automatically by the main entry. */
 export function registerBuiltinVisuals(): void {
-  if (hasVisual('clusteredColumn') && hasVisual('ribbon')) return;
+  if (hasVisual('clusteredColumn') && hasVisual('sunburst')) return;
   registerVisual(clusteredColumn, ['column']);
   registerVisual(stackedColumn);
   registerVisual(percentStackedColumn);
@@ -70,6 +72,7 @@ export function registerBuiltinVisuals(): void {
   registerVisual(pieChart);
   registerVisual(donutChart);
   registerVisual(treemap);
+  registerVisual(sunburst);
   registerVisual(funnel);
   registerVisual(scatter, ['bubble']);
   registerVisual(card);

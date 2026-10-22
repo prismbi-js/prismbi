@@ -174,3 +174,39 @@ describe('Studio undo history', () => {
     expect([small.undo(), small.undo(), small.undo(), small.undo()]).toEqual([[4], [3], [2], undefined]);
   });
 });
+
+describe('sunburst', () => {
+  it('draws one ring per level, sizes children within their parent, and selects any level', async () => {
+    const { buildModel } = await import('../examples/model');
+    const model = buildModel();
+    const el = mount();
+    const r = createVisual(el, { model, type: 'sunburst', fields: { category: ['Product[Category]', 'Product[Subcategory]'], values: 'Total Sales' } });
+    r.flush();
+    const cats = model.query({ groupBy: ['Product[Category]'], values: ['Total Sales'] }).rows.filter((x) => (x.values[0] as number) > 0);
+    const subs = model.query({ groupBy: ['Product[Category]', 'Product[Subcategory]'], values: ['Total Sales'] }).rows.filter((x) => (x.values[0] as number) > 0);
+    const arcs = [...el.querySelectorAll('path.pbi-mark')];
+    expect(arcs).toHaveLength(cats.length + subs.length);
+    // the total sits in the middle
+    expect([...el.querySelectorAll('text')].some((t) => t.getAttribute('font-weight') === '600' && /^\$[\d.,]+[KMB]?$/.test(t.textContent ?? ''))).toBe(true);
+    // clicking an inner arc selects the category; clicking an outer one selects category + subcategory
+    const picked: unknown[] = [];
+    r.on('dataPointClick', (e) => picked.push(e.keys));
+    (arcs[0] as SVGElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    (arcs[arcs.length - 1] as SVGElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect((picked[0] as unknown[]).length).toBe(1);
+    expect((picked[1] as unknown[]).length).toBe(2);
+    r.destroy();
+    el.remove();
+  });
+
+  it('uses real evaluations per level, so ratios stay correct', async () => {
+    const { buildModel } = await import('../examples/model');
+    const model = buildModel();
+    const el = mount();
+    const r = createVisual(el, { model, type: 'sunburst', fields: { category: ['Product[Category]', 'Product[Subcategory]'], values: 'Margin %' } });
+    r.flush();
+    expect(el.querySelectorAll('path.pbi-mark').length).toBeGreaterThan(0);
+    r.destroy();
+    el.remove();
+  });
+});

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Sunburst visual** (`sunburst`, entry `@prismbi/prismbi/visuals/sunburst`): one ring per hierarchy level, each level a real measure evaluation, children sized within their parent, curved labels, centre total, selection and tooltips at any level; in the Studio palette and `ask()` ("sunburst of sales by category and subcategory"). Full-bundle budgets +2 KB for it.
 - **Time intelligence in the single-pass path:** visuals grouped by date-table columns answer `SAMEPERIODLASTYEAR`, `DATEADD`, `DATES*TD`, `TOTAL*TD` (fiscal year ends too), `PARALLELPERIOD` and `PREVIOUS*` from per-date partial sums in one pass; plain measures in the same visual reuse them. Day × YTD at 1M rows: 193 → 21 ms cold; year × month × sales, last year and growth: about 130 → 46 ms. The evaluator and the fast path share the calendar rules (`src/dax/timeIntel.ts`); equivalence tests in `tests/fastti.test.ts`.
 - **Faster unfiltered row lists:** the all-rows list of a table is built with a counting loop (several times faster than `Array.from` at 1M rows).
 - **Size budgets raised deliberately** (`scripts/size.mjs`): the time-intelligence fast path adds about 2.3 KB min+gzip to the core (core app 82.4 KB, budget 80 → 83; full 131.4 KB, 130 → 133, and the other core scenarios by 3 KB); the worker entry is 2.1 KB with packed columns (budget 2 → 3).

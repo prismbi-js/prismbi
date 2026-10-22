@@ -28,6 +28,7 @@ const RADAR = svg('<path d="M10 3l6.6 4.8-2.5 7.7H5.9L3.4 7.8z"/><path d="M10 7l
 const SANKEY = svg('<path d="M3 5c6 0 8 10 14 10M3 13c6 0 8-8 14-8"/>');
 const RIBBON = svg('<path d="M4 15V8M16 15V5"/><path d="M5 9c4 0 6-3 10-3M5 13c4 0 6 1 10 1"/>');
 const MAP = svg('<path d="M3 5l4-2 6 2 4-2v12l-4 2-6-2-4 2z"/><path d="M7 3v12M13 5v12"/>');
+const SUNBURST = svg('<circle cx="10" cy="10" r="2.5"/><path d="M10 5.5a4.5 4.5 0 0 1 4.5 4.5M10 5.5a4.5 4.5 0 0 0-3.9 6.7"/><path d="M10 3a7 7 0 0 1 7 7M10 3a7 7 0 0 0-6.1 10.4M17 10a7 7 0 0 1-12.9 3.6"/>');
 const COMBO = svg('<path d="M5 16v-5M10 16V8M15 16v-6"/><path d="M3 9l5-4 4 3 5-4"/>');
 
 export const VISUAL_ICONS: Record<string, string> = {
@@ -46,6 +47,7 @@ export const VISUAL_ICONS: Record<string, string> = {
   pie: PIE,
   donut: DONUT,
   treemap: TREE,
+  sunburst: SUNBURST,
   funnel: FUNNEL,
   scatter: SCATTER,
   heatmap: HEAT,
@@ -77,7 +79,7 @@ export const RAIL_ICONS = {
 export const VISUAL_ORDER = [
   'clusteredColumn', 'stackedColumn', 'percentStackedColumn', 'clusteredBar', 'stackedBar', 'percentStackedBar',
   'line', 'area', 'stackedArea', 'lineClusteredColumn', 'ribbon', 'waterfall',
-  'pie', 'donut', 'treemap', 'funnel', 'scatter', 'heatmap', 'histogram', 'boxPlot', 'bullet', 'radar', 'sankey', 'map', 'filledMap', 'decompositionTree',
+  'pie', 'donut', 'treemap', 'sunburst', 'funnel', 'scatter', 'heatmap', 'histogram', 'boxPlot', 'bullet', 'radar', 'sankey', 'map', 'filledMap', 'decompositionTree',
   'card', 'multiRowCard', 'kpi', 'gauge', 'table', 'matrix', 'slicer', 'text',
 ];
 

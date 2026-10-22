@@ -152,6 +152,7 @@ const VISUALS: [RegExp, string][] = [
   [/\b(?:table|list|details)\b/i, 'table'],
   [/\b(?:scatter|correlation|correlate|against)\b/i, 'scatter'],
   [/\b(?:treemap)\b/i, 'treemap'],
+  [/\b(?:sunburst)\b/i, 'sunburst'],
   [/\b(?:funnel)\b/i, 'funnel'],
   [/\b(?:waterfall)\b/i, 'waterfall'],
   [/\b(?:area chart|as an area)\b/i, 'area'],
@@ -344,6 +345,10 @@ export function planToSpec(model: DataModel, plan: QueryPlan & { sortDir?: 'asc'
     case 'treemap':
     case 'funnel':
       f[type === 'donut' ? 'legend' : 'category'] = gs[0];
+      f.values = ms[0];
+      break;
+    case 'sunburst':
+      f.category = gs;
       f.values = ms[0];
       break;
     case 'scatter':

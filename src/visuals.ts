@@ -11,6 +11,7 @@
 export { clusteredBar, clusteredColumn, percentStackedBar, percentStackedColumn, stackedBar, stackedColumn } from './visuals/bar';
 export { areaChart, comboChart, lineChart, stackedAreaChart } from './visuals/line';
 export { donutChart, funnel, pieChart, treemap } from './visuals/parts';
+export { sunburst } from './visuals/sunburst';
 export { scatter } from './visuals/scatter';
 export { card, gauge, kpi, multiRowCard } from './visuals/cards';
 export { matrix, table } from './visuals/table';
