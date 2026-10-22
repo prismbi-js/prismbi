@@ -1,6 +1,6 @@
 {
   "name": "@prismbi/prismbi",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "PrismBI - Power BI-style data modeling and interactive reports for the web, in TypeScript. DAX-like engine, 34 visuals, slicing and cross-filtering, a drag-and-drop studio, connectors, a Web Worker engine, AI questions/insights/agent tools, web components and React bindings. Zero dependencies.",
   "keywords": [
     "bi",

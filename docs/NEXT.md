@@ -32,7 +32,7 @@ Last updated 2026-10-22 (second session). Work happens on branch `phase-5`; `mas
   - WebGL scatter;
   - screenshots throughout the docs (`npm run docs:images` regenerates them).
 - **Known gaps:**
-  - SQL: everything below is pushed down: `CROSSFILTER` (all modes), bidirectional relationships, `USERELATIONSHIP`, measures in `FILTER`, RLS, `DATESINPERIOD`, date windows in variables, iterators over `VALUES` with a measure, `SELECTEDVALUE` / `HASONEVALUE`. Still needing `fallback: 'model'`: `MEDIAN` outside DuckDB, `FORMAT` patterns other than simple date parts, table variables other than date windows, iterators over `ALL(…)` or `FILTER(…)` with a measure body. Postgres SQL is generated but has not been run against a real Postgres.
+  - SQL: everything below is pushed down: `CROSSFILTER` (all modes), bidirectional relationships, `USERELATIONSHIP`, measures in `FILTER`, RLS, `DATESINPERIOD`, date windows in variables, iterators over `VALUES` with a measure, `SELECTEDVALUE` / `HASONEVALUE`. Still needing `fallback: 'model'`: `MEDIAN` outside DuckDB, `FORMAT` patterns other than simple date parts, table variables other than date windows, iterators over `ALL(…)` or `FILTER(…)` with a measure body. Postgres is checked with PGlite (`@electric-sql/pglite` installed into the scratchpad, not the project): a copy of `tests/sql.test.ts` with an in-process runner, tables loaded through `json_populate_recordset`; the real-world sample passes on it too.
 - **Playground:** add more ```` ```js playground ```` examples to the guides; each one is tested automatically.
 
 ## Planned next (approved by the owner, not started)
