@@ -1298,6 +1298,8 @@ export function sqlEngine(model: DataModel, opts: SqlEngineOptions) {
     /** Stop listening to the model (only needed with `cache`). */
     dispose: () => (unsubscribe?.(), clearCache()),
     async query(spec: QuerySpec, signal?: AbortSignal): Promise<Omit<QueryResult, 'baseFilters'> & { baseFilters: readonly unknown[] }> {
+      // an in-memory aggregation table that covers the query answers it without a round trip
+      if (model.aggregationFor(spec)) return model.query(spec);
       try {
         const calc = visualCalcPlan(spec);
         return calc ? calc.finish(await runPlan(calc.spec, signal)) : await runPlan(spec, signal);

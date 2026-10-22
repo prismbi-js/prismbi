@@ -24,6 +24,8 @@ export interface PbiColumn {
   /** DAX of a calculated column. */
   expression?: string;
   sortByColumn?: string;
+  /** Aggregation mapping (Power BI "manage aggregations"): the detail column or table this column summarizes. */
+  alternateOf?: { baseColumn?: string; baseTable?: string; summarization?: string };
 }
 
 export interface PbiMeasure {
@@ -86,6 +88,19 @@ const indentOf = (line: string) => {
   return m.replace(/ {4}/g, '\t').replace(/ /g, '').length;
 };
 
+/** model.bim's `alternateOf` ({ baseColumn: { table, column } | "T.C", baseTable, summarization }) in TMDL's shape. */
+function bimAlternateOf(a: unknown): PbiColumn['alternateOf'] {
+  if (!a || typeof a !== 'object') return undefined;
+  const o = a as Record<string, unknown>;
+  const col = o.baseColumn as { table?: string; column?: string; name?: string } | string | undefined;
+  const tab = o.baseTable as { table?: string; name?: string } | string | undefined;
+  return {
+    baseColumn: typeof col === 'string' ? col : col ? `${col.table}.${col.column ?? col.name}` : undefined,
+    baseTable: typeof tab === 'string' ? tab : (tab?.table ?? tab?.name),
+    summarization: o.summarization as string | undefined,
+  };
+}
+
 /** Parse the TMDL files of a semantic model (`definition/tables/*.tmdl`, `definition/relationships.tmdl`, …). */
 export function parseTmdl(texts: string[]): PbiModel {
   const tables: PbiTable[] = [];
@@ -97,6 +112,8 @@ export function parseTmdl(texts: string[]): PbiModel {
     let rel: (Partial<PbiRelationship> & { indent: number }) | null = null;
     let fence = false;
     let fenceTarget: { target: Record<string, unknown>; key: string } | null = null;
+    // an "alternateOf" block inside a column
+    let alt: { target: Record<string, unknown>; indent: number } | null = null;
     for (let i = 0; i < lines.length; i++) {
       const raw = lines[i];
       const line = raw.trim();
@@ -110,6 +127,12 @@ export function parseTmdl(texts: string[]): PbiModel {
       }
       if (!line || line.startsWith('///') || line.startsWith('//')) continue;
       const ind = indentOf(raw);
+      if (alt && ind <= alt.indent) alt = null;
+      if (alt) {
+        const p = /^([A-Za-z]+)\s*:\s*(.*)$/.exec(line);
+        if (p) alt.target[p[1]] = unquote(p[2].trim());
+        continue;
+      }
       // expression continuation: deeper than the object's properties
       if (obj?.exprKey && ind >= obj.indent + 2) {
         obj.target[obj.exprKey] = `${obj.target[obj.exprKey] ? `${obj.target[obj.exprKey]}\n` : ''}${line}`;
@@ -225,6 +248,12 @@ export function parseTmdl(texts: string[]): PbiModel {
         continue;
       }
       if (table && prop && ind === 1 && (prop[1] === 'isHidden')) table.isHidden = prop[2].trim() !== 'false';
+      if (obj?.kind === 'column' && line === 'alternateOf' && ind === obj.indent + 1) {
+        const a: Record<string, unknown> = {};
+        obj.target.alternateOf = a;
+        alt = { target: a, indent: ind };
+        continue;
+      }
       // a bare flag line like "isHidden"
       if (obj && /^[A-Za-z]+$/.test(line) && ind === obj.indent + 1) obj.target[line] = true;
     }
@@ -255,7 +284,7 @@ export function parseModelBim(json: string | Record<string, unknown>): PbiModel 
     return {
       name: String(tt.name),
       isHidden: !!tt.isHidden,
-      columns: ((tt.columns as Record<string, unknown>[]) ?? []).filter((c) => c.type !== 'rowNumber').map((c) => ({ name: String(c.name), dataType: c.dataType as string, formatString: c.formatString as string, isHidden: !!c.isHidden, displayFolder: c.displayFolder as string, description: joinExpr(c.description) || undefined, expression: c.type === 'calculated' ? joinExpr(c.expression) : undefined, sortByColumn: c.sortByColumn as string })),
+      columns: ((tt.columns as Record<string, unknown>[]) ?? []).filter((c) => c.type !== 'rowNumber').map((c) => ({ name: String(c.name), dataType: c.dataType as string, formatString: c.formatString as string, isHidden: !!c.isHidden, displayFolder: c.displayFolder as string, description: joinExpr(c.description) || undefined, expression: c.type === 'calculated' ? joinExpr(c.expression) : undefined, sortByColumn: c.sortByColumn as string, alternateOf: bimAlternateOf(c.alternateOf) })),
       measures: ((tt.measures as Record<string, unknown>[]) ?? []).map((m) => ({ name: String(m.name), expression: joinExpr(m.expression), formatString: m.formatString as string, displayFolder: m.displayFolder as string, description: joinExpr(m.description) || undefined, isHidden: !!m.isHidden })),
       calculated: calc ? joinExpr(calc.source?.expression) : undefined,
       ...(tt.calculationGroup
@@ -529,6 +558,33 @@ export function buildModelFrom(pm: PbiModel, opts: ImportOptions = {}, warn: (m:
         warn(`Measure [${m.name}]: ${(e as Error).message}`);
       }
     }
+  // aggregation tables: columns that are "alternate of" detail columns
+  for (const t of pm.tables) {
+    const alts = t.columns.filter((c) => c.alternateOf);
+    if (!alts.length) continue;
+    const def: { table: string; detail: string; groupBy: Record<string, string>; columns: Record<string, Record<string, string>>; rows?: string } = { table: t.name, detail: '', groupBy: {}, columns: {} };
+    let ok = true;
+    for (const c of alts) {
+      const a = c.alternateOf!;
+      const how = (a.summarization ?? '').toLowerCase();
+      const [bt, bc] = a.baseColumn ? (/\[/.test(a.baseColumn) ? [a.baseColumn.replace(/^'?(.*?)'?\[.*$/, '$1'), a.baseColumn.replace(/^.*\[(.*)\]$/, '$1')] : splitRef(a.baseColumn)) : [a.baseTable ?? '', ''];
+      if (def.detail && def.detail !== bt) ok = false;
+      def.detail = bt;
+      if (!bc && how === 'count') def.rows = c.name;
+      else if (how === 'groupby') def.groupBy[bc] = c.name;
+      else if (['sum', 'min', 'max', 'count'].includes(how)) (def.columns[bc] ??= {})[how] = c.name;
+      else ok = false;
+    }
+    if (!ok || !def.detail) {
+      warn(`Aggregation table "${t.name}": unsupported mapping (one detail table; groupBy, sum, min, max, count)`);
+      continue;
+    }
+    try {
+      model.addAggregation(def);
+    } catch (e) {
+      warn(`Aggregation table "${t.name}": ${(e as Error).message}`);
+    }
+  }
   return model;
 }
 

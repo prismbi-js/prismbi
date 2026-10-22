@@ -6,6 +6,7 @@ import type { DataModel } from './model';
 import type { Expr } from '../dax/ast';
 import { parseDax } from '../dax/parser';
 import { fastGroupQuery, useFastQuery } from './fastQuery';
+import { aggregationRewrite, parsedValues } from './aggregations';
 import { computeVisualCalc } from './visualCalc';
 
 export type Aggregation = 'sum' | 'avg' | 'min' | 'max' | 'count' | 'countRows' | 'distinctCount' | 'median' | 'first' | 'last';
@@ -78,6 +79,8 @@ export interface QueryResult {
   truncated: boolean;
   /** Filters that produced this result (for drill-through / selection identities). */
   baseFilters: readonly Filter[];
+  /** The aggregation table that answered the query, when one did ({@link DataModel.addAggregation}). */
+  aggregation?: string;
 }
 
 const AGG_FN: Record<Aggregation, string> = {
@@ -114,7 +117,8 @@ export interface ResolvedValue extends QueryField {
 export function resolveValueField(model: DataModel, f: FieldSpec): ResolvedValue {
   const spec = typeof f === 'string' ? { field: f } : f;
   if (spec.expression) {
-    return { kind: 'value', name: spec.name ?? spec.expression, ref: spec.expression, ast: parseDax(spec.expression), format: spec.format };
+    const ast = (typeof f === 'object' && parsedValues.get(f)) || parseDax(spec.expression);
+    return { kind: 'value', name: spec.name ?? spec.expression, ref: spec.expression, ast, format: spec.format };
   }
   const field = spec.field ?? '';
   const bare = field.replace(/^\[|\]$/g, '');
@@ -173,6 +177,19 @@ function resolveTopN(model: DataModel, spec: TopNFilterSpec, ctx: Filter[]): Col
 }
 
 export function runQuery(model: DataModel, spec: QuerySpec): QueryResult {
+  const aggs = model.aggregations();
+  const hit = aggs.length ? aggregationRewrite(model, spec, aggs, resolveValueField) : null;
+  if (hit) {
+    // run against the aggregation table, then report the fields as asked for
+    const res = runQueryAll(model, hit.spec);
+    const groups = (spec.groupBy ?? []).map((g) => resolveGroupField(model, g));
+    const values = (spec.values ?? []).map((v, i) => (typeof v === 'object' && v.visualCalc ? res.values[i] : stripAst(resolveValueField(model, v))));
+    return { ...res, groups, values: values.map((v, i) => ({ ...v, format: res.values[i]?.format ?? v.format })), aggregation: hit.table };
+  }
+  return runQueryAll(model, spec);
+}
+
+function runQueryAll(model: DataModel, spec: QuerySpec): QueryResult {
   const plan = visualCalcPlan(spec);
   return plan ? plan.finish(runQueryCore(model, plan.spec)) : runQueryCore(model, spec);
 }

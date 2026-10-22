@@ -10,8 +10,9 @@ import type { Expr } from '../dax/ast';
 import { parseDax } from '../dax/parser';
 import { Evaluator } from '../dax/evaluator';
 import type { QueryResult, QuerySpec } from './query';
-import { runQuery } from './query';
+import { resolveValueField, runQuery } from './query';
 import { applySteps, rowLocalSteps } from './transform';
+import { aggregationRewrite, type AggregationDef } from './aggregations';
 import type { TransformStep } from './transform';
 
 export interface AppendOptions {
@@ -141,6 +142,7 @@ export class DataModel {
   /** Power Query-style steps per table, with the untransformed source rows they replay over. */
   private transforms = new Map<string, { source: Row[]; steps: TransformStep[] }>();
   private policies = new Map<string, RefreshPolicy>();
+  private aggs: AggregationDef[] = [];
   private calcGroupMap = new Map<string, CalculationGroup>();
   private fieldParams = new Map<string, { column: string; fields: FieldParameterDef[] }>();
   private hierarchies = new Map<string, { table: string; name: string; levels: string[] }>();
@@ -207,6 +209,35 @@ export class DataModel {
       this.policies.set(name, policy);
     } else this.policies.delete(name);
     return this;
+  }
+
+  /**
+   * Answer the queries an aggregation table covers from it instead of its detail table (Power BI's "manage
+   * aggregations"). The aggregation table must already be in the model, related to the dimensions it covers.
+   */
+  addAggregation(def: AggregationDef): this {
+    const t = this.table(def.table);
+    if (!this.hasTable(def.detail)) throw new Error(`Unknown detail table "${def.detail}"`);
+    const used = [...Object.values(def.groupBy ?? {}), ...Object.values(def.columns ?? {}).flatMap((c) => Object.values(c)), ...(def.rows ? [def.rows] : [])];
+    for (const c of used) if (!t.hasColumn(c as string)) throw new Error(`Aggregation table "${def.table}" has no column "${c}"`);
+    this.aggs = [...this.aggs.filter((a) => a.table !== def.table), def];
+    this.changed();
+    return this;
+  }
+
+  removeAggregation(table: string): this {
+    this.aggs = this.aggs.filter((a) => a.table !== table);
+    this.changed();
+    return this;
+  }
+
+  aggregations(): readonly AggregationDef[] {
+    return this.aggs;
+  }
+
+  /** The aggregation table that would answer `spec`, or null (other engines use it to stay off the detail table). */
+  aggregationFor(spec: QuerySpec): string | null {
+    return this.aggs.length ? (aggregationRewrite(this, spec, this.aggs, resolveValueField)?.table ?? null) : null;
   }
 
   refreshPolicyOf(name: string): RefreshPolicy | undefined {
@@ -715,6 +746,7 @@ export class DataModel {
       roles: Object.fromEntries(this.roles),
       transforms: Object.fromEntries([...this.transforms].map(([k, v]) => [k, v.steps])),
       refreshPolicies: Object.fromEntries(this.policies),
+      aggregations: [...this.aggs],
     };
   }
 

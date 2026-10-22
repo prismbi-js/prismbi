@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { importPowerBI, parseTmdl } from '@prismbi/prismbi/powerbi';
+import { buildModelFrom, importPowerBI, parseModelBim, parseTmdl } from '@prismbi/prismbi/powerbi';
 import { Report } from '../src/index';
 
 const salesTmdl = `table Sales
@@ -245,5 +245,64 @@ describe('Power BI calculation groups', () => {
     const { parseModelBim } = await import('@prismbi/prismbi/powerbi');
     const pm = parseModelBim({ model: { tables: [{ name: 'TI', calculationGroup: { precedence: 1, calculationItems: [{ name: 'YoY %', expression: ['SELECTEDMEASURE()'], ordinal: 0, formatStringDefinition: { expression: '"0%"' } }] }, columns: [{ name: 'Name', dataType: 'string' }] }] } });
     expect(pm.tables[0].calculationGroup).toEqual({ precedence: 1, items: [{ name: 'YoY %', expression: 'SELECTEDMEASURE()', ordinal: 0, formatStringDefinition: '"0%"' }] });
+  });
+});
+
+describe('aggregation tables (alternateOf)', () => {
+  const aggTmdl = `table SalesAgg
+	isHidden
+
+	column ProductKey
+		dataType: int64
+		alternateOf
+			baseColumn: Sales.ProductKey
+			summarization: groupBy
+
+	column Amount
+		dataType: decimal
+		alternateOf
+			baseColumn: Sales.Amount
+			summarization: sum
+
+	column Rows
+		dataType: int64
+		alternateOf
+			baseTable: Sales
+			summarization: count
+`;
+  const aggRel = `relationship 9e3a
+	fromColumn: SalesAgg.ProductKey
+	toColumn: Product.ProductKey
+`;
+  const data = {
+    Sales: [{ Amount: 5, Cost: 1, ProductKey: 1, OrderDate: new Date(2025, 0, 1) }, { Amount: 7, Cost: 2, ProductKey: 2, OrderDate: new Date(2025, 0, 2) }, { Amount: 3, Cost: 1, ProductKey: 1, OrderDate: new Date(2025, 0, 3) }],
+    Product: [{ ProductKey: 1, Category: 'Bikes' }, { ProductKey: 2, Category: 'Helmets' }],
+    SalesAgg: [{ ProductKey: 1, Amount: 8, Rows: 2 }, { ProductKey: 2, Amount: 7, Rows: 1 }],
+  };
+
+  it('reads TMDL alternateOf into an aggregation that answers covered queries', () => {
+    const pm = parseTmdl([salesTmdl, productTmdl, relTmdl, aggTmdl, aggRel]);
+    expect(pm.tables.find((t) => t.name === 'SalesAgg')!.columns.map((c) => c.alternateOf)).toEqual([
+      { baseColumn: 'Sales.ProductKey', summarization: 'groupBy' },
+      { baseColumn: 'Sales.Amount', summarization: 'sum' },
+      { baseTable: 'Sales', summarization: 'count' },
+    ]);
+    const warnings: string[] = [];
+    const model = buildModelFrom(pm, { data }, (w) => warnings.push(w));
+    expect(warnings.filter((w) => /Aggregation/.test(w))).toEqual([]);
+    expect(model.aggregations()).toEqual([{ table: 'SalesAgg', detail: 'Sales', groupBy: { ProductKey: 'ProductKey' }, columns: { Amount: { sum: 'Amount' } }, rows: 'Rows' }]);
+    const r = model.query({ groupBy: ['Product[Category]'], values: ['Total Sales', { name: 'n', expression: 'COUNTROWS(Sales)' }] });
+    expect(r.aggregation).toBe('SalesAgg');
+    expect(r.rows.map((x) => [x.keys[0], ...x.values])).toEqual([['Bikes', 8, 2], ['Helmets', 7, 1]]);
+    // by date: not covered, answered from Sales
+    expect(model.query({ groupBy: ['Sales[OrderDate]'], values: ['Total Sales'] }).aggregation).toBeUndefined();
+  });
+
+  it('reads model.bim alternateOf', () => {
+    const pm = parseModelBim({ model: { tables: [{ name: 'Agg', columns: [{ name: 'Amt', dataType: 'double', alternateOf: { baseColumn: { table: 'Sales', column: 'Amount' }, summarization: 'sum' } }, { name: 'N', dataType: 'int64', alternateOf: { baseTable: 'Sales', summarization: 'count' } }] }] } });
+    expect(pm.tables[0].columns.map((c) => c.alternateOf)).toEqual([
+      { baseColumn: 'Sales.Amount', baseTable: undefined, summarization: 'sum' },
+      { baseColumn: undefined, baseTable: 'Sales', summarization: 'count' },
+    ]);
   });
 });

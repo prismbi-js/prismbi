@@ -92,6 +92,31 @@ model.addMeasure('Projected Sales', '[Total Sales] * (1 + [Price Change Value])'
 { type: 'slicer', fields: { field: "'Price Change'[Price Change]" }, format: { slicer: { style: 'slider' } } }
 ```
 
+## Aggregation tables
+
+An aggregation table summarizes a large fact table at a coarser grain (per day and product, say), and answers every query it can, as Power BI's "manage aggregations" does. The detail table answers the rest; it can even be empty locally while an [SQL engine](sql.md) holds its rows.
+
+```ts
+model
+  .addTable('SalesAgg', dailyRows) // OrderDate, ProductKey, Amount, Qty, Rows
+  .addRelationship({ from: 'SalesAgg[OrderDate]', to: 'Date[Date]' })
+  .addRelationship({ from: 'SalesAgg[ProductKey]', to: 'Product[ProductKey]' })
+  .addAggregation({
+    table: 'SalesAgg',
+    detail: 'Sales',
+    groupBy: { OrderDate: 'OrderDate', ProductKey: 'ProductKey' },   // detail column → aggregation column
+    columns: { SalesAmount: { sum: 'Amount' }, Quantity: { sum: 'Qty', max: 'MaxQty', count: 'QtyCount' } },
+    rows: 'Rows',                                                    // detail rows per group, for COUNTROWS
+  });
+
+model.query({ groupBy: ['Product[Category]', 'Date[Year]'], values: ['Total Sales', 'Margin %'] }).aggregation; // 'SalesAgg'
+```
+
+- **Covered queries:** every grouping, filter and `CALCULATE` column is on a table the aggregation is related to (directly or further along many-to-one relationships), on the aggregation itself, or a detail column in `groupBy`. Measures (followed through other measures) may use `SUM`, `MIN`, `MAX`, `COUNT` / `COUNTA` and `AVERAGE` of mapped columns (`AVERAGE` needs `sum` and `count`), `COUNTROWS` of the detail table (with `rows`), `MIN`, `MAX` and `DISTINCTCOUNT` of grouped-by columns, and anything that doesn't touch the detail table: `CALCULATE` filters, time intelligence, `DIVIDE` and the rest.
+- **Not covered**, answered from the detail table: other columns of the detail table, iterators or `FILTER` over it, distinct counts of columns it doesn't group by, Top N filters, compiled row filters, and any query while row-level security is active.
+- **Which one:** `result.aggregation` names the table that answered; `model.aggregationFor(spec)` tells without running. With several, the higher `precedence` wins, then the smaller table. Results keep the field names and formats asked for.
+- **Power BI:** aggregation mappings (`alternateOf` in TMDL or `model.bim`) come across in [the import](powerbi.md).
+
 ## Hierarchies, display folders, perspectives
 
 ```ts

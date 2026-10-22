@@ -24,6 +24,7 @@ new Report(el, { model, engine, pages });
 
 - **Other databases:** `run` is any `(sql, signal) => Promise<rows>`, so you can send the SQL to your own server for Postgres, DuckDB or SQLite. Set `dialect: 'postgres' | 'sqlite'` (default `'duckdb'`).
 - **Different names:** `tables` maps model tables to SQL tables or views (`{ Sales: 'analytics.fact_sales' }`). `columns` maps column names per table (`{ Sales: { SalesAmount: 'amount' } }`).
+- **Aggregation tables:** with an [aggregation table](advanced-modeling.md#aggregation-tables) in memory, `sqlEngine` answers the queries it covers locally and sends only the rest to the database.
 - **Caching:** `cache: true` (or `{ max, ttlMs }`) runs each distinct statement once: re-renders, visuals asking the same thing and concurrent duplicates share one result. Model changes clear it; call `engine.clearCache()` after reloading the database, and `engine.dispose()` when you drop the engine.
 - **Logging:** `onSql` sees every statement (with `cache`, only those that actually run). `engine.toSql(spec)` and `toSql(model, spec, opts)` return the SQL without running it.
 
