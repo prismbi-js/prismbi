@@ -33,7 +33,6 @@ Last updated 2026-10-22. Work happens on branch `phase-5`; `master` is fast-forw
   - screenshots throughout the docs (`npm run docs:images` regenerates them).
 - **Known gaps:**
   - SQL: `CROSSFILTER` (all modes), bidirectional relationships, `USERELATIONSHIP`, measures in `FILTER` and RLS are pushed down. `MEDIAN` outside DuckDB still needs `fallback: 'model'`.
-  - SQLite is slow on non-contiguous date contexts (no subquery decorrelation); DuckDB and Postgres are fine.
 - **Playground:** add more ```` ```js playground ```` examples to the guides; each one is tested automatically.
 
 ## Planned next (approved by the owner, not started)
@@ -67,7 +66,7 @@ All in `CHANGELOG.md` under Unreleased. Highlights:
 - **Budgets raised deliberately** (`scripts/size.mjs`): core +3 KB, full +3 / +5 KB, studio +2, worker 3, connectors 5.
 - **Verification aids not committed:** DuckDB checks ran through a scratch copy of `tests/sql.test.ts` with Python `duckdb` (pip into a temp dir); repeat that way when changing `src/sql.ts`.
 
-**Still open from the plan below:** columnar storage from load time and typed row lists (both invasive: audit every `Column.values` / `rowsOf` reader first); SQLite on non-contiguous date contexts; feature ideas other than the sunburst and warm start (key influencers, aggregation tables, goals and scorecards); real-world validation (item 2).
+**Still open from the plan below:** columnar storage from load time and typed row lists (both invasive: audit every `Column.values` / `rowsOf` reader first); feature ideas other than the sunburst and warm start (key influencers, aggregation tables, goals and scorecards); real-world validation (item 2).
 
 ### 3. Performance
 

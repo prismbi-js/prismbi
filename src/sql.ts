@@ -490,15 +490,23 @@ class ContextTranslator {
     const preds = [...this.filterPreds(table, inner, y), cond(y)];
     const lhs = row.length === 1 ? s.col(row[0]) : `(${row.map((c) => s.col(c)).join(', ')})`;
     if (this.hoistTo !== 'groups') return `${lhs} IN (SELECT ${keys.join(', ')}\n${y.from()}\nWHERE ${preds.join(' AND ')})`;
+    return `${lhs} IN ${this.groupSet(keys, y.from(), preds)}`;
+  }
+
+  /**
+   * A set that depends only on the group, computed once per group: `SELECT c.g…, keys… FROM hz AS c CROSS JOIN
+   * <from> WHERE <preds>` becomes a materialized CTE, and this returns `(SELECT k… FROM hsN WHERE <this group>)`.
+   */
+  private groupSet(keys: string[], from: string, preds: string[]): string {
     const g = Array.from({ length: this.groupCount }, (_, i) => i);
-    const sql = `SELECT ${[...g.map((i) => `c.g${i}`), ...keys.map((k, i) => `${k} AS k${i}`)].join(', ')}\nFROM hz AS c CROSS JOIN ${y.from().replace(/^FROM /, '')}\nWHERE ${preds.join(' AND ')}`;
+    const sql = `SELECT ${[...g.map((i) => `c.g${i}`), ...keys.map((k, i) => `${k} AS k${i}`)].join(', ')}\nFROM hz AS c CROSS JOIN ${from.replace(/^FROM /, '')}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''}`;
     let name = this.sets.get(sql);
     if (!name) {
       name = `hs${this.sets.size}`;
       this.sets.set(sql, name);
     }
     const match = g.map((i) => this.isNotDistinct(`${name}.g${i}`, `c.g${i}`));
-    return `${lhs} IN (SELECT ${keys.map((_, i) => `${name}.k${i}`).join(', ')} FROM ${name}${match.length ? ` WHERE ${match.join(' AND ')}` : ''})`;
+    return `(SELECT ${keys.map((_, i) => `${name}.k${i}`).join(', ')} FROM ${name}${match.length ? ` WHERE ${match.join(' AND ')}` : ''})`;
   }
 
   /** Whether a condition needs a per-row context transition (a measure or CALCULATE). */
@@ -620,8 +628,19 @@ WHERE ${inner.join(' AND ')})`);
       const preds = [...this.filterPreds(date.table, ctx, s), ...more(x)];
       return `(SELECT ${select(x)}\n${s.from()}${preds.length ? `\nWHERE ${preds.join(' AND ')}` : ''})`;
     };
-    const direct = set((x) => this.shift(x, n, unit));
-    const monthEnds = set((x) => x, (x) => [`${x} = ${this.monthEnd(x)}`]);
+    // the sets depend only on the group: when grouping, materialize them once per group (databases without
+    // subquery decorrelation, like SQLite, would otherwise rebuild them for every fact row)
+    const setOf = (select: (x: string) => string, more: (x: string) => string[] = () => []) => {
+      if (this.hoistTo !== 'groups') return set(select, more);
+      const y = this.scope(date.table, ctx);
+      const x = y.col(date);
+      const preds = [...this.filterPreds(date.table, ctx, y), ...more(x)];
+      // a set the group doesn't filter is uncorrelated already: the database computes it once
+      if (!preds.some((p) => /\bc\.g\d/.test(p))) return set(select, more);
+      return this.groupSet([select(x)], y.from(), preds);
+    };
+    const direct = setOf((x) => this.shift(x, n, unit));
+    const monthEnds = setOf((x) => x, (x) => [`${x} = ${this.monthEnd(x)}`]);
     const general = (col: string) => {
       if (unit === 'day') return `${col} IN ${direct}`;
       // the context month-end that col would extend: the last day of col's month shifted back

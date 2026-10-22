@@ -15,6 +15,7 @@
 - **Lighter Studio undo:** each of the 200 undo steps stores the splice between neighbouring report states instead of a full JSON snapshot (`History.stored` reports the characters held).
 - **Worker: packed columns.** `engine.addColumns(name, columns, schema?, { transfer })` sends numbers and dates as `Float64Array`s and text as dictionary codes in transferred buffers (shared when they live in a `SharedArrayBuffer`); the worker adopts them as its numeric and dictionary views. About 10× faster than `addTable` with row objects at 1M rows. `model.addColumns(name, columns, schema?)` builds a table from column arrays in process. `packColumn`, `addPackedTable`; `PortLike.postMessage` takes a transfer list.
 - **Fix (SQL): bidirectional relationships.** Filter-context SQL ignored `crossFilter: 'both'` and silently returned unfiltered dimension measures (a product count by country counted every product). Filters on the "many" side now flow back as semi-joins, matching the in-memory engine (verified on SQLite and DuckDB). `CROSSFILTER(…, BOTH | ONEWAY | NONE)` in `CALCULATE` is pushed down too.
+- **SQL on SQLite: non-contiguous dates.** Shifted-date sets that depend on the group (e.g. last year by year, with a Q1 + Q3 filter) are materialized once per group instead of re-run for every fact row: 130 s → 11 s on the demo data. Sets that don't depend on the group stay uncorrelated.
 - **Fix:** plugin signing and verification work on Node 18, which has no global `crypto` (falls back to `node:crypto` `webcrypto`).
 
 ## 0.9.1 (2026-10-19)
