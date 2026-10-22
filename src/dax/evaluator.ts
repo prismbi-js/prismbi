@@ -7,9 +7,9 @@ import { groupCombos, groupFilter } from '../data/query';
 import type { DataModel } from '../data/model';
 import { formatValue } from '../format/format';
 import { PartialAggregates, type PartialKind } from '../data/partials';
-import { fastPathsEnabled } from '../data/fastQuery';
+import { fastGroupQuery, fastPathsEnabled } from '../data/fastQuery';
 import { compileRowExpr, type RowFn, type RowPlan } from './rowCompile';
-import { addMonths, MS_DAY, parallelPeriod, periodStart, shiftDates } from './timeIntel';
+import { addMonths, MS_DAY, parallelPeriod, periodStart, periodWindow, shiftDates } from './timeIntel';
 
 export class DaxError extends Error {
   constructor(message: string) {
@@ -115,6 +115,17 @@ export class Evaluator {
   private stack: string[] = [];
   /** Compiled row expressions per AST node and iterated table (WeakMap: ad-hoc ASTs don't accumulate). */
   private rowPlans = new WeakMap<Expr, Map<string, RowPlan | null>>();
+  /** Each date column's distinct dates in order, with their times, for range lookups by binary search. */
+  private dateIndex = new Map<string, { times: Float64Array; dates: Date[] }>();
+  /** DATESINPERIOD results by column, start, length and unit: rolling windows repeat across groups. */
+  private windows = new Map<string, TuplesTable>();
+  /** Filters made from table values (the same date window filters many evaluations). */
+  private tableFilters = new WeakMap<TableValue, Filter>();
+  /**
+   * Time-intelligence date tables by the visible dates they derive from (a cached list, so identity is the key) and
+   * the function's arguments: groups that don't filter the calendar (products, say) all shift the same dates.
+   */
+  private tiMemo = new WeakMap<readonly CellValue[], Map<string, TuplesTable>>();
 
   constructor(private model: DataModel) {
     this.partials = new PartialAggregates(model);
@@ -125,6 +136,10 @@ export class Evaluator {
     this.measureCache.clear();
     this.partials.clear();
     this.rowPlans = new WeakMap();
+    this.dateIndex.clear();
+    this.windows.clear();
+    this.tableFilters = new WeakMap();
+    this.tiMemo = new WeakMap();
   }
 
   // ------------------------------------------------------------ entry points
@@ -506,6 +521,13 @@ export class Evaluator {
   }
 
   private listToTable(e: Extract<Expr, { type: 'list' }>, ctx: EvalContext): TuplesTable {
+    // { (a, b), (c, d) }: one row per tuple, columns Value1, Value2, …
+    const rows = e.row ? [e] : e.items.length && e.items.every((i) => i.type === 'list' && i.row) ? (e.items as Extract<Expr, { type: 'list' }>[]) : null;
+    if (rows) {
+      const n = rows[0].items.length;
+      if (rows.some((r) => r.items.length !== n)) throw new DaxError('Each row of a table constructor needs the same number of values');
+      return { kind: 'tuples', columns: Array.from({ length: n }, (_, i) => ({ table: '', column: `Value${i + 1}` })), tuples: rows.map((r) => r.items.map((x) => this.evalScalar(x, ctx))) };
+    }
     return { kind: 'tuples', columns: [{ table: '', column: 'Value' }], tuples: e.items.map((i) => [this.evalScalar(i, ctx)]) };
   }
 
@@ -532,8 +554,27 @@ export class Evaluator {
     return t.tuples.map((values) => ({ kind: 'tuple', columns: t.columns, values }));
   }
 
-  /** Iterate `t`, evaluating `expr` in a row context for each row. */
-  private iterate(t: TableValue, expr: Expr, ctx: EvalContext): CellValue[] {
+  /**
+   * `X(VALUES(T[c]), [measure])` evaluated set-wise: the measure for every value of the column in one grouped pass
+   * under the current filters, instead of a context transition per value. Exact because VALUES only yields values
+   * the filters allow. Null when the measure needs the general engine, or a row context is in play.
+   */
+  private groupedIterate(source: Expr | undefined, t: TableValue, expr: Expr, ctx: EvalContext): CellValue[] | null {
+    if (!source || source.type !== 'call' || t.kind !== 'tuples' || t.columns.length !== 1 || t.tuples.length < 8) return null;
+    const fn = source.name.toUpperCase();
+    if ((fn !== 'VALUES' && fn !== 'DISTINCT') || source.args[0]?.type !== 'column' || ctx.rows?.length || ctx.selectedMeasure || !fastPathsEnabled()) return null;
+    const col = t.columns[0];
+    if (!col.table) return null;
+    const res = fastGroupQuery(this.model, [col], [expr], [...ctx.filters], undefined, () => t.tuples);
+    if (!res) return null;
+    const byKey = new Map(res.rows.map((r) => [valueKey(r.keys[0]), r.values[0]]));
+    return t.tuples.map((tu) => byKey.get(valueKey(tu[0])) ?? null);
+  }
+
+  /** Iterate `t`, evaluating `expr` in a row context for each row (`source` is the table expression, when known). */
+  private iterate(t: TableValue, expr: Expr, ctx: EvalContext, source?: Expr): CellValue[] {
+    const grouped = this.groupedIterate(source, t, expr, ctx);
+    if (grouped) return grouped;
     const f = t.kind === 'rows' ? this.rowFn(t.table, expr, ctx) : null;
     if (f && t.kind === 'rows') {
       const rows = t.rows;
@@ -574,7 +615,7 @@ export class Evaluator {
         }
       }
     } else {
-      for (const v of this.iterate(t, args[1], ctx)) {
+      for (const v of this.iterate(t, args[1], ctx, args[0])) {
         if (v === null || v === '') continue;
         sum += num(v);
         n++;
@@ -697,10 +738,14 @@ export class Evaluator {
   }
 
   private tableAsFilter(t: TableValue): Filter {
-    if (t.kind === 'rows') return rowsFilter(t.table, t.rows);
-    if (t.columns.some((c) => !c.table)) throw new DaxError('Table filter must be based on model columns');
-    if (t.columns.length === 1) return compileFilter({ target: t.columns[0], op: 'in', values: t.tuples.map((x) => x[0]) });
-    return compileFilter({ targets: t.columns, op: 'tuples', tuples: t.tuples });
+    let f = this.tableFilters.get(t);
+    if (f) return f;
+    if (t.kind === 'rows') f = rowsFilter(t.table, t.rows);
+    else if (t.columns.some((c) => !c.table)) throw new DaxError('Table filter must be based on model columns');
+    else if (t.columns.length === 1) f = compileFilter({ target: t.columns[0], op: 'in', values: t.tuples.map((x) => x[0]) });
+    else f = compileFilter({ targets: t.columns, op: 'tuples', tuples: t.tuples });
+    this.tableFilters.set(t, f);
+    return f;
   }
 
   /** `Products[Color] = "Red"` → FILTER(ALL(Products[Color]), ...) → `in` filter. */
@@ -756,11 +801,44 @@ export class Evaluator {
 
   // ------------------------------------------------------------ time intelligence
 
-  private dateColumnValues(e: Expr, ctx: EvalContext): { col: ColumnRef; visible: Date[]; all: Date[] } {
+  private dateColumnValues(e: Expr, ctx: EvalContext): { col: ColumnRef; visible: Date[]; all: Date[]; source: readonly CellValue[] } {
     const col = this.colArg(e, 'Time intelligence');
-    const visible = this.model.valuesOf(col, this.transition(ctx)).filter((d): d is Date => d instanceof Date);
+    const source = this.model.valuesOf(col, this.transition(ctx));
+    const visible = source.filter((d): d is Date => d instanceof Date);
     const all = this.model.table(col.table).distinct(col.column).filter((d): d is Date => d instanceof Date);
-    return { col, visible, all };
+    return { col, visible, all, source };
+  }
+
+  /** `make()` once per visible-date list and key (see {@link tiMemo}). */
+  private memoDates(source: readonly CellValue[], key: string, make: () => TuplesTable): TuplesTable {
+    let m = this.tiMemo.get(source);
+    if (!m) this.tiMemo.set(source, (m = new Map()));
+    let t = m.get(key);
+    if (!t) m.set(key, (t = make()));
+    return t;
+  }
+
+  /** The column's distinct dates from `lo` to `hi` (epoch ms, inclusive), in order. */
+  private datesIn(col: ColumnRef, lo: number, hi: number): Date[] {
+    const t = this.model.table(col.table);
+    const key = `${col.table}\u0001${col.column}\u0001${t.rowCount}`;
+    let ix = this.dateIndex.get(key);
+    if (!ix) {
+      const dates = t.distinct(col.column).filter((d): d is Date => d instanceof Date).sort((a, b) => a.getTime() - b.getTime());
+      ix = { times: Float64Array.from(dates, (d) => d.getTime()), dates };
+      this.dateIndex.set(key, ix);
+    }
+    const first = (x: number) => {
+      let a = 0;
+      let b = ix!.times.length;
+      while (a < b) {
+        const m = (a + b) >> 1;
+        if (ix!.times[m] < x) a = m + 1;
+        else b = m;
+      }
+      return a;
+    };
+    return ix.dates.slice(first(lo), first(hi + 1e-3));
   }
 
   private datesTable(col: ColumnRef, dates: Date[]): TuplesTable {
@@ -768,18 +846,20 @@ export class Evaluator {
   }
 
   private periodToDate(args: Expr[], ctx: EvalContext, period: 'year' | 'quarter' | 'month', yearEnd?: string): TuplesTable {
-    const { col, visible, all } = this.dateColumnValues(args[0], ctx);
+    const { col, visible, source } = this.dateColumnValues(args[0], ctx);
     if (visible.length === 0) return this.datesTable(col, []);
-    const last = visible.reduce((a, b) => (a > b ? a : b));
-    const start = periodStart(last, period, yearEnd);
-    return this.datesTable(col, all.filter((d) => d >= start && d <= last));
+    return this.memoDates(source, `ptd\u0001${col.table}\u0001${col.column}\u0001${period}\u0001${yearEnd ?? ''}`, () => {
+      const last = visible.reduce((a, b) => (a.getTime() > b.getTime() ? a : b));
+      const start = periodStart(last, period, yearEnd);
+      return this.datesTable(col, this.datesIn(col, start.getTime(), last.getTime()));
+    });
   }
 
   private shiftDates(args: Expr[], ctx: EvalContext, n: number, interval: string): TuplesTable {
-    const { col, visible, all } = this.dateColumnValues(args[0], ctx);
+    const { col, visible, all, source } = this.dateColumnValues(args[0], ctx);
     const unit = interval.toUpperCase();
     if (!['DAY', 'MONTH', 'QUARTER', 'YEAR'].includes(unit)) throw new DaxError(`Unknown interval ${interval}`);
-    return this.datesTable(col, shiftDates(visible, new Set(all.map((d) => d.getTime())), n, unit));
+    return this.memoDates(source, `shift\u0001${col.table}\u0001${col.column}\u0001${n}\u0001${unit}`, () => this.datesTable(col, shiftDates(visible, new Set(all.map((d) => d.getTime())), n, unit)));
   }
 
   private intervalArg(e: Expr | undefined): string {
@@ -867,7 +947,7 @@ export class Evaluator {
     const s = (i: number) => this.evalScalar(args[i], ctx);
     const opt = (i: number, d: CellValue = null) => (args[i] ? s(i) : d);
     const agg = (fn: (vals: CellValue[]) => CellValue): CellValue => fn(this.columnValues(this.colArg(args[0], name), ctx));
-    const iter = (fn: (vals: CellValue[]) => CellValue): CellValue => fn(this.iterate(this.evalTable(args[0], ctx), args[1], ctx));
+    const iter = (fn: (vals: CellValue[]) => CellValue): CellValue => fn(this.iterate(this.evalTable(args[0], ctx), args[1], ctx, args[0]));
     const nums = (vals: CellValue[]) => vals.filter((v) => v !== null && v !== '').map(num);
 
     switch (name) {
@@ -1077,20 +1157,39 @@ export class Evaluator {
       case 'PREVIOUSMONTH':
       case 'PREVIOUSYEAR':
       case 'PREVIOUSQUARTER': {
-        const { col, visible, all } = this.dateColumnValues(args[0], ctx);
+        const { col, visible, source } = this.dateColumnValues(args[0], ctx);
         if (!visible.length) return this.datesTable(col, []);
         const unit = name === 'PARALLELPERIOD' ? this.intervalArg(args[2]) : name.replace('PREVIOUS', '');
         const n = name === 'PARALLELPERIOD' ? num(s(1)) : -1;
-        const first = visible.reduce((a, b) => (a < b ? a : b));
-        const [start, end] = parallelPeriod(first, unit, n);
-        return this.datesTable(col, all.filter((d) => d >= start && d <= end));
+        return this.memoDates(source, `par\u0001${col.table}\u0001${col.column}\u0001${n}\u0001${unit}`, () => {
+          const first = visible.reduce((a, b) => (a.getTime() < b.getTime() ? a : b));
+          const [start, end] = parallelPeriod(first, unit, n);
+          return this.datesTable(col, this.datesIn(col, start.getTime(), end.getTime()));
+        });
       }
       case 'DATESBETWEEN': {
         const col = this.colArg(args[0], name);
         const lo = s(1);
         const hi = s(2);
-        const all = this.model.table(col.table).distinct(col.column).filter((d): d is Date => d instanceof Date);
-        return this.datesTable(col, all.filter((d) => (lo === null || d >= (lo as Date)) && (hi === null || d <= (hi as Date))));
+        const time = (v: CellValue, open: number) => (v instanceof Date ? v.getTime() : v === null ? open : NaN);
+        return this.datesTable(col, this.datesIn(col, time(lo, -Infinity), time(hi, Infinity)));
+      }
+      case 'DATESINPERIOD': {
+        const col = this.colArg(args[0], name);
+        const start = s(1);
+        if (!(start instanceof Date)) return this.datesTable(col, []);
+        const unit = this.intervalArg(args[3]);
+        if (!['DAY', 'MONTH', 'QUARTER', 'YEAR'].includes(unit)) throw new DaxError(`Unknown interval ${unit}`);
+        const n = num(s(2));
+        const key = `${col.table}\u0001${col.column}\u0001${start.getTime()}\u0001${n}\u0001${unit}`;
+        let w = this.windows.get(key);
+        if (!w) {
+          const [first, last] = periodWindow(start, n, unit);
+          w = this.datesTable(col, this.datesIn(col, first.getTime(), last.getTime()));
+          if (this.windows.size > 2000) this.windows.clear();
+          this.windows.set(key, w);
+        }
+        return w;
       }
       case 'FIRSTDATE':
       case 'LASTDATE': {
@@ -1130,6 +1229,13 @@ export class Evaluator {
         return true;
       case 'FALSE':
         return false;
+      case 'NAMEOF': {
+        // the fully qualified name of a column or measure, as field parameters store it
+        const a = args[0];
+        if (a?.type === 'column') return `'${a.table.replace(/'/g, "''")}'[${a.column}]`;
+        if (a?.type === 'bracket') return `[${a.name}]`;
+        throw new DaxError('NAMEOF expects a column or a measure');
+      }
       case 'BLANK':
         return null;
       case 'ISBLANK':

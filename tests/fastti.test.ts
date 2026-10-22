@@ -17,7 +17,10 @@ const model = buildModel()
   .addMeasure('Growth', '[Total Sales] - [Sales LY]')
   .addMeasure('Bike Sales', 'CALCULATE([Total Sales], Product[Category] = "Bikes")')
   .addMeasure('Growth Ratio', 'DIVIDE([Total Sales], [Sales LY])')
-  .addMeasure('Profit YTD', 'TOTALYTD(SUMX(Sales, Sales[SalesAmount] - Sales[TotalCost]), Date[Date])');
+  .addMeasure('Profit YTD', 'TOTALYTD(SUMX(Sales, Sales[SalesAmount] - Sales[TotalCost]), Date[Date])')
+  .addMeasure('Guarded LY', 'IF([Total Sales] > 0, CALCULATE([Total Sales], SAMEPERIODLASTYEAR(Date[Date])))')
+  .addMeasure('Small Months Sales', 'IF([Units] <= 400, [Total Sales])')
+  .addMeasure('Growth Or Same', 'IF([Sales LY] <> 0, [Total Sales] - [Sales LY], [Total Sales])');
 
 const run = (spec: QuerySpec, mode: 'always' | 'off') => {
   setFastQuery(mode);
@@ -46,6 +49,7 @@ const CASES: [string, QuerySpec][] = [
   ['other filters stay, date filters are replaced', { groupBy: ['Date[MonthShort]'], values: ['Sales LY', 'Bike Sales LY', 'Orders LY', 'Avg Line LY'], filters: [...y2025, { target: 'Region[Country]', op: 'in', values: ['Canada', 'Germany'] }, { target: 'Date[Quarter]', op: 'in', values: ['Q1', 'Q2'] }], totals: true }],
   ['plain measures summed from the same partials, under date and other filters', { groupBy: ['Date[Year]', 'Date[MonthShort]'], values: ['Total Sales', 'Units', 'Bike Sales', 'Sales LY', 'Growth'], filters: [{ target: 'Region[Group]', op: 'in', values: ['Europe', 'Pacific'] }, { target: 'Date[Quarter]', op: 'in', values: ['Q2', 'Q4'] }], totals: true }],
   ['a distinct count keeps its own pass', { groupBy: ['Date[Year]', 'Date[Quarter]'], values: ['Orders', 'Sales LY'], totals: true }],
+  ['IF guards around time intelligence and plain measures', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Guarded LY', 'Small Months Sales', 'Growth Or Same'], totals: true }],
   ['SUMX under TOTALYTD', { groupBy: ['Date[MonthNumber]'], values: ['Profit YTD'], filters: y2025 }],
 ];
 

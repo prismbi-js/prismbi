@@ -38,7 +38,7 @@ export function formatDax(src: string | Expr, opts: FormatDaxOptions = {}): stri
       case 'varRef':
         return e.name;
       case 'list':
-        return `{ ${e.items.map((i) => fmt(i, level)).join(', ')} }`;
+        return e.row ? `(${e.items.map((i) => fmt(i, level)).join(', ')})` : `{ ${e.items.map((i) => fmt(i, level)).join(', ')} }`;
       case 'unary':
         return e.op === 'NOT' ? `NOT ${wrap(e.operand, 3, level)}` : `${e.op}${wrap(e.operand, 9, level)}`;
       case 'binary': {

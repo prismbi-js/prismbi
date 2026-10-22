@@ -255,6 +255,13 @@ class Parser {
         return this.tableOrColumn(t.value);
       case 'lparen': {
         const e = this.expr();
+        // (a, b): a row of a table constructor
+        if (this.peek().type === 'comma') {
+          const items = [e];
+          while (this.peek().type === 'comma' && this.next()) items.push(this.expr());
+          this.expect('rparen');
+          return { type: 'list', items, row: true };
+        }
         this.expect('rparen');
         return e;
       }

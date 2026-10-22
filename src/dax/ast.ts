@@ -10,7 +10,8 @@ export type Expr =
   | { type: 'call'; name: string; args: Expr[] }
   | { type: 'unary'; op: '-' | '+' | 'NOT'; operand: Expr }
   | { type: 'binary'; op: BinaryOp; left: Expr; right: Expr }
-  | { type: 'list'; items: Expr[] }
+  /** `{ a, b }`; `row` marks a parenthesized tuple `(a, b)`, a row of a table constructor `{ (1, "x"), (2, "y") }`. */
+  | { type: 'list'; items: Expr[]; row?: boolean }
   | { type: 'var'; bindings: { name: string; value: Expr }[]; body: Expr }
   | { type: 'varRef'; name: string };
 

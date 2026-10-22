@@ -8,7 +8,7 @@
  * const { model, report, warnings } = importPowerBI(files, { data: { Sales: await loadCsv('/sales.csv') } });
  * ```
  */
-import { DataModel, DataTable } from '@prismbi/prismbi';
+import { DataModel, DataTable, parseDax } from '@prismbi/prismbi';
 import type { ColumnSchema, DataType, FieldSpec, PageDefinition, ReportDefinition, Row, VisualSpec } from '@prismbi/prismbi';
 
 /** Project files keyed by forward-slash path (relative to the .pbip folder). */
@@ -24,6 +24,10 @@ export interface PbiColumn {
   /** DAX of a calculated column. */
   expression?: string;
   sortByColumn?: string;
+  /** Where an import or calculated table column comes from (`[Value1]` for a table constructor's first column). */
+  sourceColumn?: string;
+  /** A date column's auto date/time table: `defaultHierarchy` is `Table.'Hierarchy'`. */
+  variation?: { defaultHierarchy?: string; relationship?: string };
   /** Aggregation mapping (Power BI "manage aggregations"): the detail column or table this column summarizes. */
   alternateOf?: { baseColumn?: string; baseTable?: string; summarization?: string };
 }
@@ -138,7 +142,8 @@ export function parseTmdl(texts: string[]): PbiModel {
         obj.target[obj.exprKey] = `${obj.target[obj.exprKey] ? `${obj.target[obj.exprKey]}\n` : ''}${line}`;
         continue;
       }
-      const head = /^(table|column|measure|relationship|partition|hierarchy|level|annotation|calculationGroup|calculationItem|expression|role|culture|perspective|model|database|ref|dataSource)\s*(.*)$/.exec(line);
+      // a declaration ("column Year"), not a property that shares the keyword ("column: Year" in a hierarchy level)
+      const head = /^(table|column|measure|relationship|partition|hierarchy|level|annotation|calculationGroup|calculationItem|expression|role|culture|perspective|model|database|ref|dataSource)(?!\s*:)\s*(.*)$/.exec(line);
       if (head && (ind === 0 || ['column', 'measure', 'partition', 'hierarchy', 'calculationGroup', 'calculationItem', 'annotation', 'level'].includes(head[1]))) {
         const [, kind, rest] = head;
         const eq = rest.match(/^((?:'(?:[^']|'')*'|[^=])*?)\s*=\s*(.*)$/);
@@ -201,7 +206,7 @@ export function parseTmdl(texts: string[]): PbiModel {
         }
         if (kind === 'partition') {
           // "partition X = calculated" with a DAX source makes a calculated table
-          const p: Record<string, unknown> = { mode: expr };
+          const p: Record<string, unknown> = { partitionType: expr };
           obj = { kind, target: p, indent: ind };
           (table as PbiTable & { _partition?: Record<string, unknown> })._partition = p;
           continue;
@@ -248,9 +253,10 @@ export function parseTmdl(texts: string[]): PbiModel {
         continue;
       }
       if (table && prop && ind === 1 && (prop[1] === 'isHidden')) table.isHidden = prop[2].trim() !== 'false';
-      if (obj?.kind === 'column' && line === 'alternateOf' && ind === obj.indent + 1) {
+      // nested blocks of a column: "alternateOf" (aggregations) and "variation <name>" (its auto date/time table)
+      if (obj?.kind === 'column' && (line === 'alternateOf' || /^variation\b/.test(line)) && ind === obj.indent + 1) {
         const a: Record<string, unknown> = {};
-        obj.target.alternateOf = a;
+        obj.target[line === 'alternateOf' ? 'alternateOf' : 'variation'] = a;
         alt = { target: a, indent: ind };
         continue;
       }
@@ -259,7 +265,7 @@ export function parseTmdl(texts: string[]): PbiModel {
     }
     for (const t of tables) {
       const p = (t as PbiTable & { _partition?: Record<string, unknown> })._partition;
-      if (p && p.mode === 'calculated' && typeof p.source === 'string') t.calculated = p.source;
+      if (p && p.partitionType === 'calculated' && typeof p.source === 'string') t.calculated = p.source;
       delete (t as PbiTable & { _partition?: unknown })._partition;
     }
   }
@@ -284,7 +290,7 @@ export function parseModelBim(json: string | Record<string, unknown>): PbiModel 
     return {
       name: String(tt.name),
       isHidden: !!tt.isHidden,
-      columns: ((tt.columns as Record<string, unknown>[]) ?? []).filter((c) => c.type !== 'rowNumber').map((c) => ({ name: String(c.name), dataType: c.dataType as string, formatString: c.formatString as string, isHidden: !!c.isHidden, displayFolder: c.displayFolder as string, description: joinExpr(c.description) || undefined, expression: c.type === 'calculated' ? joinExpr(c.expression) : undefined, sortByColumn: c.sortByColumn as string, alternateOf: bimAlternateOf(c.alternateOf) })),
+      columns: ((tt.columns as Record<string, unknown>[]) ?? []).filter((c) => c.type !== 'rowNumber').map((c) => ({ name: String(c.name), dataType: c.dataType as string, formatString: c.formatString as string, isHidden: !!c.isHidden, displayFolder: c.displayFolder as string, description: joinExpr(c.description) || undefined, expression: c.type === 'calculated' ? joinExpr(c.expression) : undefined, sortByColumn: c.sortByColumn as string, sourceColumn: c.sourceColumn as string | undefined, alternateOf: bimAlternateOf(c.alternateOf) })),
       measures: ((tt.measures as Record<string, unknown>[]) ?? []).map((m) => ({ name: String(m.name), expression: joinExpr(m.expression), formatString: m.formatString as string, displayFolder: m.displayFolder as string, description: joinExpr(m.description) || undefined, isHidden: !!m.isHidden })),
       calculated: calc ? joinExpr(calc.source?.expression) : undefined,
       ...(tt.calculationGroup
@@ -333,6 +339,7 @@ const VISUALS: Record<string, { type: string; roles: Record<string, string> }> =
   pivotTable: { type: 'matrix', roles: { Rows: 'rows', Columns: 'columns', Values: 'values' } },
   slicer: { type: 'slicer', roles: { Values: 'field' } },
   map: { type: 'map', roles: { Category: 'location', Size: 'size', Series: 'legend' } },
+  azureMap: { type: 'map', roles: { Category: 'location', Size: 'size', Series: 'legend', Latitude: 'latitude', Longitude: 'longitude' } },
   filledMap: { type: 'filledMap', roles: { Category: 'location', Values: 'values' } },
   decompositionTreeVisual: { type: 'decompositionTree', roles: { Analyze: 'values', ExplainBy: 'explainBy' } },
   textbox: { type: 'text', roles: {} },
@@ -340,6 +347,9 @@ const VISUALS: Record<string, { type: string; roles: Record<string, string> }> =
 
 const AGG: Record<number, string> = { 0: 'sum', 1: 'avg', 2: 'distinctCount', 3: 'min', 4: 'max', 5: 'count', 6: 'median' };
 const ref = (table: string, column: string) => `${/^[A-Za-z_][A-Za-z0-9_]*$/.test(table) ? table : `'${table.replace(/'/g, "''")}'`}[${column}]`;
+
+/** Separates a date column from the level of its auto date/time hierarchy until the level's table is known. */
+const VARIATION = '\u0001';
 
 /** A Power BI query field (Column / Measure / Aggregation / HierarchyLevel) as a PrismBI field spec. */
 function fieldOf(field: Record<string, unknown> | undefined, warn: (m: string) => void): FieldSpec | null {
@@ -359,7 +369,10 @@ function fieldOf(field: Record<string, unknown> | undefined, warn: (m: string) =
     return { field: ref(entityOf(a.Expression!.Column), col.Property), aggregation: (agg ?? 'sum') as never };
   }
   if (field.HierarchyLevel) {
-    const hl = field.HierarchyLevel as { Expression?: { Hierarchy?: { Expression?: unknown } }; Level: string };
+    const hl = field.HierarchyLevel as { Expression?: { Hierarchy?: { Expression?: { PropertyVariationSource?: { Expression?: unknown; Property: string } } } }; Level: string };
+    // auto date/time: a level of the hidden date table behind a date column, resolved once relationships are known
+    const pv = hl.Expression?.Hierarchy?.Expression?.PropertyVariationSource;
+    if (pv) return `${ref(entityOf(pv), pv.Property)}${VARIATION}${hl.Level}`;
     return ref(entityOf(hl.Expression?.Hierarchy), hl.Level);
   }
   return null;
@@ -470,6 +483,11 @@ const fmt = (f?: string) => (f ? f.replace(/\\(.)/g, '$1') : undefined);
 export interface ImportOptions {
   /** Rows per table (e.g. from loadCsv / loadRest). Missing tables are created empty. */
   data?: Record<string, Row[]>;
+  /**
+   * A date table without rows (one built in Power Query, say) gets its date key filled over the whole years of the
+   * dates related to it, so relationships and time intelligence work; its other columns stay blank. Default true.
+   */
+  dateTables?: boolean;
   /** Add to an existing model instead of a new one. */
   model?: DataModel;
 }
@@ -481,6 +499,69 @@ export interface ImportResult {
   warnings: string[];
   /** The parsed semantic model, before mapping. */
   semanticModel: PbiModel;
+}
+
+/**
+ * A Power BI field parameter: a calculated table of `(label, NAMEOF(field), order)` rows. It becomes a PrismBI field
+ * parameter, so visuals grouped by its label column switch fields as in Power BI. False when the table isn't one.
+ */
+function fieldParameter(model: DataModel, t: PbiTable): (() => void) | null {
+  let e;
+  try {
+    e = parseDax(t.calculated!);
+  } catch {
+    return null;
+  }
+  if (e.type !== 'list' || !e.items.length) return null;
+  const rows = e.items.map((r) => (r.type === 'list' && r.row ? r.items : null));
+  const fields: { label: string; field: string; order: number }[] = [];
+  for (const r of rows) {
+    const [label, name, order] = r ?? [];
+    if (label?.type !== 'string' || name?.type !== 'call' || name.name.toUpperCase() !== 'NAMEOF') return null;
+    const a = name.args[0];
+    const field = a?.type === 'column' ? `'${a.table.replace(/'/g, "''")}'[${a.column}]` : a?.type === 'bracket' ? a.name : null;
+    if (!field) return null;
+    fields.push({ label: label.value, field, order: order?.type === 'number' ? order.value : fields.length });
+  }
+  // the label column reads [Value1]; the others (fields, order) are internal in PrismBI
+  const labelCol = t.columns.find((c) => /^\[?Value1\]?$/.test(c.sourceColumn ?? ''))?.name ?? t.name;
+  // added once the measures it lists exist
+  return () => model.addFieldParameter(t.name, fields.sort((a, b) => a.order - b.order).map(({ label, field }) => ({ label, field })), { column: labelCol });
+}
+
+const asDate = (v: unknown): Date | null => {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  if (typeof v !== 'string' && typeof v !== 'number') return null;
+  const m = typeof v === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(v) : null;
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/**
+ * Rows for a date table that has no data: its date column, when relationships from other tables' date columns point
+ * at it, filled with every day of the years those dates cover.
+ */
+function dateTableRows(pm: PbiModel, t: PbiTable, data: Record<string, Row[]>, warn: (m: string) => void): Row[] | undefined {
+  const key = t.columns.find((c) => !c.expression && TYPE[c.dataType ?? ''] === 'date' && pm.relationships.some((r) => r.toTable === t.name && r.toColumn === c.name));
+  if (!key) return undefined;
+  let lo = Infinity;
+  let hi = -Infinity;
+  const sources: string[] = [];
+  for (const r of pm.relationships.filter((x) => x.toTable === t.name && x.toColumn === key.name)) {
+    const rows = data[r.fromTable];
+    if (!rows) continue;
+    sources.push(`${r.fromTable}[${r.fromColumn}]`);
+    for (const row of rows) {
+      const d = asDate(row[r.fromColumn]);
+      if (d) (lo = Math.min(lo, d.getFullYear())), (hi = Math.max(hi, d.getFullYear()));
+    }
+  }
+  if (!Number.isFinite(lo)) return undefined;
+  const out: Row[] = [];
+  for (let d = new Date(lo, 0, 1); d.getFullYear() <= hi; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) out.push({ [key.name]: d });
+  const blank = t.columns.filter((c) => c !== key && !c.expression).map((c) => c.name);
+  warn(`Date table "${t.name}" has no data: generated ${t.name}[${key.name}] for ${lo}–${hi} from ${sources.join(', ')}${blank.length ? `; columns made in Power Query stay blank (${blank.join(', ')}): pass rows in data to fill them` : ''}`);
+  return out;
 }
 
 /** Build a DataModel from a parsed semantic model. */
@@ -512,21 +593,27 @@ export function buildModelFrom(pm: PbiModel, opts: ImportOptions = {}, warn: (m:
   for (const t of physical) {
     const schema: Record<string, ColumnSchema> = {};
     const baseCols = t.columns.filter((c) => !c.expression);
-    for (const c of baseCols) schema[c.name] = { type: TYPE[c.dataType ?? ''] ?? undefined, format: fmt(c.formatString), hidden: c.isHidden || t.isHidden, description: c.description, folder: c.displayFolder } as ColumnSchema;
-    const rows = opts.data?.[t.name];
+    // sort-by columns must be base columns of the same table (calculated ones are added later)
+    const base = new Set(baseCols.map((c) => c.name));
+    for (const c of baseCols) schema[c.name] = { type: TYPE[c.dataType ?? ''] ?? undefined, format: fmt(c.formatString), hidden: c.isHidden || t.isHidden, description: c.description, folder: c.displayFolder, sortBy: c.sortByColumn && base.has(c.sortByColumn) ? c.sortByColumn : undefined } as ColumnSchema;
+    const rows = opts.data?.[t.name] ?? (opts.dateTables === false ? undefined : dateTableRows(pm, t, opts.data ?? {}, warn));
     if (rows) model.addTable(t.name, rows, schema);
     else {
       if (!opts.data || Object.keys(opts.data).length) warn(`No data for table "${t.name}": created empty`);
       model.addTable(t.name, DataTable.fromColumns(t.name, Object.fromEntries(baseCols.map((c) => [c.name, []])), schema));
     }
   }
-  for (const r of pm.relationships) {
+  // relationships to calculated tables (auto date tables, say) wait until those tables exist
+  const calculatedNames = new Set(pm.tables.filter((t) => t.calculated).map((t) => t.name));
+  const addRel = (r: PbiRelationship) => {
     try {
       model.addRelationship({ from: ref(r.fromTable, r.fromColumn), to: ref(r.toTable, r.toColumn), active: r.isActive !== false, crossFilter: r.crossFilteringBehavior === 'bothDirections' ? 'both' : 'single' });
     } catch (e) {
       warn(`Relationship ${r.fromTable}[${r.fromColumn}] → ${r.toTable}[${r.toColumn}]: ${(e as Error).message}`);
     }
-  }
+  };
+  const later = pm.relationships.filter((r) => calculatedNames.has(r.fromTable) || calculatedNames.has(r.toTable));
+  for (const r of pm.relationships) if (!later.includes(r)) addRel(r);
   for (const t of physical)
     for (const c of t.columns.filter((x) => x.expression)) {
       try {
@@ -535,13 +622,31 @@ export function buildModelFrom(pm: PbiModel, opts: ImportOptions = {}, warn: (m:
         warn(`Calculated column ${t.name}[${c.name}]: ${(e as Error).message}`);
       }
     }
+  const params: [string, () => void][] = [];
   for (const t of pm.tables.filter((x) => x.calculated)) {
     try {
-      model.addCalculatedTable(t.name, t.calculated!);
+      const param = fieldParameter(model, t);
+      if (param) {
+        params.push([t.name, param]);
+        continue;
+      }
+      // name the columns as the model declares them (a table constructor's columns are Value1, Value2, …)
+      const base = t.columns.filter((c) => !c.expression);
+      const src = (c: PbiColumn) => (c.sourceColumn ?? c.name).replace(/^\[|\]$/g, '').replace(/^.*\[(.*)\]$/, '$1');
+      const renamed = base.some((c) => src(c) !== c.name);
+      const quote = (n: string) => `"${n.replace(/"/g, '""')}"`;
+      model.addCalculatedTable(t.name, renamed ? `SELECTCOLUMNS(${t.calculated}, ${base.map((c) => `${quote(c.name)}, [${src(c).replace(/]/g, ']]')}]`).join(', ')})` : t.calculated!);
+      for (const c of t.columns.filter((x) => x.expression))
+        try {
+          model.addCalculatedColumn(t.name, c.name, c.expression!, { format: fmt(c.formatString), hidden: c.isHidden });
+        } catch (e) {
+          warn(`Calculated column ${t.name}[${c.name}]: ${(e as Error).message}`);
+        }
     } catch (e) {
       warn(`Calculated table ${t.name}: ${(e as Error).message}`);
     }
   }
+  for (const r of later) addRel(r);
   for (const t of pm.tables.filter((x) => !x.calculationGroup || x.measures.length))
     for (const m of t.measures) {
       if (!m.expression) continue;
@@ -557,6 +662,12 @@ export function buildModelFrom(pm: PbiModel, opts: ImportOptions = {}, warn: (m:
       } catch (e) {
         warn(`Measure [${m.name}]: ${(e as Error).message}`);
       }
+    }
+  for (const [name, add] of params)
+    try {
+      add();
+    } catch (e) {
+      warn(`Field parameter "${name}": ${(e as Error).message}`);
     }
   // aggregation tables: columns that are "alternate of" detail columns
   for (const t of pm.tables) {
@@ -590,6 +701,29 @@ export function buildModelFrom(pm: PbiModel, opts: ImportOptions = {}, warn: (m:
 
 const norm = (files: PbipFiles): PbipFiles => Object.fromEntries(Object.entries(files).map(([k, v]) => [k.replace(/\\/g, '/').replace(/^\.\//, ''), v]));
 
+/** Auto date/time levels (Orders[OrderDate] › Year) → the hidden date table's column (LocalDateTable_…[Year]). */
+function resolveVariations(report: ReportDefinition, pm: PbiModel, warn: (m: string) => void): ReportDefinition {
+  const fix = (s: string): string => {
+    const [col, level] = s.split(VARIATION);
+    const m = /^'?(.*?)'?\[(.*)\]$/.exec(col);
+    const table = m?.[1].replace(/''/g, "'");
+    // the column's variation names its date table; otherwise follow its relationship (the active one first)
+    const declared = m && pm.tables.find((t) => t.name === table)?.columns.find((c) => c.name === m[2])?.variation?.defaultHierarchy;
+    if (declared) return ref(splitRef(declared)[0], level);
+    const r = m && [...pm.relationships].sort((a, b) => Number(b.isActive !== false) - Number(a.isActive !== false)).find((x) => x.fromTable === table && x.fromColumn === m[2]);
+    if (r) return ref(r.toTable, level);
+    warn(`${col} › ${level}: no date table behind it; grouped by the date itself`);
+    return col;
+  };
+  const walk = (v: unknown): unknown => {
+    if (typeof v === 'string') return v.includes(VARIATION) ? fix(v) : v;
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object' && !(v instanceof Date)) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
+    return v;
+  };
+  return walk(report) as ReportDefinition;
+}
+
 /** Import a `.pbip` project: the semantic model, the report, and warnings for anything left out. */
 export function importPowerBI(input: PbipFiles, opts: ImportOptions = {}): ImportResult {
   const files = norm(input);
@@ -610,6 +744,7 @@ export function importPowerBI(input: PbipFiles, opts: ImportOptions = {}): Impor
   if (pbir) report = mapPbirReport(files, warn);
   else if (legacy) report = mapLegacyReport(files[legacy], warn);
   else warn('No report found (expected *.Report/definition/pages or report.json)');
+  report = resolveVariations(report, pm, warn);
   // fields that refer to things the model does not have
   const known = (f: FieldSpec) => {
     const s = typeof f === 'string' ? f : (f.field ?? '');

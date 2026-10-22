@@ -56,3 +56,24 @@ describe('CALCULATE in the single-pass grouped path', () => {
     expect(new Set(fast.rows.filter((r) => r.keys[1] === 2025).map((r) => Math.round(r.values[0] as number))).size).toBe(1);
   });
 });
+
+describe('iterators over VALUES evaluated set-wise', () => {
+  const m = buildModel()
+    .addMeasure('Avg Daily Sales', 'AVERAGEX(VALUES(Date[Date]), [Total Sales])')
+    .addMeasure('Best Product Sales', 'MAXX(VALUES(Product[Name]), [Total Sales])')
+    .addMeasure('Worst Country Margin', 'MINX(VALUES(Region[Country]), [Margin %])')
+    .addMeasure('Selling Days', 'COUNTX(VALUES(Date[Date]), [Total Sales])')
+    .addMeasure('Rolling 3M Daily Avg', 'CALCULATE(AVERAGEX(VALUES(Date[Date]), [Total Sales]), DATESINPERIOD(Date[Date], MAX(Date[Date]), -3, MONTH))')
+    .addMeasure('Sum Of Category Shares', 'SUMX(VALUES(Product[Category]), DIVIDE([Total Sales], CALCULATE([Total Sales], ALL(Product))))');
+  const spec: QuerySpec = { groupBy: ['Product[Category]', 'Date[Year]'], values: ['Avg Daily Sales', 'Best Product Sales', 'Worst Country Margin', 'Selling Days', 'Rolling 3M Daily Avg', 'Sum Of Category Shares'], filters: [{ target: 'Region[Group]', op: 'in', values: ['Europe', 'North America'] }], totals: true };
+  const q = (mode: 'off' | 'auto') => {
+    setFastQuery(mode);
+    m.evaluator.clearCache?.();
+    const r = m.query(spec);
+    const norm = (v: unknown) => (typeof v === 'number' ? Number(v.toPrecision(10)) : v);
+    return { rows: r.rows.map((x) => [x.keys, x.values.map(norm)]), totals: r.totals?.map(norm) };
+  };
+  it('matches row-by-row evaluation', () => {
+    expect(q('auto')).toEqual(q('off'));
+  });
+});

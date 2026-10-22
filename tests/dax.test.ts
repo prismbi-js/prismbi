@@ -200,3 +200,32 @@ describe('errors', () => {
     expect(() => ev('NOTAFUNCTION(1, 2)')).toThrow(/not supported/);
   });
 });
+
+describe('found by importing a real Power BI project', () => {
+  it('table constructors with row tuples, as field parameters use them', () => {
+    const t = m.evaluateTable('{ ("Sales", NAMEOF([Total Sales]), 0), ("Region", NAMEOF(Sales[Region]), 1) }');
+    expect(t.columns).toEqual(['Value1', 'Value2', 'Value3']);
+    expect(t.rows).toEqual([['Sales', '[Total Sales]', 0], ['Region', "'Sales'[Region]", 1]]);
+    expect(m.evaluateTable('{ 1, 2 }').columns).toEqual(['Value']);
+    expect(ev('(1 + 2) * 3')).toBe(9); // a parenthesized expression is still an expression
+    expect(() => m.evaluateTable('{ (1, 2), (3) }')).toThrow();
+  });
+
+  it('DATESINPERIOD: n intervals back from (or forward from) a date, within the column', async () => {
+    const { buildModel } = await import('../examples/model');
+    const model = buildModel();
+    const dates = (expr: string) => model.evaluateTable(expr).rows.map((r) => (r[0] as Date).toISOString().slice(0, 10));
+    const back = dates('DATESINPERIOD(Date[Date], DATE(2025, 3, 31), -3, MONTH)');
+    expect(back[0]).toBe(new Date(2025, 0, 1).toISOString().slice(0, 10));
+    expect(back[back.length - 1]).toBe(new Date(2025, 2, 31).toISOString().slice(0, 10));
+    expect(back).toHaveLength(90);
+    const fwd = dates('DATESINPERIOD(Date[Date], DATE(2025, 12, 30), 7, DAY)');
+    expect(fwd).toHaveLength(2); // the column ends on Dec 31
+    // a rolling 3-month measure, as in the sample project
+    model.addMeasure('Sales 3M', 'CALCULATE([Total Sales], DATESINPERIOD(Date[Date], MAX(Date[Date]), -3, MONTH))');
+    const q = model.query({ groupBy: ['Date[MonthNumber]'], values: ['Sales 3M', 'Total Sales'], filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }] });
+    const march = q.rows.find((r) => r.keys[0] === 3)!;
+    const q1 = q.rows.filter((r) => (r.keys[0] as number) <= 3).reduce((a, r) => a + (r.values[1] as number), 0);
+    expect(march.values[0] as number).toBeCloseTo(q1, 6);
+  });
+});

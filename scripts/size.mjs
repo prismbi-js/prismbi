@@ -26,13 +26,13 @@ const PACKAGE_ALIASES = Object.fromEntries(
 
 /** [name, source, budget in KB min+gzip, optional base scenario: report only the increment over it] */
 const SCENARIOS = [
-  ['core (api)', `export * from '${dist}/core.js';`, 96],
-  ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 85],
-  ['full (api)', `export * from '${dist}/index.js';`, 136],
-  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 131],
-  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 126],
-  ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 92],
-  ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 105],
+  ['core (api)', `export * from '${dist}/core.js';`, 98],
+  ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 87],
+  ['full (api)', `export * from '${dist}/index.js';`, 138],
+  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 133],
+  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 128],
+  ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 94],
+  ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 107],
   ['connectors', `export * from '${dist}/connectors.js';`, 5],
   ['worker', `export * from '${dist}/worker.js';`, 3],
   ['ai (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/ai.js';`, 28, 'full (api)'],

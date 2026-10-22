@@ -135,6 +135,13 @@ export class DataModel {
   private allRowsCache = new Map<string, number[]>();
   private pathCache = new Map<string, Relationship[] | null>();
   private relatedCache = new Map<string, Int32Array | null>();
+  /** Distinct visible values by row list and column values (both cached arrays, so identity is the key). */
+  private valuesCache = new WeakMap<number[], WeakMap<CellValue[], CellValue[]>>();
+  /**
+   * Many-side rows selected by a set of one-side rows, per relationship: keyed by the one-side row list (a cached
+   * array), so a filter shared by many evaluations (a date window under each product) is mapped once.
+   */
+  private fkCache = new WeakMap<number[], Map<string, { keys: unknown[]; rows?: number[] }>>();
   private listeners = new Set<Listener>();
   /** While positive, changes clear caches but don't notify (one notification follows). */
   private quiet = 0;
@@ -770,6 +777,8 @@ export class DataModel {
     this.allRowsCache.clear();
     this.pathCache.clear();
     this.relatedCache.clear();
+    this.valuesCache = new WeakMap();
+    this.fkCache = new WeakMap();
     this.evaluator.clearCache();
   }
 
@@ -1052,12 +1061,22 @@ export class DataModel {
       if (!dimFilters.length) continue;
       const dim = this.table(rel.toTable);
       const dimRows = this.rowsOf(rel.toTable, ctxFor(dimFilters), blocked);
-      const fkIdx = t.index(rel.fromColumn);
-      const pkCol = dim.column(rel.toColumn).values;
-      const keys = new Set<unknown>();
-      for (const i of dimRows) keys.add(valueKey(pkCol[i]));
-      if (narrowBits(rel.fromColumn, keys)) continue;
-      narrow(unionLists([...keys].map((k) => fkIdx.get(k) ?? []), t.rowCount));
+      let byRel = this.fkCache.get(dimRows);
+      if (!byRel) this.fkCache.set(dimRows, (byRel = new Map()));
+      const relKey = `${table}[${rel.fromColumn}]>${rel.toTable}[${rel.toColumn}]:${t.rowCount}`;
+      let hit = byRel.get(relKey);
+      if (!hit) {
+        const pkCol = dim.column(rel.toColumn).values;
+        const keys = new Set<unknown>();
+        for (const i of dimRows) keys.add(valueKey(pkCol[i]));
+        byRel.set(relKey, (hit = { keys: [...keys] }));
+      }
+      if (narrowBits(rel.fromColumn, hit.keys)) continue;
+      if (!hit.rows) {
+        const fkIdx = t.index(rel.fromColumn);
+        hit.rows = unionLists(hit.keys.map((k) => fkIdx.get(k) ?? []), t.rowCount);
+      }
+      narrow(hit.rows);
       if (cand!.length === 0) break;
     }
 
@@ -1124,10 +1143,17 @@ export class DataModel {
     const t = this.table(col.table);
     const rows = this.rowsOf(col.table, ctx);
     if (rows.length === t.rowCount) return t.distinct(col.column);
+    // row lists are cached per context, so the same list (e.g. a date window under many groups) gives the same values
     const vals = t.column(col.column).values;
+    let byColumn = this.valuesCache.get(rows);
+    if (!byColumn) this.valuesCache.set(rows, (byColumn = new WeakMap()));
+    const hit = byColumn.get(vals);
+    if (hit) return hit;
     const keep = new Set<unknown>();
     for (const i of rows) keep.add(valueKey(vals[i]));
-    return t.distinct(col.column).filter((v) => keep.has(valueKey(v)));
+    const out = t.distinct(col.column).filter((v) => keep.has(valueKey(v)));
+    byColumn.set(vals, out);
+    return out;
   }
 }
 

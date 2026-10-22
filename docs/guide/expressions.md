@@ -46,7 +46,7 @@ PrismBI measures and calculated columns use a DAX-compatible syntax and semantic
 ### Time intelligence
 These need a date table related to your facts. See [data-model.md](data-model.md#date-tables).
 
-`TOTALYTD(expr, dates, [filter], [yearEnd "mm-dd"])` · `TOTALQTD` · `TOTALMTD` · `DATESYTD(dates, [yearEnd])` · `DATESQTD` · `DATESMTD` · `SAMEPERIODLASTYEAR` · `DATEADD(dates, n, DAY|MONTH|QUARTER|YEAR)` · `PARALLELPERIOD` · `PREVIOUSMONTH` · `PREVIOUSQUARTER` · `PREVIOUSYEAR` · `DATESBETWEEN(dates, start, end)` · `FIRSTDATE` · `LASTDATE`
+`TOTALYTD(expr, dates, [filter], [yearEnd "mm-dd"])` · `TOTALQTD` · `TOTALMTD` · `DATESYTD(dates, [yearEnd])` · `DATESQTD` · `DATESMTD` · `SAMEPERIODLASTYEAR` · `DATEADD(dates, n, DAY|MONTH|QUARTER|YEAR)` · `PARALLELPERIOD` · `PREVIOUSMONTH` · `PREVIOUSQUARTER` · `PREVIOUSYEAR` · `DATESBETWEEN(dates, start, end)` · `DATESINPERIOD(dates, start, n, DAY|MONTH|QUARTER|YEAR)` · `FIRSTDATE` · `LASTDATE`
 
 Used inside `CALCULATE`, these clear the other filters on the date table (Power BI "mark as date table" behaviour). So `CALCULATE([Sales], SAMEPERIODLASTYEAR(Date[Date]))` works inside a visual grouped by `Date[Year]`.
 
@@ -54,13 +54,13 @@ Used inside `CALCULATE`, these clear the other filters on the date table (Power 
 `USERELATIONSHIP` · `CROSSFILTER` · `TREATAS(table, col…)` · `LOOKUPVALUE(result, searchCol, value, …, [alternate])` · `CONTAINS(table, col, value, …)`
 
 ### Table functions
-`SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `NATURALINNERJOIN` · `NATURALLEFTOUTERJOIN` · `SAMPLE(n, table, orderBy, [ASC|DESC]…)` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · `GENERATESERIES` · `CALENDAR` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
+`SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `NATURALINNERJOIN` · `NATURALLEFTOUTERJOIN` · `SAMPLE(n, table, orderBy, [ASC|DESC]…)` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · table constructors `{ 1, 2 }` (column `Value`) and `{ (1, "a"), (2, "b") }` (`Value1`, `Value2`) · `GENERATESERIES` · `CALENDAR` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
 
 ### Statistical
 `STDEV.S` · `STDEV.P` · `VAR.S` · `VAR.P` · `STDEVX.S` · `STDEVX.P` · `VARX.S` · `VARX.P` · `PERCENTILE.INC` · `PERCENTILE.EXC` · `PERCENTILEX.INC` · `PERCENTILEX.EXC` · `GEOMEAN` · `GEOMEANX` · `AVERAGEA` · `MAXA` · `MINA`
 
 ### Row context, parent-child & scope
-`EARLIER(col, [n])` · `EARLIEST` · `PATH(id, parent)` · `PATHLENGTH` · `PATHITEM` · `PATHITEMREVERSE` · `PATHCONTAINS` · `ISINSCOPE(col)` · `ISCROSSFILTERED`
+`EARLIER(col, [n])` · `EARLIEST` · `PATH(id, parent)` · `PATHLENGTH` · `PATHITEM` · `PATHITEMREVERSE` · `PATHCONTAINS` · `NAMEOF(col or [measure])` · `ISINSCOPE(col)` · `ISCROSSFILTERED`
 
 ### Calculation groups & security
 `SELECTEDMEASURE` · `SELECTEDMEASURENAME` · `ISSELECTEDMEASURE` · `USERNAME` · `USERPRINCIPALNAME` · `CUSTOMDATA`. See [advanced modeling](advanced-modeling.md).

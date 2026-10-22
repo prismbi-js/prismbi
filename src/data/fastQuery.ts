@@ -1,6 +1,6 @@
 import type { Expr } from '../dax/ast';
 import type { CellValue, ColumnRef } from './types';
-import { valueKey } from './types';
+import { compareValues, valueKey } from './types';
 import type { Filter } from './filters';
 import type { DataModel } from './model';
 import type { QueryRow } from './query';
@@ -38,7 +38,9 @@ type Tree =
   | { t: 'ti'; i: number }
   | { t: 'num'; v: number }
   | { t: 'bin'; op: '+' | '-' | '*' | '/'; l: Tree; r: Tree }
-  | { t: 'div'; a: Tree; b: Tree; alt?: Tree };
+  | { t: 'div'; a: Tree; b: Tree; alt?: Tree }
+  /** IF(l op r, a, [b]) */
+  | { t: 'if'; op: string; l: Tree; r: Tree; a: Tree; b?: Tree };
 
 const AGG_FN: Record<string, Agg['kind']> = { SUM: 'sum', AVERAGE: 'avg', MIN: 'min', MAX: 'max', COUNT: 'count', COUNTA: 'count', DISTINCTCOUNT: 'distinct' };
 
@@ -171,6 +173,16 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds
       return l && r ? { t: 'bin', op: e.op as '+', l, r } : null;
     }
     case 'call': {
+      if (e.name.toUpperCase() === 'IF' && (e.args.length === 2 || e.args.length === 3)) {
+        // IF(<measure comparison>, a, [b]): "only when there are sales" and similar guards
+        const c = e.args[0];
+        if (c.type !== 'binary' || !['>', '<', '>=', '<=', '=', '<>'].includes(c.op)) return null;
+        const l = compile(model, c.left, plan, seen, preds);
+        const r = l && compile(model, c.right, plan, seen, preds);
+        const a = r && compile(model, e.args[1], plan, seen, preds);
+        const b = a && e.args[2] ? compile(model, e.args[2], plan, seen, preds) : undefined;
+        return l && r && a && b !== null ? { t: 'if', op: c.op, l, r, a, b } : null;
+      }
       if (e.name === 'DIVIDE' && (e.args.length === 2 || e.args.length === 3)) {
         const a = compile(model, e.args[0], plan, seen, preds);
         const b = a && compile(model, e.args[1], plan, seen, preds);
@@ -283,6 +295,8 @@ function blankPreserving(t: Tree): boolean {
       return blankPreserving(t.l) && blankPreserving(t.r);
     case 'div':
       return blankPreserving(t.a) && (t.alt === undefined || blankPreserving(t.alt));
+    case 'if':
+      return blankPreserving(t.a) && (t.b === undefined || blankPreserving(t.b));
   }
 }
 
@@ -308,6 +322,12 @@ function evalTree(t: Tree, vals: CellValue[], ti: CellValue[] = []): CellValue {
       if (a === null && b === null) return null;
       if (num(b) === 0) return num(a) === 0 ? NaN : num(a) > 0 ? Infinity : -Infinity;
       return num(a) / num(b);
+    }
+    case 'if': {
+      // the evaluator's comparison: BLANK compares as 0 against a number
+      const c = compareValues(evalTree(t.l, vals, ti) ?? 0, evalTree(t.r, vals, ti) ?? 0);
+      const ok = t.op === '>' ? c > 0 : t.op === '<' ? c < 0 : t.op === '>=' ? c >= 0 : t.op === '<=' ? c <= 0 : t.op === '=' ? c === 0 : c !== 0;
+      return ok ? evalTree(t.a, vals, ti) : t.b ? evalTree(t.b, vals, ti) : null;
     }
     case 'div': {
       const a = evalTree(t.a, vals, ti);
@@ -369,9 +389,13 @@ const UNMATCHED = -2;
 
 /** Date-valued aggregations only survive as a whole measure (date arithmetic has calendar semantics). */
 function datesOnlyAtTop(t: Tree, aggs: Agg[]): boolean {
-  const walk = (x: Tree): boolean => (x.t === 'agg' ? !aggs[x.i].isDate : x.t === 'num' || x.t === 'ti' ? true : x.t === 'bin' ? walk(x.l) && walk(x.r) : walk(x.a) && walk(x.b) && (!x.alt || walk(x.alt)));
+  const walk = (x: Tree): boolean =>
+    x.t === 'agg' ? !aggs[x.i].isDate : x.t === 'num' || x.t === 'ti' ? true : x.t === 'bin' ? walk(x.l) && walk(x.r) : x.t === 'if' ? walk(x.l) && walk(x.r) && walk(x.a) && (!x.b || walk(x.b)) : walk(x.a) && walk(x.b) && (!x.alt || walk(x.alt));
   return t.t === 'agg' || walk(t);
 }
+
+/** Group codes per fact row, by the row map and the column codes they were made from. */
+const composed = new WeakMap<Int32Array, WeakMap<Int32Array, Int32Array>>();
 
 /**
  * Group code for every row of `fact` (many → one hops). Each hop maps the foreign key's dictionary codes through the
@@ -380,6 +404,19 @@ function datesOnlyAtTop(t: Tree, aggs: Agg[]): boolean {
 function groupCodes(model: DataModel, fact: string, col: ColumnRef): Int32Array | null {
   const target = model.table(col.table).codes(col.column).codes;
   if (col.table === fact) return target;
+  // through the model's cached row map (fact row → dimension row): rebuilt only when either array is
+  const map = model.relatedRows(fact, col.table);
+  if (map) {
+    let byTarget = composed.get(map);
+    if (!byTarget) composed.set(map, (byTarget = new WeakMap()));
+    let out = byTarget.get(target);
+    if (!out) {
+      out = new Int32Array(map.length);
+      for (let r = 0; r < map.length; r++) out[r] = map[r] < 0 ? UNMATCHED : target[map[r]];
+      byTarget.set(target, out);
+    }
+    return out;
+  }
   const path = model.pathTo(fact, col.table);
   if (!path) return null;
   let rowCode = target; // codes per row of the current "one" side, walking back towards the fact

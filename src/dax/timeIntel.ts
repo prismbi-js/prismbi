@@ -58,3 +58,15 @@ export function parallelPeriod(first: Date, unit: string, n: number): [start: Da
   const start = addMonths(anchor, n * months);
   return [start, new Date(addMonths(start, months).getTime() - 1)];
 }
+
+/**
+ * DATESINPERIOD: the window of `n` units (DAY, MONTH, QUARTER, YEAR) from `start`: backwards and ending on it when
+ * `n` is negative, forwards and starting on it otherwise.
+ */
+export function periodWindow(start: Date, n: number, unit: string): [first: Date, last: Date] {
+  const day = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const move = (k: number) => (unit === 'DAY' ? new Date(day.getFullYear(), day.getMonth(), day.getDate() + k) : addMonths(day, k * (unit === 'YEAR' ? 12 : unit === 'QUARTER' ? 3 : 1)));
+  const edge = move(n);
+  const shift = (d: Date, k: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + k);
+  return n < 0 ? [shift(edge, 1), day] : [day, shift(edge, -1)];
+}

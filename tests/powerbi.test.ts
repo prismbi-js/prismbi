@@ -306,3 +306,116 @@ describe('aggregation tables (alternateOf)', () => {
     ]);
   });
 });
+
+describe('found importing real projects', () => {
+  const T = '\t';
+  const salesT = [
+    'table Sales',
+    `${T}measure 'Total Sales' = SUM(Sales[Amount])`,
+    `${T}column Amount`,
+    `${T}${T}dataType: decimal`,
+    `${T}${T}sourceColumn: Amount`,
+    `${T}column OrderDate`,
+    `${T}${T}dataType: dateTime`,
+    `${T}${T}sourceColumn: OrderDate`,
+    `${T}${T}variation Variation`,
+    `${T}${T}${T}isDefault`,
+    `${T}${T}${T}relationship: r2`,
+    `${T}${T}${T}defaultHierarchy: LocalDate_1.'Date Hierarchy'`,
+    '',
+  ].join('\n');
+  // a Power Query calendar: no rows in the project, a hierarchy whose levels name columns with "column:"
+  const calendarT = [
+    'table Calendar',
+    `${T}column Date`,
+    `${T}${T}dataType: dateTime`,
+    `${T}${T}sourceColumn: Date`,
+    `${T}column 'Month Name'`,
+    `${T}${T}dataType: string`,
+    `${T}${T}sourceColumn: Month Name`,
+    `${T}${T}sortByColumn: Month`,
+    `${T}column Month`,
+    `${T}${T}dataType: int64`,
+    `${T}${T}sourceColumn: Month`,
+    `${T}hierarchy 'Date Hierarchy'`,
+    `${T}${T}level Month`,
+    `${T}${T}${T}column: Month`,
+    '',
+  ].join('\n');
+  // a field parameter and a calculated table whose columns are renamed by sourceColumn, written as Desktop writes them
+  const paramT = [
+    "table 'Pick'",
+    `${T}column 'Pick'`,
+    `${T}${T}sourceColumn: [Value1]`,
+    `${T}column 'Pick Fields'`,
+    `${T}${T}isHidden`,
+    `${T}${T}sourceColumn: [Value2]`,
+    `${T}column 'Pick Order'`,
+    `${T}${T}sourceColumn: [Value3]`,
+    `${T}partition 'Pick' = calculated`,
+    `${T}${T}mode: import`,
+    `${T}${T}source =`,
+    `${T}${T}${T}${T}{`,
+    `${T}${T}${T}${T}    ("Amount", NAMEOF('Sales'[Amount]), 1),`,
+    `${T}${T}${T}${T}    ("Sales", NAMEOF([Total Sales]), 0)`,
+    `${T}${T}${T}${T}}`,
+    '',
+  ].join('\n');
+  const autoDateT = [
+    'table LocalDate_1',
+    `${T}isHidden`,
+    `${T}column Date`,
+    `${T}${T}dataType: dateTime`,
+    `${T}${T}sourceColumn: [Date]`,
+    `${T}column Year = YEAR([Date])`,
+    `${T}${T}dataType: int64`,
+    `${T}partition LocalDate_1 = calculated`,
+    `${T}${T}mode: import`,
+    `${T}${T}source = CALENDAR(DATE(2024, 1, 1), DATE(2025, 12, 31))`,
+    '',
+  ].join('\n');
+  const rels = [
+    'relationship r1',
+    `${T}fromColumn: Sales.OrderDate`,
+    `${T}toColumn: Calendar.Date`,
+    'relationship r2',
+    `${T}fromColumn: Sales.OrderDate`,
+    `${T}toColumn: LocalDate_1.Date`,
+    `${T}isActive: false`,
+    '',
+  ].join('\n');
+  const variation = { field: { HierarchyLevel: { Expression: { Hierarchy: { Expression: { PropertyVariationSource: { Expression: { SourceRef: { Entity: 'Sales' } }, Name: 'Variation', Property: 'OrderDate' } }, Hierarchy: 'Date Hierarchy' } }, Level: 'Year' } } };
+  const files = {
+    'M.SemanticModel/definition/tables/Sales.tmdl': salesT,
+    'M.SemanticModel/definition/tables/Calendar.tmdl': calendarT,
+    'M.SemanticModel/definition/tables/Pick.tmdl': paramT,
+    'M.SemanticModel/definition/tables/LocalDate_1.tmdl': autoDateT,
+    'M.SemanticModel/definition/relationships.tmdl': rels,
+    'M.Report/definition/pages/pages.json': JSON.stringify({ pageOrder: ['p1'] }),
+    'M.Report/definition/pages/p1/page.json': JSON.stringify({ name: 'p1', displayName: 'P', width: 1280, height: 720 }),
+    'M.Report/definition/pages/p1/visuals/v1/visual.json': visual('v1', 'clusteredColumnChart', { Category: { projections: [variation] }, Y: { projections: [measure('Sales', 'Total Sales')] } }, { x: 0, y: 0, width: 640, height: 336 }),
+    'M.Report/definition/pages/p1/visuals/v2/visual.json': visual('v2', 'azureMap', { Category: { projections: [col('Sales', 'Amount')] }, Size: { projections: [measure('Sales', 'Total Sales')] } }, { x: 640, y: 0, width: 640, height: 336 }),
+  };
+  const sales = [{ Amount: 10, OrderDate: '2024-03-05' }, { Amount: 5, OrderDate: '2025-07-01' }];
+
+  it('imports calculated tables, field parameters, date tables without data and auto date/time fields', () => {
+    const res = importPowerBI(files, { data: { Sales: sales } });
+    const { model, report, warnings } = res;
+    // "column: Month" inside a hierarchy level is not a column
+    expect([...model.table('Calendar').columns.keys()]).toEqual(['Date', 'Month Name', 'Month']);
+    expect(model.table('Calendar').column('Month Name').sortBy).toBe('Month');
+    // the date table had no rows: its dates cover the related years
+    expect(model.table('Calendar').rowCount).toBe(731);
+    expect(warnings.some((w) => /Date table "Calendar" has no data: generated Calendar\[Date\] for 2024–2025/.test(w))).toBe(true);
+    // the calculated table survives its "mode: import" line, keeps its calculated column, and its relationship is added after it
+    expect(model.table('LocalDate_1').rowCount).toBe(731);
+    expect(model.table('LocalDate_1').hasColumn('Year')).toBe(true);
+    expect(model.relationships().some((r) => r.toTable === 'LocalDate_1')).toBe(true);
+    // the field parameter switches fields like PrismBI's own
+    expect(model.resolveFieldParameter("'Pick'[Pick]")).toEqual(['Total Sales', "'Sales'[Amount]"]);
+    // the auto date/time level resolves to the hidden date table behind the column
+    expect(report.pages[0].visuals[0].fields).toEqual({ category: ["LocalDate_1[Year]"], values: ['Total Sales'] });
+    expect(report.pages[0].visuals[1].type).toBe('map');
+    expect(warnings.filter((w) => /not found|refers to|not supported/.test(w))).toEqual([]);
+  });
+});
