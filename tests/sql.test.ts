@@ -106,7 +106,8 @@ model
   .addMeasure('Sales QTD', 'TOTALQTD([Total Sales], Date[Date])')
   .addMeasure('Big Product Sales', 'CALCULATE([Total Sales], FILTER(VALUES(Product[Name]), [Total Sales] > 400000))')
   .addMeasure('Big Products', 'COUNTROWS(FILTER(VALUES(Product[Name]), [Total Sales] > 400000))')
-  .addMeasure('Products Sold', 'CALCULATE(COUNTROWS(Product), CROSSFILTER(Sales[ProductKey], Product[ProductKey], BOTH))');
+  .addMeasure('Products Sold', 'CALCULATE(COUNTROWS(Product), CROSSFILTER(Sales[ProductKey], Product[ProductKey], BOTH))')
+  .addMeasure('Sales Ignoring Product', 'CALCULATE([Total Sales], CROSSFILTER(Sales[ProductKey], Product[ProductKey], NONE))');
 
 const y2025 = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
 const CONTEXT_CASES: [string, QuerySpec][] = [
@@ -124,6 +125,7 @@ const CONTEXT_CASES: [string, QuerySpec][] = [
   ['USERELATIONSHIP (sales by ship date)', { groupBy: ['Date[Year]', 'Date[Quarter]'], values: ['Total Sales', 'Sales by Ship Date'] }],
   ['measures inside FILTER conditions (context transition)', { groupBy: ['Product[Category]'], values: ['Big Product Sales', 'Big Products'], filters: y2025 }],
   ['CROSSFILTER(…, BOTH) on a single-direction relationship', { groupBy: ['Region[Country]'], values: ['Products Sold', 'Product Count'], filters: [{ target: 'Date[Date]', op: 'eq', value: new Date(2025, 2, 3) }] }],
+  ['CROSSFILTER(…, NONE): product filters stop at the relationship', { groupBy: ['Product[Category]', 'Region[Group]'], values: ['Total Sales', 'Sales Ignoring Product'], filters: [{ target: 'Product[Subcategory]', op: 'in', values: ['Road Bikes', 'Helmets'] }], totals: true }],
   ['highlights in context mode', { groupBy: ['Product[Category]'], values: ['Sales LY'], highlight: [{ target: 'Region[Country]', op: 'eq', value: 'Canada' }], filters: y2025 }],
 ];
 
@@ -200,16 +202,16 @@ describe('toSql', () => {
   });
 
   it('reports what it cannot push down, and can fall back to the model', async () => {
-    // time intelligence and ALLSELECTED now translate (filter-context mode); CROSSFILTER(…, NONE) still doesn't
+    // time intelligence and ALLSELECTED translate (filter-context mode); MEDIAN outside DuckDB doesn't
     expect(toSql(model, { values: ['Sales LY'] }).mode).toBe('context');
     expect(toSql(model, { values: ['Total Sales'] }).mode).toBe('aggregate');
-    const m = buildModel().addMeasure('No Cross', 'CALCULATE([Total Sales], CROSSFILTER(Sales[ProductKey], Product[ProductKey], NONE))');
-    expect(() => toSql(m, { values: ['No Cross'] })).toThrow(/CROSSFILTER\(…, NONE\) is not pushed down/);
-    const strict = sqlEngine(m, { run: async () => [] });
-    await expect(strict.query({ values: ['No Cross'] })).rejects.toThrow(SqlUnsupportedError);
-    const lenient = sqlEngine(m, { run: async () => [], fallback: 'model' });
+    const m = buildModel().addMeasure('Median Line', 'MEDIAN(Sales[SalesAmount])');
+    expect(() => toSql(m, { values: ['Median Line'] }, { dialect: 'sqlite' })).toThrow(/MEDIAN is only pushed down to DuckDB/);
+    const strict = sqlEngine(m, { run: async () => [], dialect: 'sqlite' });
+    await expect(strict.query({ values: ['Median Line'] })).rejects.toThrow(SqlUnsupportedError);
+    const lenient = sqlEngine(m, { run: async () => [], dialect: 'sqlite', fallback: 'model' });
     const y = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
-    expect((await lenient.query({ values: ['No Cross'], filters: y })).rows[0].values[0]).toBe(m.query({ values: ['No Cross'], filters: y }).rows[0].values[0]);
+    expect((await lenient.query({ values: ['Median Line'], filters: y })).rows[0].values[0]).toBe(m.query({ values: ['Median Line'], filters: y }).rows[0].values[0]);
   });
 });
 
