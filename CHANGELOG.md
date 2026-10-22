@@ -4,6 +4,7 @@
 
 - **Time intelligence in the single-pass path:** visuals grouped by date-table columns answer `SAMEPERIODLASTYEAR`, `DATEADD`, `DATES*TD`, `TOTAL*TD` (fiscal year ends too), `PARALLELPERIOD` and `PREVIOUS*` from per-date partial sums in one pass; plain measures in the same visual reuse them. Day × YTD at 1M rows: 193 → 21 ms cold; year × month × sales, last year and growth: about 130 → 46 ms. The evaluator and the fast path share the calendar rules (`src/dax/timeIntel.ts`); equivalence tests in `tests/fastti.test.ts`.
 - **Faster unfiltered row lists:** the all-rows list of a table is built with a counting loop (several times faster than `Array.from` at 1M rows).
+- **Size budgets raised deliberately** (`scripts/size.mjs`): the time-intelligence fast path adds about 2.3 KB min+gzip to the core (core app 82.4 KB, budget 80 → 83; full 131.4 KB, 130 → 133, and the other core scenarios by 3 KB); the worker entry is 2.1 KB with packed columns (budget 2 → 3).
 - **Benchmark budgets:** `npm run bench` ceilings tightened to about 3× measured times, plus a last-year growth query.
 - **SQL totals in one round trip:** with `totals`, aggregate-mode queries on DuckDB and Postgres return the grand total in the grouped statement (`GROUPING SETS`, `SqlPlan.totalsInline`); SQLite keeps two statements.
 - **SQL result cache:** `sqlEngine(model, { cache: true | { max, ttlMs } })` runs each distinct statement once and shares concurrent duplicates; cleared on model changes and by `engine.clearCache()`; `engine.dispose()`.

@@ -10,7 +10,7 @@
 |---|---|---|
 | ![PrismBI Studio](https://prismbi-js.github.io/docs/images/studio.png) | ![The Studio agent panel](https://prismbi-js.github.io/docs/images/studio-agent.png) | ![The live playground](https://prismbi-js.github.io/docs/images/playground.png) |
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 80 KB min+gzip for the core (model, DAX engine, report runtime), about 99 KB for a dashboard with five visuals, and about 122 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 34 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 82 KB min+gzip for the core (model, DAX engine, report runtime), about 101 KB for a dashboard with five visuals, and about 125 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install @prismbi/prismbi
@@ -91,7 +91,7 @@ import '@prismbi/prismbi/visuals/card';
 import '@prismbi/prismbi/visuals/slicer';
 ```
 
-Entries: `bar`, `line`, `pie`, `treemap`, `funnel`, `scatter`, `card`, `kpi`, `gauge`, `table`, `slicer`, `text`, `waterfall`, `heatmap`, `calendar`, `decomposition`, `distribution`, `bullet`, `radar`, `sankey`, `ribbon`, `map`. Each also exports its definitions (`import { waterfall } from '@prismbi/prismbi/visuals/waterfall'`). Minified and gzipped, core with one visual is about 82 KB; the full package is about 117 KB. You can also import definitions from `@prismbi/prismbi/visuals` and call `registerVisual` yourself.
+Entries: `bar`, `line`, `pie`, `treemap`, `funnel`, `scatter`, `card`, `kpi`, `gauge`, `table`, `slicer`, `text`, `waterfall`, `heatmap`, `calendar`, `decomposition`, `distribution`, `bullet`, `radar`, `sankey`, `ribbon`, `map`. Each also exports its definitions (`import { waterfall } from '@prismbi/prismbi/visuals/waterfall'`). Minified and gzipped, core with one visual is about 89 KB; the full package is about 125 KB. You can also import definitions from `@prismbi/prismbi/visuals` and call `registerVisual` yourself.
 
 ## React
 
