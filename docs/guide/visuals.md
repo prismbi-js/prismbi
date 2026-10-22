@@ -44,7 +44,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | ![slicer-list](../images/visuals/slicer-list.png) `slicer-list` | ![slicer-range](../images/visuals/slicer-range.png) `slicer-range` | ![slicer-tiles](../images/visuals/slicer-tiles.png) `slicer-tiles` |
 | ![stackedArea](../images/visuals/stackedArea.png) `stackedArea` | ![stackedBar](../images/visuals/stackedBar.png) `stackedBar` | ![stackedColumn](../images/visuals/stackedColumn.png) `stackedColumn` |
 | ![table](../images/visuals/table.png) `table` | ![text](../images/visuals/text.png) `text` | ![treemap](../images/visuals/treemap.png) `treemap` |
-| ![waterfall](../images/visuals/waterfall.png) `waterfall` | ![sunburst](../images/visuals/sunburst.png) `sunburst` |  |
+| ![waterfall](../images/visuals/waterfall.png) `waterfall` | ![sunburst](../images/visuals/sunburst.png) `sunburst` | ![scorecard](../images/visuals/scorecard.png) `scorecard` |
 
 ## Catalogue
 
@@ -59,6 +59,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `waterfall` | `category`* (drillable) · `values`* | Running total with connectors, increase / decrease / total colours, optional total bar |
 | `pie`, `donut` | `legend`* (drillable) · `values`* | Folds slices past the palette into "Other". Donut shows a centre total |
 | `treemap` | `category`* (drillable) · `values`* | Squarified layout |
+| `scorecard` (`goals`) | `values`* (goals, multiple) · `targets` (paired with values in order) · `trend` | Current value (the latest trend point, else the total), target, progress, status and sparkline per goal; settings in `format.scorecard.goals` |
 | `sunburst` | `category`* (multiple: one ring per level, first innermost) · `values`* | Each level is a real measure evaluation (ratios stay right); children split their parent's angle by value; centre total; click any ring to select that level |
 | `funnel` | `category`* · `values`* | Shows % of first stage |
 | `scatter` (`bubble`) | `details`* · `legend` · `x`* · `y`* · `size` | Bubble area ∝ size. Cross-highlight, trend line |
@@ -286,6 +287,28 @@ return createVisual(el, {
   type: 'sunburst',
   title: 'Sales by category and subcategory',
   fields: { category: ['Product[Category]', 'Product[Subcategory]'], values: 'Total Sales' },
+});
+```
+
+## Scorecard (goals)
+
+`type: 'scorecard'` tracks goals: each measure in **Goals** gets its current value, target, progress, a status and a trend sparkline. With a **Trend axis**, the current value is the latest point that has one (like a goal check-in); without it, the total.
+
+![A scorecard with three goals](../images/visuals/scorecard.png)
+
+- **Targets:** a measure in **Targets**, paired with the goals in order, or a fixed `target` per goal.
+- **Status:** progress = value ÷ target (target ÷ value for `direction: 'down'`, such as costs). At least 100% is **On track**, from `atRisk` (default 90%) **At risk**, below that **Behind**. `goalStatus(value, target, goal)` applies the same rules, for alerts or exports.
+- **Columns:** owner and due date appear when a goal has them; narrow tiles drop due, owner, trend, target and then progress, keeping the goal, its value and status.
+
+```js playground
+import { createVisual } from '@prismbi/prismbi';
+
+return createVisual(el, {
+  model,
+  type: 'scorecard',
+  fields: { values: ['Total Sales', 'Margin %'], targets: ['Sales Target'], trend: 'Date[MonthYear]' },
+  filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
+  format: { scorecard: { goals: { 'Margin %': { target: 0.42, owner: 'Finance', due: '2025-12-31' } } } },
 });
 ```
 

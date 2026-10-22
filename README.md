@@ -10,7 +10,7 @@
 |---|---|---|
 | ![PrismBI Studio](https://prismbi-js.github.io/docs/images/studio.png) | ![The Studio agent panel](https://prismbi-js.github.io/docs/images/studio-agent.png) | ![The live playground](https://prismbi-js.github.io/docs/images/playground.png) |
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 35 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 82 KB min+gzip for the core (model, DAX engine, report runtime), about 101 KB for a dashboard with five visuals, and about 125 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 36 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 82 KB min+gzip for the core (model, DAX engine, report runtime), about 101 KB for a dashboard with five visuals, and about 125 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install @prismbi/prismbi
@@ -53,7 +53,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | **Report editor** | `@prismbi/prismbi/studio`: drag-and-drop canvas, fields, build, format and filters panes, measure and column editors, data and model views, theme designer, undo/redo, autosave, versioned JSON |
 | **Developer tooling** | DAX language service (completion, hover, diagnostics, signature help), formatter, dependency explanation, `evaluateTable()` queries |
 | **Slice and narrow down** | Slicers (list, dropdown, tiles, range, relative date, hierarchy tree, synced across pages), cross-filter and cross-highlight, Ctrl+click multi-select, right-click Include / Exclude, drill down / up / expand all, drill-through pages with Back, a decomposition tree, report, page and visual filters, a filter pane with Basic, Advanced and Top N, bookmarks |
-| **35 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, sunburst, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps, decomposition tree, card, multi-row card, KPI, gauge, table, matrix, slicer, text, and small multiples for cartesian charts |
+| **36 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, sunburst, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps, decomposition tree, card, multi-row card, KPI, gauge, goals scorecard, table, matrix, slicer, text, and small multiples for cartesian charts |
 | **Light and fast** | Zero dependencies. A columnar engine with typed-array views, vectorised aggregations, a single-pass grouped query path, hash indexes and caches. Queries over 1M rows, including YTD per day, take 12–191 ms cold. LTTB-thinned lines, canvas scatter, virtualized tables, and an optional Web Worker engine |
 | **Live data** | `@prismbi/prismbi/connectors`: CSV, Google Sheets, JSON, paginated REST, GraphQL, Apache Arrow (Parquet via DuckDB-Wasm), SQL adapters, WebSocket and EventSource streaming into sliding windows, scheduled refresh |
 | **Analytics** | Continuous time and number axes, log scales, reference lines (constant, average, median, min, max, percentile), trend lines, rule- and gradient-based colours, report-page tooltips, real totals |
@@ -64,7 +64,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 
 | Import | What |
 |---|---|
-| `@prismbi/prismbi` | Everything: model, DAX, report runtime and all 35 visuals |
+| `@prismbi/prismbi` | Everything: model, DAX, report runtime and all 36 visuals |
 | `@prismbi/prismbi/core` + `@prismbi/prismbi/visuals` | Lean builds: register only the visuals you use |
 | `@prismbi/prismbi/studio` | Drag-and-drop report editor |
 | `@prismbi/prismbi/react` | `<PrismReport>`, `<PrismVisual>`, `<PrismStudio>` |
@@ -91,7 +91,7 @@ import '@prismbi/prismbi/visuals/card';
 import '@prismbi/prismbi/visuals/slicer';
 ```
 
-Entries: `bar`, `line`, `pie`, `treemap`, `sunburst`, `funnel`, `scatter`, `card`, `kpi`, `gauge`, `table`, `slicer`, `text`, `waterfall`, `heatmap`, `calendar`, `decomposition`, `distribution`, `bullet`, `radar`, `sankey`, `ribbon`, `map`. Each also exports its definitions (`import { waterfall } from '@prismbi/prismbi/visuals/waterfall'`). Minified and gzipped, core with one visual is about 89 KB; the full package is about 125 KB. You can also import definitions from `@prismbi/prismbi/visuals` and call `registerVisual` yourself.
+Entries: `bar`, `line`, `pie`, `treemap`, `sunburst`, `scorecard`, `funnel`, `scatter`, `card`, `kpi`, `gauge`, `table`, `slicer`, `text`, `waterfall`, `heatmap`, `calendar`, `decomposition`, `distribution`, `bullet`, `radar`, `sankey`, `ribbon`, `map`. Each also exports its definitions (`import { waterfall } from '@prismbi/prismbi/visuals/waterfall'`). Minified and gzipped, core with one visual is about 89 KB; the full package is about 125 KB. You can also import definitions from `@prismbi/prismbi/visuals` and call `registerVisual` yourself.
 
 ## React
 

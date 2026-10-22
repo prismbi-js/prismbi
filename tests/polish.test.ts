@@ -210,3 +210,59 @@ describe('sunburst', () => {
     el.remove();
   });
 });
+
+describe('scorecard (goals)', () => {
+  it('scores progress, with at-risk thresholds and lower-is-better goals', async () => {
+    const { goalStatus } = await import('../src/visuals/scorecard');
+    expect(goalStatus(110, 100)).toEqual({ progress: 1.1, status: 'on-track' });
+    expect(goalStatus(95, 100).status).toBe('at-risk');
+    expect(goalStatus(80, 100).status).toBe('behind');
+    expect(goalStatus(80, 100, { atRisk: 0.75 }).status).toBe('at-risk');
+    expect(goalStatus(50, 40, { direction: 'down' })).toEqual({ progress: 0.8, status: 'behind' });
+    expect(goalStatus(null, 100).status).toBe('none');
+    expect(goalStatus(5, null).status).toBe('none');
+  });
+
+  it('lists each goal with current value, target, status and trend', async () => {
+    const { buildModel } = await import('../examples/model');
+    const model = buildModel();
+    const el = mount();
+    const y = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
+    const spec = {
+      model,
+      type: 'scorecard',
+      fields: { values: ['Total Sales', 'Margin %'], targets: ['Sales Target'], trend: 'Date[MonthYear]' },
+      filters: y,
+      format: { scorecard: { goals: { 'Margin %': { target: 0.99, owner: 'Finance' } } } } as never,
+    };
+    // a narrow tile keeps only the goal, its current value and status
+    const narrow = createVisual(el, spec);
+    narrow.flush();
+    expect([...el.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['Goal', 'Current', 'Status']);
+    narrow.destroy();
+    // jsdom has no layout: pretend the tile is wide
+    const width = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!;
+    Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 900 });
+    const r = createVisual(el, spec);
+    try {
+      r.flush();
+    } finally {
+      Object.defineProperty(Element.prototype, 'clientWidth', width);
+    }
+    const rows = [...el.querySelectorAll('tbody tr')];
+    expect(rows).toHaveLength(2);
+    // Total Sales is paired with Sales Target; current = the latest month with sales
+    const months = model.query({ groupBy: ['Date[MonthYear]'], values: ['Total Sales', 'Sales Target'], filters: y }).rows;
+    const last = months[months.length - 1];
+    const { goalStatus } = await import('../src/visuals/scorecard');
+    expect(rows[0].getAttribute('data-status')).toBe(goalStatus(last.values[0], last.values[1]).status);
+    // Margin % uses its fixed target: far above any real margin
+    expect(rows[1].getAttribute('data-status')).toBe('behind');
+    expect(rows[1].textContent).toContain('Finance');
+    expect(el.querySelectorAll('tbody svg')).toHaveLength(2); // sparklines
+    // no goal has a due date: that column is left out
+    expect([...el.querySelectorAll('th')].map((th) => th.textContent)).not.toContain('Due');
+    r.destroy();
+    el.remove();
+  });
+});

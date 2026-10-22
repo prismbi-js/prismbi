@@ -44,6 +44,7 @@ export const GALLERY: Spec[] = [
   { type: 'multiRowCard', fields: { category: 'Region[Group]', values: ['Total Sales', 'Orders'] } },
   { type: 'kpi', fields: { trend: 'Date[MonthYear]', value: 'Total Sales', target: 'Sales Target' } },
   { type: 'gauge', fields: { value: 'Margin %' } },
+  { type: 'scorecard', fields: { values: ['Total Sales', 'Margin %', 'Orders'], targets: ['Sales Target'], trend: 'Date[MonthYear]' }, filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }], format: { scorecard: { goals: { 'Margin %': { target: 0.42, owner: 'Finance' }, Orders: { target: 4000, owner: 'Sales', due: '2025-12-31' } } } } },
   { type: 'table', fields: { columns: ['Product[Category]', 'Total Sales', 'Margin %'] } },
   { type: 'matrix', fields: { rows: 'Product[Category]', columns: 'Date[Year]', values: 'Total Sales' } },
   { key: 'slicer-tiles', type: 'slicer', fields: { field: 'Region[Group]' }, format: { slicer: { style: 'tiles' } } },

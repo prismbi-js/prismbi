@@ -15,6 +15,7 @@ import { boxPlot, histogram } from './distribution';
 import { bullet, radar, ribbon, sankey } from './more';
 import { bubbleMap, filledMap } from './map';
 import { sunburst } from './sunburst';
+import { scorecard } from './scorecard';
 
 export const builtinVisuals = {
   clusteredColumn,
@@ -36,6 +37,7 @@ export const builtinVisuals = {
   card,
   multiRowCard,
   kpi,
+  scorecard,
   gauge,
   table,
   matrix,
@@ -58,7 +60,7 @@ export const builtinVisuals = {
 
 /** Register every built-in visual (idempotent). Called automatically by the main entry. */
 export function registerBuiltinVisuals(): void {
-  if (hasVisual('clusteredColumn') && hasVisual('sunburst')) return;
+  if (hasVisual('clusteredColumn') && hasVisual('scorecard')) return;
   registerVisual(clusteredColumn, ['column']);
   registerVisual(stackedColumn);
   registerVisual(percentStackedColumn);
@@ -78,6 +80,7 @@ export function registerBuiltinVisuals(): void {
   registerVisual(card);
   registerVisual(multiRowCard);
   registerVisual(kpi);
+  registerVisual(scorecard, ['goals']);
   registerVisual(gauge);
   registerVisual(table);
   registerVisual(matrix);

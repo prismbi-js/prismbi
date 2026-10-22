@@ -29,6 +29,7 @@ const SANKEY = svg('<path d="M3 5c6 0 8 10 14 10M3 13c6 0 8-8 14-8"/>');
 const RIBBON = svg('<path d="M4 15V8M16 15V5"/><path d="M5 9c4 0 6-3 10-3M5 13c4 0 6 1 10 1"/>');
 const MAP = svg('<path d="M3 5l4-2 6 2 4-2v12l-4 2-6-2-4 2z"/><path d="M7 3v12M13 5v12"/>');
 const SUNBURST = svg('<circle cx="10" cy="10" r="2.5"/><path d="M10 5.5a4.5 4.5 0 0 1 4.5 4.5M10 5.5a4.5 4.5 0 0 0-3.9 6.7"/><path d="M10 3a7 7 0 0 1 7 7M10 3a7 7 0 0 0-6.1 10.4M17 10a7 7 0 0 1-12.9 3.6"/>');
+const GOALS = svg('<circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r="1" fill="currentColor"/>');
 const COMBO = svg('<path d="M5 16v-5M10 16V8M15 16v-6"/><path d="M3 9l5-4 4 3 5-4"/>');
 
 export const VISUAL_ICONS: Record<string, string> = {
@@ -62,6 +63,7 @@ export const VISUAL_ICONS: Record<string, string> = {
   card: CARD,
   multiRowCard: CARD,
   kpi: KPI,
+  scorecard: GOALS,
   gauge: GAUGE,
   table: TABLE,
   matrix: MATRIX,
@@ -80,7 +82,7 @@ export const VISUAL_ORDER = [
   'clusteredColumn', 'stackedColumn', 'percentStackedColumn', 'clusteredBar', 'stackedBar', 'percentStackedBar',
   'line', 'area', 'stackedArea', 'lineClusteredColumn', 'ribbon', 'waterfall',
   'pie', 'donut', 'treemap', 'sunburst', 'funnel', 'scatter', 'heatmap', 'histogram', 'boxPlot', 'bullet', 'radar', 'sankey', 'map', 'filledMap', 'decompositionTree',
-  'card', 'multiRowCard', 'kpi', 'gauge', 'table', 'matrix', 'slicer', 'text',
+  'card', 'multiRowCard', 'kpi', 'scorecard', 'gauge', 'table', 'matrix', 'slicer', 'text',
 ];
 
 export const FALLBACK_ICON = svg('<rect x="4" y="4" width="12" height="12" rx="2"/><path d="M8 10h4M10 8v4"/>');
