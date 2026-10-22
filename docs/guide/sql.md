@@ -24,7 +24,8 @@ new Report(el, { model, engine, pages });
 
 - **Other databases:** `run` is any `(sql, signal) => Promise<rows>`, so you can send the SQL to your own server for Postgres, DuckDB or SQLite. Set `dialect: 'postgres' | 'sqlite'` (default `'duckdb'`).
 - **Different names:** `tables` maps model tables to SQL tables or views (`{ Sales: 'analytics.fact_sales' }`). `columns` maps column names per table (`{ Sales: { SalesAmount: 'amount' } }`).
-- **Logging:** `onSql` sees every statement. `engine.toSql(spec)` and `toSql(model, spec, opts)` return the SQL without running it.
+- **Caching:** `cache: true` (or `{ max, ttlMs }`) runs each distinct statement once: re-renders, visuals asking the same thing and concurrent duplicates share one result. Model changes clear it; call `engine.clearCache()` after reloading the database, and `engine.dispose()` when you drop the engine.
+- **Logging:** `onSql` sees every statement (with `cache`, only those that actually run). `engine.toSql(spec)` and `toSql(model, spec, opts)` return the SQL without running it.
 
 ## What is pushed down
 
@@ -34,7 +35,8 @@ new Report(el, { model, engine, pages });
 | Filters: `eq`, `in`, `notIn`, comparisons, `between`, text matching, blanks, multi-column `tuples` | `WHERE` (blank-aware like the in-memory engine) |
 | Top N filters | an `IN (SELECT … ORDER BY … LIMIT n)` subquery |
 | `orderBy`, `top`, `limit`, sort-by columns (month names in calendar order) | `ORDER BY … NULLS LAST`, `LIMIT` |
-| `totals`, `highlight` | extra statements, run in parallel |
+| `totals` | `GROUPING SETS ((…), ())` in the same statement on DuckDB and Postgres; a second statement on SQLite (and in filter-context mode) |
+| `highlight` | an extra statement, run in parallel |
 | Visual calculations | applied to the SQL result, as in memory |
 | `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `DISTINCTCOUNT`, `COUNTROWS(fact)`, `MEDIAN` (DuckDB) | aggregates; empty counts are blank, as in DAX |
 | `SUMX`, `AVERAGEX`, `MINX`, `MAXX` over the fact table, with arithmetic and `RELATED` | aggregates of row expressions |

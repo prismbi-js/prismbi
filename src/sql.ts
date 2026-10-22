@@ -30,8 +30,13 @@ export class SqlUnsupportedError extends Error {
 export interface SqlPlan {
   /** Grouped query: columns `g0…` (group keys) and `v0…` (values). */
   sql: string;
-  /** Grand totals (`spec.totals`). */
+  /** Grand totals (`spec.totals`), when they need their own statement. */
   totals?: string;
+  /**
+   * The grand-totals row comes back inside `sql` (`GROUPING SETS`, DuckDB and Postgres): it is the row whose
+   * `gt` column is 1, ordered first.
+   */
+  totalsInline?: boolean;
   /** The grouped query with the highlight filters added (`spec.highlight`). */
   highlight?: string;
   groups: QueryField[];
@@ -1050,7 +1055,9 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
 
   const tr = new Translator(model, dialect);
   for (const g of groups) tr.touched.add(`${g.column!.table}[${g.column!.column}]`);
-  const build = (extra: FilterSpec[], grouped: boolean): string => {
+  // DuckDB and Postgres return the grand totals with the grouped rows (one round trip); SQLite runs a second statement
+  const inline = !!spec.totals && values.length > 0 && groups.length > 0 && dialect !== 'sqlite';
+  const build = (extra: FilterSpec[], grouped: boolean, withTotals = false): string => {
     const s = new Scope(model, opts, base, (sc, e) => tr.rowExpr(sc, e));
     const all = [...filters, ...extra];
     // joins in reading order: grouping columns, then values, then filters
@@ -1058,14 +1065,15 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
     const vs = values.map((v) => tr.value(s, v.ast, [], all));
     const where = all.map((f) => tr.filter(s, f, all));
     const select = [...gs, ...vs.map((v, i) => `${v} AS v${i}`)];
+    if (withTotals) select.push(`GROUPING(${s.col(groups[0].column!)}) AS gt`);
     const parts = [`SELECT ${grouped && !values.length ? 'DISTINCT ' : ''}${select.join(', ')}`, s.from()];
     if (where.length) parts.push(`WHERE ${where.join(' AND ')}`);
     if (grouped && groups.length && values.length) {
-      parts.push(`GROUP BY ${groups.map((_, i) => i + 1).join(', ')}`);
+      parts.push(withTotals ? `GROUP BY GROUPING SETS ((${groups.map((g) => s.col(g.column!)).join(', ')}), ())` : `GROUP BY ${groups.map((_, i) => i + 1).join(', ')}`);
       if (!spec.includeEmpty) parts.push(`HAVING NOT (${vs.map((v) => `${v} IS NULL`).join(' AND ')})`);
     }
     if (grouped && groups.length) {
-      const order: string[] = [];
+      const order: string[] = withTotals ? ['gt DESC'] : [];
       for (const o of spec.orderBy ?? []) {
         const dir = o.direction === 'desc' ? 'DESC' : 'ASC';
         let gi = -1;
@@ -1082,7 +1090,7 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
       }
       groups.forEach((_, i) => order.push(groupOrder(s, i, 'ASC')));
       parts.push(`ORDER BY ${order.join(', ')}`);
-      const cap = Math.min(spec.top ?? Infinity, (spec.limit ?? 30_000) + 1);
+      const cap = Math.min(spec.top ?? Infinity, (spec.limit ?? 30_000) + 1) + (withTotals ? 1 : 0);
       if (Number.isFinite(cap)) parts.push(`LIMIT ${cap}`);
     }
     return parts.join('\n');
@@ -1094,10 +1102,11 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
     const key = sortBy ? (values.length ? `MIN(${s.col({ table: g.table, column: sortBy })})` : s.col({ table: g.table, column: sortBy })) : `g${i}`;
     return `${key} ${dir} NULLS FIRST`;
   };
-  const sql = build([], true);
+  const sql = build([], true, inline);
   return {
     sql,
-    totals: spec.totals && values.length ? build([], false) : undefined,
+    totals: spec.totals && values.length && !inline ? build([], false) : undefined,
+    totalsInline: inline || undefined,
     highlight: highlight.length && values.length ? build(highlight, groups.length > 0) : undefined,
     groups,
     values: values.map(({ ast: _a, ...v }) => v),
@@ -1117,6 +1126,12 @@ export interface SqlEngineOptions extends SqlOptions {
   fallback?: 'error' | 'model';
   /** Called with each SQL statement before it runs (logging, debugging). */
   onSql?: (sql: string) => void;
+  /**
+   * Cache results by SQL text: identical statements (a visual re-rendering, two visuals asking the same thing,
+   * concurrent duplicates) run once. Cleared when the model changes and by `clearCache()`; `ttlMs` bounds how
+   * stale a cached answer may get when the database changes underneath. `true` means `{ max: 200 }`.
+   */
+  cache?: boolean | { max?: number; ttlMs?: number };
 }
 
 function normalize(v: unknown, field: QueryField | undefined): CellValue {
@@ -1137,16 +1152,49 @@ const cell = (row: Record<string, unknown> | unknown[], name: string, index: num
  * empty locally and live only in the database.
  */
 export function sqlEngine(model: DataModel, opts: SqlEngineOptions) {
+  type Rows = Awaited<ReturnType<SqlRunner>>;
+  const cacheOpts = opts.cache === true ? {} : opts.cache || undefined;
+  const max = cacheOpts?.max ?? 200;
+  const cache = new Map<string, { at: number; rows: Promise<Rows> }>();
+  const clearCache = () => cache.clear();
+  const unsubscribe = cacheOpts ? model.onChange(clearCache) : undefined;
+  const exec = (sql: string, signal?: AbortSignal): Promise<Rows> => {
+    if (!cacheOpts) return (opts.onSql?.(sql), opts.run(sql, signal));
+    const hit = cache.get(sql);
+    if (hit && (cacheOpts.ttlMs === undefined || Date.now() - hit.at < cacheOpts.ttlMs)) {
+      // most recently used goes last
+      cache.delete(sql);
+      cache.set(sql, hit);
+      return signal ? abortable(hit.rows, signal) : hit.rows;
+    }
+    opts.onSql?.(sql);
+    // shared by concurrent callers, so one caller's abort must not cancel the others
+    const rows = opts.run(sql);
+    const entry = { at: Date.now(), rows };
+    cache.set(sql, entry);
+    rows.catch(() => cache.get(sql) === entry && cache.delete(sql));
+    while (cache.size > max) cache.delete(cache.keys().next().value!);
+    return signal ? abortable(rows, signal) : rows;
+  };
   const runPlan = async (spec: QuerySpec, signal?: AbortSignal) => {
     const plan = toSql(model, spec, opts);
-    const exec = (sql: string) => (opts.onSql?.(sql), opts.run(sql, signal));
-    const [main, totals, hl] = await Promise.all([exec(plan.sql), plan.totals ? exec(plan.totals) : null, plan.highlight ? exec(plan.highlight) : null]);
+    const [main, totals, hl] = await Promise.all([exec(plan.sql, signal), plan.totals ? exec(plan.totals, signal) : null, plan.highlight ? exec(plan.highlight, signal) : null]);
     const ng = plan.groups.length;
     const toRow = (r: Record<string, unknown> | unknown[]): QueryRow => ({
       keys: plan.groups.map((g, i) => normalize(cell(r, `g${i}`, i), g)),
       values: plan.values.map((v, i) => normalize(cell(r, `v${i}`, ng + i), v)),
     });
-    let rows = main.map(toRow);
+    let inlineTotals: Record<string, unknown> | unknown[] | undefined;
+    let mainRows = main;
+    if (plan.totalsInline) {
+      // the totals row is ordered first; its GROUPING() flag is the column after the values
+      const flag = (r: Record<string, unknown> | unknown[]) => Number(cell(r, 'gt', ng + plan.values.length)) === 1;
+      if (main.length && flag(main[0])) {
+        inlineTotals = main[0];
+        mainRows = main.slice(1);
+      }
+    }
+    let rows = mainRows.map(toRow);
     if (!ng && !plan.values.length) rows = [];
     if (!ng && plan.values.length && !rows.length) rows = [{ keys: [], values: plan.values.map(() => null) }];
     let truncated = false;
@@ -1165,7 +1213,7 @@ export function sqlEngine(model: DataModel, opts: SqlEngineOptions) {
       groups: plan.groups,
       values: plan.values,
       rows,
-      totals: totals ? plan.values.map((v, i) => normalize(cell(totals[0] ?? {}, `v${i}`, i), v)) : undefined,
+      totals: totals ? plan.values.map((v, i) => normalize(cell(totals[0] ?? {}, `v${i}`, i), v)) : plan.totalsInline ? plan.values.map((v, i) => normalize(inlineTotals ? cell(inlineTotals, `v${i}`, ng + i) : null, v)) : undefined,
       truncated,
       baseFilters: (spec.filters ?? []).map(toSpec),
     };
@@ -1173,6 +1221,10 @@ export function sqlEngine(model: DataModel, opts: SqlEngineOptions) {
   return {
     /** The SQL a query would run (for logging and tests). */
     toSql: (spec: QuerySpec) => toSql(model, spec, opts),
+    /** Forget cached results (`cache` option), e.g. after the database was reloaded. */
+    clearCache,
+    /** Stop listening to the model (only needed with `cache`). */
+    dispose: () => (unsubscribe?.(), clearCache()),
     async query(spec: QuerySpec, signal?: AbortSignal): Promise<Omit<QueryResult, 'baseFilters'> & { baseFilters: readonly unknown[] }> {
       try {
         const calc = visualCalcPlan(spec);
@@ -1183,6 +1235,15 @@ export function sqlEngine(model: DataModel, opts: SqlEngineOptions) {
       }
     },
   };
+}
+
+function abortable<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }
 
 /** A runner for a DuckDB connection: DuckDB-Wasm's `AsyncDuckDBConnection`, or anything whose `query(sql)` returns an Arrow table or rows. */

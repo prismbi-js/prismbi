@@ -62,10 +62,18 @@ export interface LoadedPlugin {
   registered: { visuals: string[]; themes: string[]; connectors: string[] };
 }
 
-const subtle = () => {
-  const s = (globalThis.crypto as Crypto | undefined)?.subtle;
+let subtleCache: SubtleCrypto | undefined;
+/** WebCrypto, falling back to Node's `webcrypto` where there is no global `crypto` (Node 18). */
+const subtle = async (): Promise<SubtleCrypto> => {
+  if (subtleCache) return subtleCache;
+  let s = (globalThis.crypto as Crypto | undefined)?.subtle;
+  const proc = (globalThis as { process?: { versions?: { node?: string } } }).process;
+  if (!s && proc?.versions?.node) {
+    const spec = 'node:crypto';
+    s = ((await import(/* @vite-ignore */ spec)) as { webcrypto?: Crypto }).webcrypto?.subtle;
+  }
   if (!s) throw new Error('WebCrypto (crypto.subtle) is not available in this environment');
-  return s;
+  return (subtleCache = s);
 };
 
 const b64 = (bytes: ArrayBuffer | Uint8Array) => {
@@ -85,27 +93,27 @@ export function signedPayload(m: Pick<PluginManifest, 'name' | 'version' | 'kind
 /** `sha256-<base64>` of some bytes. */
 export async function integrityOf(code: ArrayBuffer | Uint8Array | string): Promise<string> {
   const bytes = typeof code === 'string' ? utf8(code) : code instanceof Uint8Array ? code : new Uint8Array(code);
-  return `sha256-${b64(await subtle().digest('SHA-256', bytes))}`;
+  return `sha256-${b64(await (await subtle()).digest('SHA-256', bytes))}`;
 }
 
 const ALG = { name: 'ECDSA', namedCurve: 'P-256' } as const;
 const SIG = { name: 'ECDSA', hash: 'SHA-256' } as const;
 
 async function asKey(k: JsonWebKey | CryptoKey, usage: 'sign' | 'verify'): Promise<CryptoKey> {
-  return typeof (k as CryptoKey).type === 'string' && 'algorithm' in (k as object) ? (k as CryptoKey) : subtle().importKey('jwk', k as JsonWebKey, ALG, false, [usage]);
+  return typeof (k as CryptoKey).type === 'string' && 'algorithm' in (k as object) ? (k as CryptoKey) : (await subtle()).importKey('jwk', k as JsonWebKey, ALG, false, [usage]);
 }
 
 /** Generate a signing key pair (JWK); keep the private key secret and publish the public one. */
 export async function generateSigningKeys(): Promise<{ publicKey: JsonWebKey; privateKey: JsonWebKey }> {
-  const pair = await subtle().generateKey(ALG, true, ['sign', 'verify']);
-  return { publicKey: await subtle().exportKey('jwk', pair.publicKey), privateKey: await subtle().exportKey('jwk', pair.privateKey) };
+  const pair = await (await subtle()).generateKey(ALG, true, ['sign', 'verify']);
+  return { publicKey: await (await subtle()).exportKey('jwk', pair.publicKey), privateKey: await (await subtle()).exportKey('jwk', pair.privateKey) };
 }
 
 /** Fill in `integrity` and `signature` for a manifest and its code. */
 export async function signPlugin(manifest: Omit<PluginManifest, 'integrity' | 'signature'> & { integrity?: string }, code: ArrayBuffer | Uint8Array | string, privateKey: JsonWebKey | CryptoKey, keyId: string): Promise<PluginManifest> {
   const integrity = await integrityOf(code);
   const m = { ...manifest, integrity, keyId } as PluginManifest;
-  const sig = await subtle().sign(SIG, await asKey(privateKey, 'sign'), utf8(signedPayload(m)));
+  const sig = await (await subtle()).sign(SIG, await asKey(privateKey, 'sign'), utf8(signedPayload(m)));
   return { ...m, signature: b64(sig) };
 }
 
@@ -115,7 +123,7 @@ export async function verifyPlugin(manifest: PluginManifest, code: ArrayBuffer |
   if (actual !== manifest.integrity) throw new Error(`Plugin ${manifest.name}: integrity mismatch (expected ${manifest.integrity}, got ${actual})`);
   const key = manifest.keyId ? opts.trustedKeys?.[manifest.keyId] : undefined;
   if (manifest.signature && key) {
-    const ok = await subtle().verify(SIG, await asKey(key, 'verify'), unb64(manifest.signature), utf8(signedPayload(manifest)));
+    const ok = await (await subtle()).verify(SIG, await asKey(key, 'verify'), unb64(manifest.signature), utf8(signedPayload(manifest)));
     if (!ok) throw new Error(`Plugin ${manifest.name}: invalid signature for key "${manifest.keyId}"`);
     return { signed: true };
   }

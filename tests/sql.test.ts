@@ -225,3 +225,57 @@ describe('empty local fact table', () => {
     expect(seen[0]).toContain('LEFT JOIN "Product" AS t1 ON t0."ProductKey" = t1."ProductKey"');
   });
 });
+
+describe('one round trip and result cache', () => {
+  const spec: QuerySpec = { groupBy: ['Product[Category]'], values: ['Total Sales'], totals: true };
+
+  it('returns totals with the rows through GROUPING SETS on DuckDB and Postgres, two statements on SQLite', async () => {
+    const plan = toSql(model, spec);
+    expect(plan.totalsInline).toBe(true);
+    expect(plan.totals).toBeUndefined();
+    expect(plan.sql).toContain('GROUP BY GROUPING SETS ((t1."Category"), ())');
+    expect(plan.sql).toMatch(/ORDER BY gt DESC, /);
+    expect(toSql(model, spec, { dialect: 'postgres' }).totalsInline).toBe(true);
+    const lite = toSql(model, spec, { dialect: 'sqlite' });
+    expect(lite.totalsInline).toBeUndefined();
+    expect(lite.totals).toBeDefined();
+    // the runner sees one statement; the totals row (gt = 1) is split off
+    const seen: string[] = [];
+    const e = sqlEngine(model, { run: async (sql) => (seen.push(sql), [{ g0: null, v0: 30, gt: 1 }, { g0: 'Bikes', v0: 20, gt: 0 }, { g0: 'Clothing', v0: 10, gt: 0 }]) });
+    const r = await e.query(spec);
+    expect(seen).toHaveLength(1);
+    expect(r.rows.map((x) => x.keys[0])).toEqual(['Bikes', 'Clothing']);
+    expect(r.totals).toEqual([30]);
+    // array rows: the flag follows the values
+    const a = sqlEngine(model, { run: async () => [[null, 5, 1], ['Bikes', 5, 0]] });
+    expect((await a.query(spec)).totals).toEqual([5]);
+  });
+
+  it('runs identical statements once, and forgets results when the model changes', async () => {
+    const m = buildModel();
+    let runs = 0;
+    const e = sqlEngine(m, { cache: true, run: async () => (runs++, [{ g0: 'Bikes', v0: 1, gt: 0 }]) });
+    const q = { groupBy: ['Product[Category]'], values: ['Total Sales'] };
+    await Promise.all([e.query(q), e.query(q)]);
+    await e.query(q);
+    expect(runs).toBe(1);
+    m.addMeasure('Another', 'SUM(Sales[Quantity])');
+    await e.query(q);
+    expect(runs).toBe(2);
+    e.clearCache();
+    await e.query(q);
+    expect(runs).toBe(3);
+    // an aborted caller rejects without dropping the shared result
+    const ac = new AbortController();
+    ac.abort();
+    await expect(e.query(q, ac.signal)).rejects.toBeDefined();
+    await e.query(q);
+    expect(runs).toBe(3);
+    e.dispose();
+    // no cache: every query runs
+    const plain = sqlEngine(m, { run: async () => (runs++, []) });
+    await plain.query(q);
+    await plain.query(q);
+    expect(runs).toBe(5);
+  });
+});
