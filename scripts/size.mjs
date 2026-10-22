@@ -28,7 +28,7 @@ const PACKAGE_ALIASES = Object.fromEntries(
 const SCENARIOS = [
   ['core (api)', `export * from '${dist}/core.js';`, 98],
   ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 87],
-  ['full (api)', `export * from '${dist}/index.js';`, 138],
+  ['full (api)', `export * from '${dist}/index.js';`, 139],
   ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 133],
   ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 128],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 94],
@@ -36,7 +36,7 @@ const SCENARIOS = [
   ['connectors', `export * from '${dist}/connectors.js';`, 5],
   ['worker', `export * from '${dist}/worker.js';`, 3],
   ['ai (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/ai.js';`, 28, 'full (api)'],
-  ['sql (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/sql.js';`, 12, 'full (api)'],
+  ['sql (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/sql.js';`, 14, 'full (api)'],
 ];
 
 const dir = mkdtempSync(join(tmpdir(), 'prismbi-size-'));

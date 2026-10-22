@@ -75,7 +75,7 @@ function expectSame(sql: Awaited<ReturnType<typeof engine.query>>, local: QueryR
     r.values.forEach((v, k) => (typeof v === 'number' ? expect(v).toBeCloseTo(local.rows[i].values[k] as number, 6) : expect(v).toBe(local.rows[i].values[k])));
     if (local.rows[i].highlights) r.highlights!.forEach((v, k) => (typeof v === 'number' ? expect(v).toBeCloseTo(local.rows[i].highlights![k] as number, 6) : expect(v).toBe(local.rows[i].highlights![k])));
   });
-  if (local.totals) sql.totals!.forEach((v, k) => expect(v as number).toBeCloseTo(local.totals![k] as number, 6));
+  if (local.totals) sql.totals!.forEach((v, k) => (typeof v === 'number' ? expect(v).toBeCloseTo(local.totals![k] as number, 6) : expect(v).toBe(local.totals![k])));
 }
 
 const CASES: [string, QuerySpec][] = [
@@ -107,7 +107,17 @@ model
   .addMeasure('Big Product Sales', 'CALCULATE([Total Sales], FILTER(VALUES(Product[Name]), [Total Sales] > 400000))')
   .addMeasure('Big Products', 'COUNTROWS(FILTER(VALUES(Product[Name]), [Total Sales] > 400000))')
   .addMeasure('Products Sold', 'CALCULATE(COUNTROWS(Product), CROSSFILTER(Sales[ProductKey], Product[ProductKey], BOTH))')
-  .addMeasure('Sales Ignoring Product', 'CALCULATE([Total Sales], CROSSFILTER(Sales[ProductKey], Product[ProductKey], NONE))');
+  .addMeasure('Sales Ignoring Product', 'CALCULATE([Total Sales], CROSSFILTER(Sales[ProductKey], Product[ProductKey], NONE))')
+  .addMeasure('Avg Sales per Day', 'AVERAGEX(VALUES(Date[Date]), [Total Sales])')
+  .addMeasure('Best Region Sales', 'MAXX(VALUES(Region[Region]), [Total Sales])')
+  .addMeasure('Rolling 3M Avg', 'VAR d = MAX(Date[Date]) VAR p = DATESINPERIOD(Date[Date], d, -3, MONTH) VAR r = CALCULATE(AVERAGEX(VALUES(Date[Date]), [Total Sales]), p) RETURN IF(MINX(p, Date[Date]) <= MAX(Sales[OrderDate]), r)')
+  .addMeasure('Next 10 Days Sales', 'CALCULATE([Total Sales], DATESINPERIOD(Date[Date], MIN(Date[Date]), 10, DAY))')
+  .addMeasure('Selected Category', 'SELECTEDVALUE(Product[Category], "Several")')
+  .addMeasure('One Region', 'IF(HASONEVALUE(Region[Region]), 1, 0)')
+  .addMeasure('Category Label', 'DISTINCTCOUNT(Product[Category]) & " categories"')
+  .addMeasure('Missing Label', 'CALCULATE(DISTINCTCOUNT(Product[Category]), Product[Subcategory] = "None") & " selected"')
+  .addCalculatedColumn('Date', 'Yr', 'YEAR([Date])')
+  .addCalculatedColumn('Date', 'Month Name', 'FORMAT([Date], "MMMM") & " " & FORMAT([Date], "yyyy")');
 
 const y2025 = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
 const CONTEXT_CASES: [string, QuerySpec][] = [
@@ -126,6 +136,10 @@ const CONTEXT_CASES: [string, QuerySpec][] = [
   ['measures inside FILTER conditions (context transition)', { groupBy: ['Product[Category]'], values: ['Big Product Sales', 'Big Products'], filters: y2025 }],
   ['CROSSFILTER(…, BOTH) on a single-direction relationship', { groupBy: ['Region[Country]'], values: ['Products Sold', 'Product Count'], filters: [{ target: 'Date[Date]', op: 'eq', value: new Date(2025, 2, 3) }] }],
   ['CROSSFILTER(…, NONE): product filters stop at the relationship', { groupBy: ['Product[Category]', 'Region[Group]'], values: ['Total Sales', 'Sales Ignoring Product'], filters: [{ target: 'Product[Subcategory]', op: 'in', values: ['Road Bikes', 'Helmets'] }], totals: true }],
+  ['iterators with a measure per value (average per day, best region)', { groupBy: ['Product[Category]', 'Date[Quarter]'], values: ['Avg Sales per Day', 'Best Region Sales'], filters: y2025, totals: true }],
+  ['DATESINPERIOD windows in table variables (rolling average, forward window)', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Rolling 3M Avg', 'Next 10 Days Sales'], filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }], totals: true }],
+  ['SELECTEDVALUE and HASONEVALUE', { groupBy: ['Region[Group]'], values: ['Selected Category', 'One Region'], filters: [{ target: 'Product[Subcategory]', op: 'in', values: ['Road Bikes', 'Mountain Bikes'] }], totals: true }],
+  ['text from & (BLANK as empty text) and calculated columns with YEAR and FORMAT', { groupBy: ['Date[Yr]', 'Date[Month Name]'], values: ['Category Label', 'Missing Label', 'Sales LY'], filters: [{ target: 'Date[MonthNumber]', op: 'in', values: [1, 2] }], totals: true }],
   ['highlights in context mode', { groupBy: ['Product[Category]'], values: ['Sales LY'], highlight: [{ target: 'Region[Country]', op: 'eq', value: 'Canada' }], filters: y2025 }],
 ];
 
