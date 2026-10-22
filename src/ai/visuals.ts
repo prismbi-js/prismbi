@@ -4,6 +4,7 @@ import { askSync, suggestQuestions, type AskOptions } from './ask';
 import { explain, type Explanation } from './explain';
 import { findInsights, type Insight } from './insights';
 import { writeNarrative, type NarrativePart } from './narrative';
+import { keyInfluencers, type InfluencerOptions, type KeyInfluencers } from './influencers';
 
 // ---------------------------------------------------------------- styles
 
@@ -38,6 +39,13 @@ const CSS = `
 .pbi-ai-narrative p{margin:0 0 .6em}
 .pbi-ai-narrative strong{color:var(--pbi-accent);font-weight:600}
 .pbi-ai-narrative small{display:block;color:var(--pbi-fg-3);font-size:11px}
+.pbi-ai-ki{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;height:100%;min-height:0}
+.pbi-ai-ki>div{display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0}
+.pbi-ai-ki h4{margin:0;font-size:12px;font-weight:600;color:var(--pbi-fg-2)}
+.pbi-ai-item[aria-pressed=true]{border-color:var(--pbi-accent);background:color-mix(in srgb,var(--pbi-accent) 8%,transparent)}
+.pbi-ai-bar.is-on b{color:var(--pbi-accent)}
+.pbi-ai-bar{cursor:pointer}
+@container (max-width:420px){.pbi-ai-ki{grid-template-columns:1fr}}
 .pbi-ai-close{position:absolute;top:6px;right:8px;border:0;background:none;color:var(--pbi-fg-3);font-size:16px;cursor:pointer}
 `;
 
@@ -368,7 +376,86 @@ export function enableExplain(enabled = true): void {
 }
 
 /** Register the Q&A and Insights visuals and the "Explain this" menu item. Called on import. */
+const kiCache = new WeakMap<object, Map<string, KeyInfluencers>>();
+
+/** Key influencers: which column values move a measure most, with the chosen column's breakdown against the average. */
+export const keyInfluencersVisual = /* @__PURE__ */ defineVisual({
+  type: 'keyInfluencers',
+  displayName: 'Key influencers',
+  category: 'other',
+  roles: [
+    { name: 'values', displayName: 'Analyze', kind: 'measure', required: true },
+    { name: 'explainBy', displayName: 'Explain by (optional)', kind: 'grouping', multiple: true },
+  ],
+  buildQuery: (_ctx, base) => ({ ...base, groupBy: [], values: (base.values ?? []).slice(0, 1) }),
+  render(ctx) {
+    injectStyles();
+    const measure = ctx.fields('values')[0];
+    if (!measure) return;
+    const explainBy = ctx.fields('explainBy').map((d) => (typeof d === 'string' ? d : (d.field ?? ''))).filter(Boolean);
+    const filters = [...ctx.data.baseFilters] as unknown as FilterSpec[];
+    const fo = ((ctx.format as { keyInfluencers?: Partial<InfluencerOptions> }).keyInfluencers ?? {}) as Partial<InfluencerOptions>;
+    const key = JSON.stringify([measure, explainBy, filters, fo], (_k, v) => (typeof v === 'function' ? undefined : v instanceof Set ? [...v] : v));
+    let cache = kiCache.get(ctx.model);
+    if (!cache) kiCache.set(ctx.model, (cache = new Map()));
+    let ki = cache.get(key);
+    if (!ki) {
+      ki = keyInfluencers(ctx.model, { ...fo, measure, explainBy, filters, max: fo.max ?? 8 });
+      if (cache.size > 50) cache.clear();
+      cache.set(key, ki);
+    }
+    const res = ki;
+    const wrap = el('div', { class: 'pbi-ai-ki', style: 'container-type:inline-size' });
+    const left = el('div', { role: 'list' }, el('h4', {}, `What influences ${res.metric}`));
+    const right = el('div', {});
+    wrap.append(left, right);
+    // the chosen influencer (by label) picks the column shown on the right
+    const state = ctx.host.state as { kiPick?: string };
+    const pick = res.influencers.find((i) => i.label === state.kiPick) ?? res.influencers[0];
+    const column = pick?.column ?? res.columns[0]?.column;
+    const ref = (r: string) => {
+      const m = /^'?(.*?)'?\[([^\]]+)\]$/.exec(r);
+      return m ? { table: m[1], column: m[2] } : null;
+    };
+    const drawColumn = () => {
+      const col = res.columns.find((c) => c.column === column);
+      right.replaceChildren();
+      if (!col) return;
+      right.append(el('h4', {}, `${res.metric} by ${col.name}`));
+      const segs = [...col.segments].sort((a, b) => b.segment - a.segment);
+      const max = Math.max(...segs.map((x) => Math.abs(x.segment)), Math.abs(res.overall ?? 0), 1e-12);
+      const chosen = res.influencers.filter((i) => i.column === col.column).map((i) => i.label);
+      for (const sg of segs) {
+        const on = chosen.includes(`${col.name} is ${sg.label}`);
+        const bar = el('i', { class: sg.segment < (res.overall ?? 0) ? 'neg' : '', style: `width:${Math.max(2, (Math.abs(sg.segment) / max) * 100).toFixed(1)}%` });
+        const row = el('div', { class: `pbi-ai-bar${on ? ' is-on' : ''}`, role: 'button', tabindex: '0', title: `${sg.label}: ${res.format(sg.segment)}${Number.isFinite(sg.share) ? ` · ${(sg.share * 100).toFixed(1)}% of rows` : ''}` }, el('b', {}, sg.label), el('div', {}, bar), el('em', {}, res.format(sg.segment)));
+        const c = ref(col.column);
+        const select = (e: Event) => {
+          e.stopPropagation();
+          if (c) ctx.host.select({ columns: [c], values: [sg.value] }, { multi: (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey });
+        };
+        row.addEventListener('click', select);
+        row.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), select(e)));
+        right.append(row);
+      }
+      if (res.overall !== null) right.append(el('div', { class: 'pbi-ai-note' }, `Average: ${res.format(res.overall)}`));
+    };
+    if (!res.influencers.length) left.append(el('div', { class: 'pbi-empty' }, 'No column value moves this measure much in the current selection.'));
+    for (const inf of res.influencers) {
+      const item = el('button', { type: 'button', class: 'pbi-ai-item', role: 'listitem', 'aria-pressed': String(inf === pick) }, el('div', { class: 'pbi-ai-icon', 'aria-hidden': 'true' }, inf.direction === 'up' ? '▲' : '▼'), el('b', {}, `When ${inf.label}`), el('span', {}, `${res.metric} is ${inf.effect} (${res.format(inf.segment)} vs ${res.format(inf.overall)})`));
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ctx.host.setState({ kiPick: inf.label });
+      });
+      left.append(item);
+    }
+    drawColumn();
+    ctx.root.replaceChildren(wrap);
+  },
+});
+
 export function registerAI(): void {
+  registerVisual(keyInfluencersVisual, ['influencers']);
   registerVisual(qnaVisual);
   registerVisual(insightsVisual);
   registerVisual(narrativeVisual);

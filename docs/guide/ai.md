@@ -115,6 +115,21 @@ const stop = watchAnomalies(model, {
 
 What is already unusual when watching starts doesn't alert, unless you set `alertExisting: true`. In a report definition, use `alerts: [{ …, when: { anomaly: true } }]`. The server's `watchAlerts` runs those too (see [Server](server.md)).
 
+## Key influencers
+
+`keyInfluencers(model, { measure, explainBy?, filters?, basis?, minShare?, max? })` finds the column values that move a measure most: every value of every column is compared with the overall figure, and large effects in large segments come first.
+
+![The key influencers visual for margin](../images/key-influencers.png)
+
+```ts
+keyInfluencers(model, { measure: 'Margin %', explainBy: ['Product[Category]', 'Region[Group]'] });
+// { metric: 'Margin %', overall: 0.273, influencers: [{ label: 'Category is Accessories', effect: '1.5× higher', segment: 0.418, share: 0.37, … }, …], columns: [...] }
+```
+
+- **Sums and counts** are compared per row (`basis: 'perRow'`, chosen automatically when the measure adds up over a column's segments): "Total Sales per row is 78% lower when Category is Accessories". Averages and rates (`basis: 'value'`) are compared as they are.
+- **Columns:** `explainBy` defaults to the model's categorical columns, as for insights. Segments under `minShare` of the rows (default 5%) are ignored, and the same rows reached through two columns (a subcategory with a single product) are listed once.
+- **The visual:** `type: 'keyInfluencers'` (`fields: { values: 'Margin %', explainBy: [...] }`, alias `influencers`) lists the influencers on the left and the chosen one's column against the average on the right. Clicking a bar cross-filters the page. `format.keyInfluencers` takes `max`, `minShare` and `basis`. Register it with `registerAI()`.
+
 ## Narrative
 
 The `narrative` visual writes a short summary of its measures that updates with filters and selections, like Power BI's smart narrative:

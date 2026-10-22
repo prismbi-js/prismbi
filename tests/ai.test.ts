@@ -209,3 +209,49 @@ describe('AI visuals and Explain this', () => {
     el.remove();
   });
 });
+
+describe('key influencers', () => {
+  it('compares sums per row, averages and rates as they are, and lists each segment once', async () => {
+    const { keyInfluencers } = await import('@prismbi/prismbi/ai');
+    const model = buildModel();
+    const sales = keyInfluencers(model, { measure: 'Total Sales', explainBy: ['Product[Category]', 'Product[Subcategory]', 'Product[Name]'] });
+    expect(sales.basis).toBe('perRow');
+    const rows = model.query({ values: ['Total Sales', { name: 'n', expression: 'COUNTROWS(Sales)' }] }).rows[0].values as number[];
+    expect(sales.overall).toBeCloseTo(rows[0] / rows[1], 6);
+    const top = sales.influencers[0];
+    const seg = model.query({ groupBy: [top.column], values: ['Total Sales', { name: 'n', expression: 'COUNTROWS(Sales)' }] }).rows.find((r) => r.keys[0] === top.value)!.values as number[];
+    expect(top.segment).toBeCloseTo(seg[0] / seg[1], 6);
+    expect(top.ratio).toBeCloseTo(top.segment / top.overall, 9);
+    expect(top.direction).toBe(top.ratio > 1 ? 'up' : 'down');
+    // a segment reached through two columns (a subcategory with one product) appears once
+    const keys = sales.influencers.map((i) => `${i.share.toFixed(9)}|${i.segment.toFixed(6)}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    const margin = keyInfluencers(model, { measure: 'Margin %', explainBy: ['Product[Category]'] });
+    expect(margin.basis).toBe('value');
+    expect(margin.overall).toBeCloseTo(model.evaluate('[Margin %]') as number, 9);
+    // small segments are ignored
+    expect(keyInfluencers(model, { measure: 'Margin %', explainBy: ['Product[Name]'], minShare: 0.99 }).influencers).toEqual([]);
+  });
+
+  it('renders the influencers and the chosen column, and cross-filters from a bar', async () => {
+    const { registerAI } = await import('@prismbi/prismbi/ai');
+    registerAI();
+    const model = buildModel();
+    const el = document.createElement('div');
+    document.body.append(el);
+    const r = createVisual(el, { model, type: 'keyInfluencers', fields: { values: 'Margin %', explainBy: ['Product[Category]', 'Region[Group]'] } });
+    r.flush();
+    const items = [...el.querySelectorAll('.pbi-ai-item')];
+    expect(items.length).toBeGreaterThan(0);
+    expect(items[0].textContent).toMatch(/^.When /);
+    expect(el.querySelector('.pbi-ai-ki h4')!.textContent).toBe('What influences Margin %');
+    const bars = [...el.querySelectorAll('.pbi-ai-bar')];
+    expect(bars.length).toBeGreaterThan(1);
+    const picked: unknown[] = [];
+    r.on('selectionChanged', (e) => picked.push(e));
+    (bars[0] as HTMLElement).click();
+    expect(picked.length).toBe(1);
+    r.destroy();
+    el.remove();
+  });
+});

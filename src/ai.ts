@@ -11,7 +11,7 @@ export { findInsights, timeColumn } from './ai/insights';
 export type { Insight, InsightOptions } from './ai/insights';
 export { getAIContext, contextToPrompt, createAgentTools, runTool, toAnthropicTools, toOpenAITools, toMcpTools } from './ai/agent';
 export type { AIContext, AIColumn, ContextOptions, AgentTool, AgentToolOptions } from './ai/agent';
-export { qnaVisual, insightsVisual, narrativeVisual, setNarrativeWriter, enableExplain, registerAI, showPanel, renderExplanation } from './ai/visuals';
+export { qnaVisual, insightsVisual, narrativeVisual, keyInfluencersVisual, setNarrativeWriter, enableExplain, registerAI, showPanel, renderExplanation } from './ai/visuals';
 export type { NarrativeWriter } from './ai/visuals';
 export { writeNarrative, filterPhrase } from './ai/narrative';
 export type { Narrative, NarrativeOptions, NarrativePart } from './ai/narrative';
@@ -28,3 +28,5 @@ export type { AgentPanel, AgentPanelOptions } from './ai/panel';
 import { registerAI } from './ai/visuals';
 
 registerAI();
+export { keyInfluencers } from './ai/influencers';
+export type { Influencer, InfluencerOptions, KeyInfluencers } from './ai/influencers';
