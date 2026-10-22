@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **SQL totals in one round trip:** with `totals`, aggregate-mode queries on DuckDB and Postgres return the grand total in the grouped statement (`GROUPING SETS`, `SqlPlan.totalsInline`); SQLite keeps two statements.
+- **SQL result cache:** `sqlEngine(model, { cache: true | { max, ttlMs } })` runs each distinct statement once and shares concurrent duplicates; cleared on model changes and by `engine.clearCache()`; `engine.dispose()`.
+- **Canvas heatmaps and calendars:** above 3,000 cells they paint on a canvas hit-tested by row and column (tooltips, selection, context menu and drill unchanged); `format.heatmap.renderer` / `format.calendar.renderer` (`auto` | `svg` | `canvas`). Exports and canvas-less environments keep SVG.
+- **Virtualized matrix:** above 500 visible rows (expanded children and subtotal rows count) the matrix renders only the rows in view, like the table; `format.matrix.virtualize`. Expanding or collapsing keeps the scroll position.
+- **Fix:** plugin signing and verification work on Node 18, which has no global `crypto` (falls back to `node:crypto` `webcrypto`).
+
 ## 0.9.1 (2026-10-19)
 
 - **New home:** source at https://github.com/prismbi-js/prismbi, docs and live demo at https://prismbi-js.github.io/. The package `repository`, `homepage` and `bugs` links point there.
