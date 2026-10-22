@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Warm start (table cache):** `cachedTables(model, key, load, { version, maxAgeMs, tables, store })`, `saveTables`, `loadTables`, `clearCachedTables` and `idbStore` in `@prismbi/prismbi/connectors` keep loaded tables in IndexedDB as packed typed columns and restore them on the next visit (50k rows in about 65 ms in Chrome). Packed-column helpers moved to `src/data/packed.ts`, shared with the worker.
 - **Sunburst visual** (`sunburst`, entry `@prismbi/prismbi/visuals/sunburst`): one ring per hierarchy level, each level a real measure evaluation, children sized within their parent, curved labels, centre total, selection and tooltips at any level; in the Studio palette and `ask()` ("sunburst of sales by category and subcategory"). Full-bundle budgets +2 KB for it.
 - **Time intelligence in the single-pass path:** visuals grouped by date-table columns answer `SAMEPERIODLASTYEAR`, `DATEADD`, `DATES*TD`, `TOTAL*TD` (fiscal year ends too), `PARALLELPERIOD` and `PREVIOUS*` from per-date partial sums in one pass; plain measures in the same visual reuse them. Day × YTD at 1M rows: 193 → 21 ms cold; year × month × sales, last year and growth: about 130 → 46 ms. The evaluator and the fast path share the calendar rules (`src/dax/timeIntel.ts`); equivalence tests in `tests/fastti.test.ts`.
 - **Faster unfiltered row lists:** the all-rows list of a table is built with a counting loop (several times faster than `Array.from` at 1M rows).

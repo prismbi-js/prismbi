@@ -89,6 +89,27 @@ await loadSqlTables(model, duck, [
 
 Tables load in parallel. Tables that already exist are refreshed, keeping their calculated columns and relationships.
 
+## Warm start: cache loaded tables
+
+Large CSV or API loads can be kept in the browser, so the next visit restores the tables from IndexedDB instead of fetching and parsing them again:
+
+```ts
+import { cachedTables, loadCsv } from '@prismbi/prismbi/connectors';
+
+const from = await cachedTables(model, 'sales', async () => {
+  model.addTable('Sales', await loadCsv('/data/sales.csv'));
+}, { version: DATA_VERSION, maxAgeMs: 24 * 3600_000 });
+// 'cache' or 'loaded'; then model the tables as usual
+model.addRelationship({ from: 'Sales[ProductKey]', to: 'Product[ProductKey]' }).addMeasure('Total Sales', 'SUM(Sales[Amount])');
+```
+
+- **What is stored:** the tables `load` added (or `tables`), as packed typed columns: numbers and dates as `Float64Array`s, text as dictionary codes, plus each column's type, format, sort-by and folder. Calculated columns, relationships and measures are not stored; define them after the call, as on a first visit. Restored tables start with their numeric and dictionary views already built.
+- **Invalidation:** `version` (a deploy id, an ETag) and `maxAgeMs` make an old copy a miss; `clearCachedTables(key)` drops it.
+- **Lower level:** `saveTables(model, key, options)` and `loadTables(model, key, options)` (`null` on a miss).
+- **Storage:** IndexedDB by default (`idbStore(dbName?, storeName?)`). Pass `store` with `get` / `set` / `delete` to use something else. Storage errors (private mode, quota) count as a miss and never fail the load.
+
+In Chrome, 50,000 rows of four columns restore in about 65 ms.
+
 ## Live data
 
 ### Appending rows
