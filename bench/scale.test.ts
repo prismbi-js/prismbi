@@ -33,17 +33,20 @@ function generate(n: number): DataModel {
     .addMeasure('Orders', 'DISTINCTCOUNT(Sales[OrderNumber])')
     .addMeasure('AOV', 'DIVIDE([Total Sales], [Orders])')
     .addMeasure('YTD', 'TOTALYTD([Total Sales], Date[Date])')
+    .addMeasure('LY', 'CALCULATE([Total Sales], SAMEPERIODLASTYEAR(Date[Date]))')
+    .addMeasure('Growth', 'DIVIDE([Total Sales] - [LY], [LY])')
     .addMeasure('C1 Sales', 'CALCULATE([Total Sales], Product[Category] = "C1")');
 }
 
 const year = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
 const QUERIES: [string, QuerySpec, number][] = [
-  // name, query, budget in ms at 1M rows
-  ['category × sales, AOV', { groupBy: ['Product[Category]'], values: ['Total Sales', 'AOV'], filters: year, totals: true }, 1500],
-  ['product × region (16k groups)', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['Total Sales'], filters: year }, 1500],
-  ['day × sales (365 groups)', { groupBy: ['Date[Date]'], values: ['Total Sales'], filters: year }, 800],
-  ['product × region, CALCULATE filter', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['C1 Sales'], filters: year }, 1500],
-  ['day × YTD (time intelligence)', { groupBy: ['Date[Date]'], values: ['YTD'], filters: year }, 1500],
+  // name, query, budget in ms at 1M rows (about 3× what a 2024 laptop measures: fails on real regressions, not noise)
+  ['category × sales, AOV', { groupBy: ['Product[Category]'], values: ['Total Sales', 'AOV'], filters: year, totals: true }, 750],
+  ['product × region (16k groups)', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['Total Sales'], filters: year }, 450],
+  ['day × sales (365 groups)', { groupBy: ['Date[Date]'], values: ['Total Sales'], filters: year }, 150],
+  ['product × region, CALCULATE filter', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['C1 Sales'], filters: year }, 300],
+  ['day × YTD (time intelligence)', { groupBy: ['Date[Date]'], values: ['YTD'], filters: year }, 150],
+  ['month × last year, growth', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Total Sales', 'LY', 'Growth'], totals: true }, 300],
 ];
 
 it('scale benchmark', () => {

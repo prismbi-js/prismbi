@@ -949,7 +949,10 @@ export class DataModel {
   allRows(table: string): number[] {
     let a = this.allRowsCache.get(table);
     if (!a) {
-      a = Array.from({ length: this.table(table).rowCount }, (_, i) => i);
+      // a counting loop builds a packed integer array; Array.from with a callback is several times slower
+      const n = this.table(table).rowCount;
+      a = [];
+      for (let i = 0; i < n; i++) a.push(i);
       this.allRowsCache.set(table, a);
     }
     return a;

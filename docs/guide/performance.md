@@ -9,8 +9,9 @@ Try it with `npm run dev`, then open `/perf.html`. That page generates 100k to 1
 - **Columnar storage with typed views.** Each column is a plain array. On demand, the engine also builds a `Float64Array` view (numbers, dates as milliseconds) and a dictionary encoding (`Int32Array` codes + distinct values). Both are cached until the table changes.
 - **Vectorised aggregations.** `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA` and `DISTINCTCOUNT` over a column run as tight loops over those views.
 - **Single-pass grouped queries.** A visual whose measures are built from those aggregations, `COUNTROWS` and compiled `SUMX` / `AVERAGEX` (below) is answered in one pass over the fact rows. Measures may combine them with `+ - * /` and `DIVIDE`, reference other such measures, and wrap them in `CALCULATE` with column filters (`Product[Category] = "Bikes"`, `IN` lists, comparisons, `KEEPFILTERS`, nested filters). Each filter is evaluated once into a lookup over the column's dictionary codes, so it costs about two array reads per row; a `CALCULATE` measure grouped by product × country at 1M rows dropped from about 3.1 s to 0.26 s. This replaces evaluating every group separately. Group columns may be on the fact table or on dimensions reached through many-to-one relationships.
-  - **Fallback:** anything else (time intelligence, `CALCULATE` with `ALL` or table filters, `CALCULATE` filtering a column the query also groups or filters by, other iterators, calculation groups in play, `USERELATIONSHIP`, `includeEmpty`) uses the general engine, so results never change.
-  - **When it applies:** in `'auto'` mode it is used for multi-column groupings and for single columns with more than 1,000 values. Below that, indexed per-group evaluation is already faster.
+  - **Time intelligence** joins the single pass when the visual groups by columns of the date table: `CALCULATE(x, SAMEPERIODLASTYEAR(…))`, `DATEADD`, `DATESYTD` / `QTD` / `MTD` (with a fiscal year end), `PARALLELPERIOD`, `PREVIOUSMONTH` / `QUARTER` / `YEAR` and `TOTALYTD` / `QTD` / `MTD`, where `x` is built from the aggregations above (not `DISTINCTCOUNT`). One pass sums the fact rows per date; each group then adds up the dates its rule selects (period-to-date windows and parallel periods are ranges of the sorted dates), with the evaluator's own calendar rules, including the month-end rule of `DATEADD`. Plain measures in the same visual come from the same per-date sums. Groups come from the date table, as in the general engine, so a month without sales still shows last year's. Highlights, groupings outside the date table and bidirectional relationships use the general engine.
+  - **Fallback:** anything else (other time-intelligence shapes, `CALCULATE` with `ALL` or table filters, `CALCULATE` filtering a column the query also groups or filters by, other iterators, calculation groups in play, `USERELATIONSHIP`, `includeEmpty`) uses the general engine, so results never change.
+  - **When it applies:** in `'auto'` mode it is used for multi-column groupings, for single columns with more than 1,000 values, and whenever a value uses time intelligence. Below that, indexed per-group evaluation is already faster.
   - **Toggle:** use `setFastQuery('always' | 'off' | 'auto')` to compare the two paths.
 - **Compiled row expressions.** Iterators (`SUMX`, `AVERAGEX`, `MINX`, `MAXX`, `COUNTX`, `RANKX`…) and calculated columns compile their row expression to a closure over the typed views when it only uses numbers, number columns of the iterated table, `RELATED` (or bare references) to number columns of related tables, unary minus, `+ - * /` and `DIVIDE`. BLANK handling matches the interpreter exactly. `SUMX(Sales, Sales[Quantity] * RELATED(Product[Price]))` over 300k rows drops from about 0.5 s to 40 ms. Anything else, such as measures, variables, text or dates in the row expression, runs in the interpreter, as does everything when `setFastQuery('off')` is set.
 - **Relationship maps.** `RELATED`, cross-table filters and grouping by a dimension use a cached `Int32Array` from each fact row to its related row, built once per table pair from the foreign key's dictionary codes.
@@ -22,14 +23,18 @@ Try it with `npm run dev`, then open `/perf.html`. That page generates 100k to 1
 
 ## Numbers
 
-`npm run bench` generates a star schema and times each query cold, with caches cleared before each run. The schema is a fact table, 400 products, 40 regions and a two-year calendar. The query filters to one year, about half the rows. Timings are from Node 22 on a laptop:
+`npm run bench` generates a star schema and times each query cold, with caches cleared before each run. The schema is a fact table, 400 products, 40 regions and a two-year calendar. The query filters to one year, about half the rows. Timings are from Node 18 on a laptop:
 
 | Query | 200k rows | 1M rows |
 |---|---|---|
-| Category × sales and average order value (12 groups) | 42 ms | 192 ms |
-| Product × region, 16k groups | 57 ms (per-group engine: 10.1 s) | 156 ms |
-| Day × sales, 365 groups | 8 ms | 11 ms |
-| Day × YTD (time intelligence) | 121 ms (scan path: 0.65 s) | 193 ms (scan path: 2.8 s) |
+| Category × sales and average order value (12 groups) | 47 ms | 191 ms |
+| Product × region, 16k groups | 58 ms (per-group engine: 11.3 s) | 99 ms |
+| Day × sales, 365 groups | 8 ms | 12 ms |
+| Product × region, `CALCULATE` filter | 27 ms (per-group engine: 11.6 s) | 79 ms |
+| Day × YTD (time intelligence) | 15 ms (per-group engine: 0.65 s) | 21 ms (was 193 ms) |
+| Year × month × sales, last year and growth | 17 ms (per-group engine: 47 ms) | 46 ms |
+
+Each query has a time budget in `bench/scale.test.ts` (about three times these figures), so `npm run bench` fails on a real regression.
 
 Generating and loading 1M rows takes about 0.75 s. Warm queries (same filters again) come from the caches in well under a millisecond.
 

@@ -2,12 +2,15 @@
 
 ## Unreleased
 
+- **Time intelligence in the single-pass path:** visuals grouped by date-table columns answer `SAMEPERIODLASTYEAR`, `DATEADD`, `DATES*TD`, `TOTAL*TD` (fiscal year ends too), `PARALLELPERIOD` and `PREVIOUS*` from per-date partial sums in one pass; plain measures in the same visual reuse them. Day × YTD at 1M rows: 193 → 21 ms cold; year × month × sales, last year and growth: about 130 → 46 ms. The evaluator and the fast path share the calendar rules (`src/dax/timeIntel.ts`); equivalence tests in `tests/fastti.test.ts`.
+- **Faster unfiltered row lists:** the all-rows list of a table is built with a counting loop (several times faster than `Array.from` at 1M rows).
+- **Benchmark budgets:** `npm run bench` ceilings tightened to about 3× measured times, plus a last-year growth query.
 - **SQL totals in one round trip:** with `totals`, aggregate-mode queries on DuckDB and Postgres return the grand total in the grouped statement (`GROUPING SETS`, `SqlPlan.totalsInline`); SQLite keeps two statements.
 - **SQL result cache:** `sqlEngine(model, { cache: true | { max, ttlMs } })` runs each distinct statement once and shares concurrent duplicates; cleared on model changes and by `engine.clearCache()`; `engine.dispose()`.
 - **Canvas heatmaps and calendars:** above 3,000 cells they paint on a canvas hit-tested by row and column (tooltips, selection, context menu and drill unchanged); `format.heatmap.renderer` / `format.calendar.renderer` (`auto` | `svg` | `canvas`). Exports and canvas-less environments keep SVG.
 - **Virtualized matrix:** above 500 visible rows (expanded children and subtotal rows count) the matrix renders only the rows in view, like the table; `format.matrix.virtualize`. Expanding or collapsing keeps the scroll position.
 - **Lighter Studio undo:** each of the 200 undo steps stores the splice between neighbouring report states instead of a full JSON snapshot (`History.stored` reports the characters held).
-- **Worker: packed columns.** `engine.addColumns(name, columns, schema?, { transfer })` sends numbers and dates as `Float64Array`s and text as dictionary codes in transferred buffers (shared when they live in a `SharedArrayBuffer`); the worker adopts them as its numeric and dictionary views. About 10× faster than `addTable` with row objects at 1M rows. `packColumn`, `addPackedTable`; `PortLike.postMessage` takes a transfer list.
+- **Worker: packed columns.** `engine.addColumns(name, columns, schema?, { transfer })` sends numbers and dates as `Float64Array`s and text as dictionary codes in transferred buffers (shared when they live in a `SharedArrayBuffer`); the worker adopts them as its numeric and dictionary views. About 10× faster than `addTable` with row objects at 1M rows. `model.addColumns(name, columns, schema?)` builds a table from column arrays in process. `packColumn`, `addPackedTable`; `PortLike.postMessage` takes a transfer list.
 - **Fix:** plugin signing and verification work on Node 18, which has no global `crypto` (falls back to `node:crypto` `webcrypto`).
 
 ## 0.9.1 (2026-10-19)

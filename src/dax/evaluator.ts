@@ -9,6 +9,7 @@ import { formatValue } from '../format/format';
 import { PartialAggregates, type PartialKind } from '../data/partials';
 import { fastPathsEnabled } from '../data/fastQuery';
 import { compileRowExpr, type RowFn, type RowPlan } from './rowCompile';
+import { addMonths, MS_DAY, parallelPeriod, periodStart, shiftDates } from './timeIntel';
 
 export class DaxError extends Error {
   constructor(message: string) {
@@ -67,7 +68,6 @@ const CONTEXT_FUNCS = new Set([
   'STDEV.S', 'STDEV.P', 'VAR.S', 'VAR.P', 'STDEVX.S', 'STDEVX.P', 'VARX.S', 'VARX.P', 'PERCENTILE.INC', 'PERCENTILE.EXC', 'PERCENTILEX.INC', 'PERCENTILEX.EXC', 'GEOMEAN', 'GEOMEANX', 'FIRSTNONBLANK', 'LASTNONBLANK', 'AVERAGEA', 'MAXA', 'MINA',
 ]);
 
-const MS_DAY = 86_400_000;
 
 const UNHANDLED = Symbol('unhandled');
 const FAST_AGGS = new Set(['SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'DISTINCTCOUNT']);
@@ -103,13 +103,6 @@ function blankAs(v: CellValue, like: CellValue): CellValue {
   if (typeof like === 'boolean') return false;
   if (like instanceof Date) return new Date(0);
   return 0;
-}
-
-function addMonths(d: Date, n: number): Date {
-  const r = new Date(d.getFullYear(), d.getMonth() + n, 1);
-  const last = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
-  r.setDate(Math.min(d.getDate(), last));
-  return r;
 }
 
 /**
@@ -778,42 +771,15 @@ export class Evaluator {
     const { col, visible, all } = this.dateColumnValues(args[0], ctx);
     if (visible.length === 0) return this.datesTable(col, []);
     const last = visible.reduce((a, b) => (a > b ? a : b));
-    let start: Date;
-    if (period === 'year') {
-      if (yearEnd) {
-        const [mm, dd] = yearEnd.split(/[-/]/).map(Number);
-        const fyEnd = new Date(last.getFullYear(), mm - 1, dd);
-        start = last > fyEnd ? new Date(fyEnd.getTime() + MS_DAY) : new Date(new Date(last.getFullYear() - 1, mm - 1, dd).getTime() + MS_DAY);
-      } else start = new Date(last.getFullYear(), 0, 1);
-    } else if (period === 'quarter') start = new Date(last.getFullYear(), Math.floor(last.getMonth() / 3) * 3, 1);
-    else start = new Date(last.getFullYear(), last.getMonth(), 1);
+    const start = periodStart(last, period, yearEnd);
     return this.datesTable(col, all.filter((d) => d >= start && d <= last));
   }
 
   private shiftDates(args: Expr[], ctx: EvalContext, n: number, interval: string): TuplesTable {
     const { col, visible, all } = this.dateColumnValues(args[0], ctx);
     const unit = interval.toUpperCase();
-    const shift = (d: Date): Date => {
-      if (unit === 'DAY') return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-      if (unit === 'MONTH') return addMonths(d, n);
-      if (unit === 'QUARTER') return addMonths(d, n * 3);
-      if (unit === 'YEAR') return addMonths(d, n * 12);
-      throw new DaxError(`Unknown interval ${interval}`);
-    };
-    const existing = new Set(all.map((d) => d.getTime()));
-    const shifted = new Map<number, Date>();
-    const lastDay = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    for (const d of visible) {
-      const s = shift(d);
-      if (existing.has(s.getTime())) shifted.set(s.getTime(), s);
-      // as in DAX: a month's last day maps to the rest of the target month too (Feb 28, 2025 → Feb 28 and 29, 2024)
-      if (unit !== 'DAY' && d.getDate() === lastDay(d))
-        for (let day = s.getDate() + 1; day <= lastDay(s); day++) {
-          const x = new Date(s.getFullYear(), s.getMonth(), day);
-          if (existing.has(x.getTime())) shifted.set(x.getTime(), x);
-        }
-    }
-    return this.datesTable(col, [...shifted.values()].sort((a, b) => a.getTime() - b.getTime()));
+    if (!['DAY', 'MONTH', 'QUARTER', 'YEAR'].includes(unit)) throw new DaxError(`Unknown interval ${interval}`);
+    return this.datesTable(col, shiftDates(visible, new Set(all.map((d) => d.getTime())), n, unit));
   }
 
   private intervalArg(e: Expr | undefined): string {
@@ -1116,10 +1082,7 @@ export class Evaluator {
         const unit = name === 'PARALLELPERIOD' ? this.intervalArg(args[2]) : name.replace('PREVIOUS', '');
         const n = name === 'PARALLELPERIOD' ? num(s(1)) : -1;
         const first = visible.reduce((a, b) => (a < b ? a : b));
-        const months = unit === 'YEAR' ? 12 : unit === 'QUARTER' ? 3 : 1;
-        const anchor = unit === 'YEAR' ? new Date(first.getFullYear(), 0, 1) : unit === 'QUARTER' ? new Date(first.getFullYear(), Math.floor(first.getMonth() / 3) * 3, 1) : new Date(first.getFullYear(), first.getMonth(), 1);
-        const start = addMonths(anchor, n * months);
-        const end = new Date(addMonths(start, months).getTime() - 1);
+        const [start, end] = parallelPeriod(first, unit, n);
         return this.datesTable(col, all.filter((d) => d >= start && d <= end));
       }
       case 'DATESBETWEEN': {
