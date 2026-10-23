@@ -72,3 +72,16 @@ it('lines stay visible when animations are disabled (reduced motion)', async () 
   t.destroy();
   el2.remove();
 });
+
+describe('context transition on a table row', () => {
+  it('replaces the filters on that table\'s columns (RANKX / SUMX over ALL(table))', async () => {
+    const { buildModel } = await import('../examples/model');
+    const m = buildModel().addMeasure('Rank T', 'RANKX(ALL(Product), [Total Sales])').addMeasure('Rank C', 'RANKX(ALL(Product[Name]), [Total Sales])').addMeasure('All T', 'SUMX(ALL(Product), [Total Sales])');
+    const r = m.query({ groupBy: ['Product[Name]'], values: ['Rank T', 'Rank C', 'All T'], totals: true });
+    for (const row of r.rows) {
+      expect(row.values[0]).toBe(row.values[1]);
+      expect(row.values[2] as number).toBeCloseTo(r.totals![2] as number, 6);
+    }
+    expect(new Set(r.rows.map((x) => x.values[0])).size).toBeGreaterThan(10);
+  });
+});

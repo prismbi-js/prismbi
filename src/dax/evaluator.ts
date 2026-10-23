@@ -408,7 +408,8 @@ export class Evaluator {
   private transition(ctx: EvalContext): Filter[] {
     let filters = [...ctx.filters];
     for (const b of ctx.rows ?? []) {
-      if (b.kind === 'row') filters = overrideFilters(filters, [rowsFilter(b.table, [b.row])]);
+      // a row sets every column of its table, so it replaces the filters on those columns too (as in DAX)
+      if (b.kind === 'row') filters = overrideFilters(filters.filter((f) => f.kind !== 'columns' || !f.columns.some((c) => c.table === b.table)), [rowsFilter(b.table, [b.row])]);
       else {
         const real = b.columns.map((c, i) => ({ c, v: b.values[i] })).filter((x) => x.c.table && this.model.hasTable(x.c.table) && this.model.table(x.c.table).hasColumn(x.c.column));
         filters = overrideFilters(filters, real.map((x) => compileFilter({ target: x.c, op: 'eq', value: x.v })));

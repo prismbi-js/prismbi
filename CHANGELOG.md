@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix: context transition on a table row.** Iterating a whole table (`RANKX(ALL(Product), [Sales])`, `SUMX(ALL(Product), …)`, `FILTER(ALL(Product), …)` with a measure) kept the visual's filters on that table's columns next to the row, so in a visual grouped by product every product ranked 1 and the "all products" sum was the product's own. A row now replaces the filters on its table's columns, as in DAX.
+- **Cross-highlighting stays on the single-pass path** for share-of-total, `RANKX` and `AVERAGEX(VALUES(…))` measures and for values that aren't BLANK on empty groups: the highlighted values come from the same sub-queries over the query's filters plus the highlight.
 - **More measures in the single-pass grouped path.** Visuals with many groups (product × region at 200k rows, 16k groups) no longer fall back to one evaluation per group for everyday measure shapes. Results match the general engine (`tests/fastscalar.test.ts` compares both for every shape below).
   - **Scalar wrappers:** `SWITCH`, `IF` with any condition, `ISBLANK`, `COALESCE`, `&&` / `||` / `NOT`, comparisons, `&`, `ABS`, `ROUND`, `MIN`/`MAX` of two values, `FORMAT` and other deterministic scalar functions, applied to per-group results by the evaluator itself. About 500 → 30 ms. Values that aren't BLANK for an empty group (`COALESCE([x], 0)`) take their groups from the general path's combinations.
   - **`VAR` / `RETURN`**, including variables defined outside a `CALCULATE`.

@@ -82,6 +82,8 @@ describe('scalar functions, VAR and iterators in the single-pass grouped path', 
     ['ranks with a slicer on the ranked column', { groupBy: ['Product[Subcategory]', 'Sales[Channel]'], values: RANKS, filters: [{ target: 'Product[Subcategory]', op: 'in', values: ['Mountain Bikes', 'Road Bikes', 'Helmets', 'Gloves'] }], totals: true }],
     ['iterators over the values of a column', { groupBy: ['Product[Subcategory]', 'Region[Country]'], values: ITERS, filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }], totals: true }],
     ['iterators grouped by the iterated column', { groupBy: ['Product[Subcategory]', 'Date[Year]'], values: ITERS, totals: true }],
+    ['highlighted shares, ranks and iterators', { groupBy: ['Product[Subcategory]', 'Region[Country]'], values: [...SHARES, ...RANKS, ...ITERS, 'Coalesced'], filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }], highlight: [{ target: 'Sales[Channel]', op: 'eq', value: 'Online' }], totals: true }],
+    ['highlight on a removed table', { groupBy: ['Product[Category]', 'Region[Country]'], values: ['Pct All', 'Pct Sub', 'Rank Sub', 'Best Sub'], highlight: [{ target: 'Product[Subcategory]', op: 'in', values: ['Road Bikes', 'Mountain Bikes'] }] }],
     ['with time intelligence', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Total Sales', 'YoY Guarded', 'Rolling 3M', 'Next 2Q', 'Last 30D', 'Rolling Avg'], totals: true }],
     ['rolling windows by product and month', { groupBy: ['Product[Category]', 'Date[MonthNumber]'], values: ['Rolling 3M', 'Next 2Q', 'Last 30D'], filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }], totals: true }],
     ['rolling windows by product only', { groupBy: ['Product[Subcategory]', 'Sales[Channel]'], values: ['Rolling 3M', 'Last 30D'], filters: [{ target: 'Date[Year]', op: 'eq', value: 2024 }], totals: true }],
@@ -91,6 +93,13 @@ describe('scalar functions, VAR and iterators in the single-pass grouped path', 
       expect(run(spec, 'always')).toEqual(run(spec, 'off'));
     });
   }
+
+  it('takes the single pass with highlights too', () => {
+    setFastQuery('always');
+    const cols = [model.resolveColumn({ table: 'Product', column: 'Subcategory' }), model.resolveColumn({ table: 'Region', column: 'Country' })];
+    const hl = model.toContext([{ target: 'Sales[Channel]', op: 'eq', value: 'Online' }]);
+    for (const m of [...SHARES, ...RANKS, ...ITERS, 'Coalesced']) expect(fastGroupQuery(model, cols, [model.measure(m).ast], [], hl, () => []), m).not.toBeNull();
+  });
 
   it('takes the single pass for each of them', () => {
     setFastQuery('always');

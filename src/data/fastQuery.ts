@@ -928,14 +928,23 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     if (!blankPreserving(t)) everyCombo = true;
     trees.push(t);
   }
-  if (everyCombo && (highlight || !combos)) return null;
+  if (everyCombo && !combos) return null;
   const subs: ResolvedSub[] = [];
   for (const sn of plan.subs!) {
-    const r = highlight ? null : resolveSub(model, sn, groupCols, base);
+    const r = resolveSub(model, sn, groupCols, base);
     if (!r) return null;
     subs.push(r);
   }
+  // highlighted values: the same sub-results over the query's filters plus the highlight (removals apply to both)
+  const hlSubs: ResolvedSub[] = [];
+  if (highlight)
+    for (const sn of plan.subs!) {
+      const r = resolveSub(model, sn, groupCols, [...base, ...highlight]);
+      if (!r || r.dates) return null;
+      hlSubs.push(r);
+    }
   const subVals = (keys: CellValue[]) => subs.map((x) => x.value(keys));
+  const hlSubVals = (keys: CellValue[]) => (hlSubs.length ? hlSubs.map((x) => x.value(keys)) : undefined);
   const subTotals = () => subs.map((x) => x.total);
   if (subs.some((x) => x.dates)) return null;
   const fact = plan.table;
@@ -946,7 +955,10 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     for (const keys of combos()) {
       const sv = subVals(keys);
       const vals = trees.map((t) => evalTree(t, [], [], sv));
-      if (!vals.every((v) => v === null)) rows.push({ keys, values: vals });
+      if (vals.every((v) => v === null)) continue;
+      const row: QueryRow = { keys, values: vals };
+      if (highlight) row.highlights = trees.map((t) => evalTree(t, [], [], hlSubVals(keys)));
+      rows.push(row);
     }
     return { rows, totals: trees.map((t) => evalTree(t, [], [], subTotals())) };
   }
@@ -1107,7 +1119,10 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
       const aggVals = tv.main ?? (gi === undefined ? empty : accs[gi].result(plan.aggs));
       const vals = trees.map((t) => evalTree(t, aggVals, tv.ti, subs.length ? subVals(keys) : undefined));
       if (vals.every((v) => v === null)) continue;
-      rows.push({ keys, values: vals });
+      const row: QueryRow = { keys, values: vals };
+      // time intelligence never runs with highlights (see timeIntelligence), so only the plain aggregations here
+      if (hl) row.highlights = trees.map((t) => evalTree(t, (gi === undefined ? undefined : hl![gi]?.result(plan.aggs)) ?? empty, undefined, hlSubVals(keys)));
+      rows.push(row);
     }
     const tt: { ti: CellValue[]; main?: CellValue[] } = ti ? ti.total() : { ti: [] };
     return { rows, totals: trees.map((t) => evalTree(t, tt.main ?? total.result(plan.aggs), tt.ti, subTotals())) };
@@ -1121,7 +1136,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     const row: QueryRow = { keys, values: vals };
     if (hl) {
       const h = hl[gi]?.result(plan.aggs) ?? empty;
-      row.highlights = trees.map((t) => evalTree(t, h));
+      row.highlights = trees.map((t) => evalTree(t, h, undefined, hlSubVals(keys)));
     }
     rows.push(row);
   });
