@@ -280,10 +280,14 @@ class Parser {
           this.next();
           const args: Expr[] = [];
           if (this.peek().type !== 'rparen') {
-            do args.push(this.expr());
+            // an omitted argument (`RANKX(t, e, , ASC)`) takes the default, BLANK
+            const omitted = () => this.peek().type === 'comma' || this.peek().type === 'rparen';
+            do args.push(omitted() ? { type: 'call', name: 'BLANK', args: [] } : this.expr());
             while (this.peek().type === 'comma' && this.next());
           }
           this.expect('rparen');
+          // RANKX's omitted value is the expression itself, evaluated in the current context
+          if (upper === 'RANKX' && args.length > 2 && isBlankCall(args[2])) args[2] = args[1];
           return { type: 'call', name: upper, args };
         }
         if (upper === 'TRUE') return { type: 'boolean', value: true };
@@ -304,4 +308,9 @@ class Parser {
     }
     return { type: 'table', name };
   }
+}
+
+/** `BLANK()`, which is also what an omitted argument parses to. */
+export function isBlankCall(e: Expr | undefined): boolean {
+  return e?.type === 'call' && e.name === 'BLANK' && e.args.length === 0;
 }

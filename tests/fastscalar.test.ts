@@ -39,6 +39,8 @@ const model = buildModel()
   .addMeasure('Rank Country', 'RANKX(ALL(Region[Country]), [Units], [Units], ASC, DENSE)')
   .addMeasure('Rank Selected', 'RANKX(ALLSELECTED(Product[Subcategory]), [Margin %])')
   .addMeasure('Rank Of Value', 'RANKX(ALL(Product[Subcategory]), [Total Sales], [Total Sales] * 1.5)')
+  .addMeasure('Rank Product', 'RANKX(ALL(Product), [Total Sales])')
+  .addMeasure('Rank Product Sel', 'RANKX(ALLSELECTED(Product), [Units], , ASC)')
   .addMeasure('Top 3', 'IF(RANKX(ALL(Product[Subcategory]), [Total Sales]) <= 3, [Total Sales])')
   .addMeasure('Rolling 3M', 'CALCULATE([Total Sales], DATESINPERIOD(Date[Date], MAX(Date[Date]), -3, MONTH))')
   .addMeasure('Next 2Q', 'CALCULATE([Units], DATESINPERIOD(Date[Date], MIN(Date[Date]), 2, QUARTER))')
@@ -55,7 +57,7 @@ const model = buildModel()
 const MEASURES = ['Switch Band', 'Zero If Blank', 'Coalesced', 'Both', 'Either', 'Per Unit', 'Var In Calc', 'Rounded', 'Distance', 'Larger', 'Label', 'Not Small', 'Biggest Line', 'Smallest Line', 'Lines', 'Distinct Orders', 'Online F', 'Big F', 'Nested F', 'Or F', 'Keep F'];
 const GENERAL = ['Count F', 'Iterated F'];
 const ITERS = ['Avg Daily', 'Best Sub', 'Worst Country', 'Active Days', 'Sum Of Shares', 'Per Order Line'];
-const RANKS = ['Rank Sub', 'Rank Country', 'Rank Selected', 'Rank Of Value', 'Top 3'];
+const RANKS = ['Rank Product', 'Rank Product Sel', 'Rank Sub', 'Rank Country', 'Rank Selected', 'Rank Of Value', 'Top 3'];
 const SHARES = ['Total Sales', 'Pct All', 'Pct Sub', 'Pct Group', 'Pct Grand', 'All Bikes', 'Nested All', 'Share of Category', 'Var Share'];
 
 const run = (spec: QuerySpec, mode: 'always' | 'off') => {
@@ -77,6 +79,7 @@ describe('scalar functions, VAR and iterators in the single-pass grouped path', 
     ['FILTER through the general engine', { groupBy: ['Region[Country]', 'Date[Year]'], values: GENERAL, totals: true }],
     ['shares of totals', { groupBy: ['Product[Subcategory]', 'Region[Country]'], values: SHARES, filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }, { target: 'Product[Category]', op: 'in', values: ['Bikes', 'Accessories'] }], totals: true }],
     ['shares of totals by one dimension', { groupBy: ['Product[Category]', 'Sales[Channel]'], values: SHARES, totals: true }],
+    ['ranks by product', { groupBy: ['Product[Name]', 'Region[Group]'], values: RANKS, totals: true }],
     ['ranks', { groupBy: ['Product[Subcategory]', 'Region[Country]'], values: RANKS, filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }], totals: true }],
     ['ranks outside the ranked column', { groupBy: ['Product[Category]', 'Date[Year]'], values: RANKS, totals: true }],
     ['ranks with a slicer on the ranked column', { groupBy: ['Product[Subcategory]', 'Sales[Channel]'], values: RANKS, filters: [{ target: 'Product[Subcategory]', op: 'in', values: ['Mountain Bikes', 'Road Bikes', 'Helmets', 'Gloves'] }], totals: true }],

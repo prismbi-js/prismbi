@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Omitted arguments** parse as their default (BLANK): `RANKX(ALL(Product[Name]), [Sales], , ASC)` (the omitted value is the expression itself), `TOTALYTD([Sales], Date[Date], , "6/30")` (no filter), `IF(cond, , x)`. They were syntax errors.
+- **`RANKX(ALL(Table) | ALLSELECTED(Table), …)` on the single-pass path:** rows of a table with a unique key (the one side of a relationship) are ranked by that key.
+- **No totals, less work:** when a visual has no totals row, the single pass doesn't accumulate grand totals, and rank and iterator sub-queries skip their totals pass. Product × region share and rank at 1M rows: 799 → 300 ms.
 - **Fix: context transition on a table row.** Iterating a whole table (`RANKX(ALL(Product), [Sales])`, `SUMX(ALL(Product), …)`, `FILTER(ALL(Product), …)` with a measure) kept the visual's filters on that table's columns next to the row, so in a visual grouped by product every product ranked 1 and the "all products" sum was the product's own. A row now replaces the filters on its table's columns, as in DAX.
 - **Cross-highlighting stays on the single-pass path** for share-of-total, `RANKX` and `AVERAGEX(VALUES(…))` measures and for values that aren't BLANK on empty groups: the highlighted values come from the same sub-queries over the query's filters plus the highlight.
 - **More measures in the single-pass grouped path.** Visuals with many groups (product × region at 200k rows, 16k groups) no longer fall back to one evaluation per group for everyday measure shapes. Results match the general engine (`tests/fastscalar.test.ts` compares both for every shape below).

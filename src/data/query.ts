@@ -289,7 +289,7 @@ function runQueryPlain(model: DataModel, spec: QuerySpec): QueryResult {
     let truncated = false;
     let totals: CellValue[] | undefined;
     const cols = groups.map((g) => g.column);
-    const fast = !spec.includeEmpty && useFastQuery(model, cols, values.map((v) => v.ast)) ? fastGroupQuery(model, cols, values.map((v) => v.ast), base, highlight, () => groupCombos(model, cols, base, true)) : null;
+    const fast = !spec.includeEmpty && useFastQuery(model, cols, values.map((v) => v.ast)) ? fastGroupQuery(model, cols, values.map((v) => v.ast), base, highlight, () => groupCombos(model, cols, base, true), !!spec.totals) : null;
     if (fast) {
       rows = fast.rows;
       totals = fast.totals;

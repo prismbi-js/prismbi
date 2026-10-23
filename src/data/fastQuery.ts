@@ -6,6 +6,7 @@ import { compileFilter } from './filters';
 import type { DataModel } from './model';
 import type { QueryRow } from './query';
 import { compileRowExpr, type RowFn, type RowPlan } from '../dax/rowCompile';
+import { isBlankCall } from '../dax/parser';
 import { parallelPeriod, periodStart, periodWindow, shiftDates } from '../dax/timeIntel';
 
 /**
@@ -82,7 +83,7 @@ interface Plan {
  */
 type SubNode =
   | { kind: 'all'; mods: Expr[]; expr: Expr }
-  | { kind: 'rank'; col: ColumnRef; expr: Expr; asc: boolean; dense: boolean; selected: boolean }
+  | { kind: 'rank'; col: ColumnRef; expr: Expr; asc: boolean; dense: boolean; selected: boolean; whole?: boolean }
   | { kind: 'iter'; fn: Agg['kind']; col: ColumnRef; expr: Expr };
 
 /** A group's ranking: the rank of a value among the group's list. */
@@ -342,19 +343,23 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds
         return sub(e.args[0], next);
       }
       if (upper === 'RANKX' && e.args.length >= 2 && e.args.length <= 5) {
-        // RANKX(ALL(T[c]), expr [, value [, order [, ties]]]): one ranking list per group outside the column
+        // RANKX(ALL(T[c]) | ALL(T), expr [, value [, order [, ties]]]): one ranking list per group outside the column
         const tab = e.args[0];
-        if (!plan.subs || preds.length || tab.type !== 'call' || !['ALL', 'ALLSELECTED'].includes(tab.name.toUpperCase()) || tab.args.length !== 1 || tab.args[0].type !== 'column') return null;
-        const c = tab.args[0];
-        if (!model.hasTable(c.table) || !model.table(c.table).hasColumn(c.column)) return null;
+        if (!plan.subs || preds.length || tab.type !== 'call' || !['ALL', 'ALLSELECTED'].includes(tab.name.toUpperCase()) || tab.args.length !== 1) return null;
+        const arg = tab.args[0];
+        // a whole table ranks its rows: by its unique key (the one side of a relationship), one row per value
+        const whole = arg.type === 'table' ? uniqueKey(model, arg.name) : null;
+        const c = arg.type === 'column' ? arg : whole;
+        if (!c || !model.hasTable(c.table) || !model.table(c.table).hasColumn(c.column)) return null;
         const word = (x: Expr | undefined) => (x?.type === 'table' ? x.name.toUpperCase() : null);
-        const asc = word(e.args[3]) === 'ASC' || (e.args[3]?.type === 'number' && e.args[3].value === 1);
-        if (e.args[3] && !asc && word(e.args[3]) !== 'DESC' && !(e.args[3].type === 'number' && e.args[3].value === 0)) return null;
-        const dense = word(e.args[4]) === 'DENSE';
-        if (e.args[4] && !dense && word(e.args[4]) !== 'SKIP') return null;
+        const [order, ties] = [e.args[3], e.args[4]].map((x) => (isBlankCall(x) ? undefined : x));
+        const asc = word(order) === 'ASC' || (order?.type === 'number' && order.value === 1);
+        if (order && !asc && word(order) !== 'DESC' && !(order.type === 'number' && order.value === 0)) return null;
+        const dense = word(ties) === 'DENSE';
+        if (ties && !dense && word(ties) !== 'SKIP') return null;
         const v = sub(e.args[2] ?? e.args[1]);
         if (!v) return null;
-        plan.subs.push({ kind: 'rank', col: model.resolveColumn({ table: c.table, column: c.column }), expr: e.args[1], asc, dense, selected: tab.name.toUpperCase() === 'ALLSELECTED' });
+        plan.subs.push({ kind: 'rank', col: model.resolveColumn({ table: c.table, column: c.column }), expr: e.args[1], asc, dense, selected: tab.name.toUpperCase() === 'ALLSELECTED', whole: !!whole });
         return { t: 'rank', i: plan.subs.length - 1, v };
       }
       if (e.name === 'COUNTROWS' && e.args.length === 1 && e.args[0].type === 'call' && ['VALUES', 'DISTINCT'].includes(e.args[0].name) && e.args[0].args.length === 1 && e.args[0].args[0].type === 'column') {
@@ -901,9 +906,10 @@ export interface FastResult {
 /**
  * Single-pass grouped evaluation for simple measures (SUM/AVERAGE/MIN/MAX/COUNT/DISTINCTCOUNT/COUNTROWS
  * combined with + - * / and DIVIDE). Returns null when the full engine is needed. Results are identical to the
- * general path: groups come from visible fact rows (auto-exist) and all-blank groups are dropped.
+ * general path: groups come from visible fact rows (auto-exist) and all-blank groups are dropped. Without `wantTotals`
+ * the grand totals aren't accumulated and `totals` is empty.
  */
-export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values: Expr[], base: Filter[], highlight: Filter[] | undefined, combos?: () => CellValue[][]): FastResult | null {
+export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values: Expr[], base: Filter[], highlight: Filter[] | undefined, combos?: () => CellValue[][], wantTotals = true): FastResult | null {
   if (!groupCols.length || !values.length) return null;
   if (base.some((f) => f.kind === 'rel') || highlight?.some((f) => f.kind === 'rel')) return null;
   // calculation groups can rewrite measures: only safe when none of their tables is involved
@@ -931,7 +937,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   if (everyCombo && !combos) return null;
   const subs: ResolvedSub[] = [];
   for (const sn of plan.subs!) {
-    const r = resolveSub(model, sn, groupCols, base);
+    const r = resolveSub(model, sn, groupCols, base, wantTotals);
     if (!r) return null;
     subs.push(r);
   }
@@ -939,7 +945,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   const hlSubs: ResolvedSub[] = [];
   if (highlight)
     for (const sn of plan.subs!) {
-      const r = resolveSub(model, sn, groupCols, [...base, ...highlight]);
+      const r = resolveSub(model, sn, groupCols, [...base, ...highlight], false);
       if (!r || r.dates) return null;
       hlSubs.push(r);
     }
@@ -960,7 +966,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
       if (highlight) row.highlights = trees.map((t) => evalTree(t, [], [], hlSubVals(keys)));
       rows.push(row);
     }
-    return { rows, totals: trees.map((t) => evalTree(t, [], [], subTotals())) };
+    return { rows, totals: wantTotals ? trees.map((t) => evalTree(t, [], [], subTotals())) : [] };
   }
   const keyCodes = groupCols.map((c) => groupCodes(model, fact, c));
   if (keyCodes.some((k) => !k)) return null;
@@ -1080,7 +1086,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   // with only time-intelligence values there is nothing to aggregate per group here
   const mainRows = ti && (!plan.aggs.length || ti.merged) ? [] : model.rowsOf(fact, base);
   for (const r of mainRows) {
-    feed(total, r);
+    if (wantTotals) feed(total, r);
     const k = keyOf(r);
     if (k === UNMATCHED) continue;
     let gi = lookup(k);
@@ -1124,6 +1130,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
       if (hl) row.highlights = trees.map((t) => evalTree(t, (gi === undefined ? undefined : hl![gi]?.result(plan.aggs)) ?? empty, undefined, hlSubVals(keys)));
       rows.push(row);
     }
+    if (!wantTotals) return { rows, totals: [] };
     const tt: { ti: CellValue[]; main?: CellValue[] } = ti ? ti.total() : { ti: [] };
     return { rows, totals: trees.map((t) => evalTree(t, tt.main ?? total.result(plan.aggs), tt.ti, subTotals())) };
   }
@@ -1140,7 +1147,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     }
     rows.push(row);
   });
-  return { rows, totals: trees.map((t) => evalTree(t, total.result(plan.aggs), undefined, subTotals())) };
+  return { rows, totals: wantTotals ? trees.map((t) => evalTree(t, total.result(plan.aggs), undefined, subTotals())) : [] };
 }
 
 interface ResolvedSub {
@@ -1155,9 +1162,9 @@ interface ResolvedSub {
  * filters (exact CALCULATE semantics); a group column stays when its group filter survives them. The rest is a
  * coarser grouped query in one pass (null when that query can't take it).
  */
-function resolveSub(model: DataModel, sn: SubNode, groupCols: ColumnRef[], base: Filter[]): ResolvedSub | null {
-  if (sn.kind === 'rank') return resolveRank(model, sn, groupCols, base);
-  if (sn.kind === 'iter') return resolveIter(model, sn, groupCols, base);
+function resolveSub(model: DataModel, sn: SubNode, groupCols: ColumnRef[], base: Filter[], wantTotals: boolean): ResolvedSub | null {
+  if (sn.kind === 'rank') return resolveRank(model, sn, groupCols, base, wantTotals);
+  if (sn.kind === 'iter') return resolveIter(model, sn, groupCols, base, wantTotals);
   const ev = model.evaluator;
   const rest = ev.removeWith(base, sn.mods);
   if (!rest) return null;
@@ -1176,7 +1183,7 @@ function resolveSub(model: DataModel, sn: SubNode, groupCols: ColumnRef[], base:
   if (!keep.length) return { value: () => total, total, dates };
   const cols = keep.map((j) => groupCols[j]);
   const keyOf = (keys: CellValue[]) => keep.map((j) => String(valueKey(keys[j]))).join('\u0001');
-  const fast = fastGroupQuery(model, cols, [sn.expr], rest, undefined);
+  const fast = fastGroupQuery(model, cols, [sn.expr], rest, undefined, undefined, false);
   if (fast) {
     const byKey = new Map<string, CellValue>();
     for (const r of fast.rows) {
@@ -1194,16 +1201,20 @@ function resolveSub(model: DataModel, sn: SubNode, groupCols: ColumnRef[], base:
  * query, sorted once per coarse key. `expr` must be BLANK for a value without rows (those drop out of the list either
  * way), and every row must have a related T row, so that ALL(T[c]) has no blank member the grouped query can't see.
  */
-function resolveRank(model: DataModel, sn: SubNode & { kind: 'rank' }, groupCols: ColumnRef[], base: Filter[]): ResolvedSub | null {
+function resolveRank(model: DataModel, sn: SubNode & { kind: 'rank' }, groupCols: ColumnRef[], base: Filter[], wantTotals: boolean): ResolvedSub | null {
   const c = sn.col;
   // ALLSELECTED lists the values the query's own filters leave: the same as ALL unless they filter the column itself
-  if (sn.selected && base.some((f) => (f.kind === 'rows' ? f.table === c.table : f.kind === 'columns' && f.columns.some((x) => x.table === c.table && x.column === c.column)))) return null;
+  // a row of the whole table sets all its columns: every filter on them goes, and so do group columns of the table
+  const on = (x: ColumnRef) => x.table === c.table && (sn.whole || x.column === c.column);
+  if (sn.selected && base.some((f) => (f.kind === 'rows' ? f.table === c.table : f.kind === 'columns' && f.columns.some(on)))) return null;
   if (hasBlankMember(model, c.table)) return null;
-  const rest = model.evaluator.removeWith(base, [{ type: 'call', name: 'REMOVEFILTERS', args: [{ type: 'column', table: c.table, column: c.column }] }]);
-  if (!rest) return null;
-  const keep = groupCols.flatMap((g, j) => (g.table === c.table && g.column === c.column ? [] : [j]));
+  const cleared = sn.whole ? [...model.table(c.table).columns.keys()] : [c.column];
+  const removed = model.evaluator.removeWith(base, [{ type: 'call', name: 'REMOVEFILTERS', args: cleared.map((column) => ({ type: 'column', table: c.table, column })) }]);
+  if (!removed) return null;
+  const rest = sn.whole ? removed.filter((f) => f.kind !== 'rows' || f.table !== c.table) : removed;
+  const keep = groupCols.flatMap((g, j) => (on(g) ? [] : [j]));
   const listsBy = (cols: ColumnRef[]) => {
-    const q = fastGroupQuery(model, [...cols, c], [sn.expr], rest, undefined);
+    const q = fastGroupQuery(model, [...cols, c], [sn.expr], rest, undefined, undefined, false);
     if (!q) return null;
     const lists = new Map<string, number[]>();
     for (const r of q.rows) {
@@ -1241,7 +1252,8 @@ function resolveRank(model: DataModel, sn: SubNode & { kind: 'rank' }, groupCols
       return (sn.asc ? below(v, false) : xs.length - below(v, true)) + 1;
     };
   };
-  const totalLists = listsBy([]);
+  // the totals' list (by the column alone) is one more pass, only made when totals are wanted
+  const totalLists = wantTotals || !keep.length ? listsBy([]) : new Map<string, number[]>();
   const lists = keep.length ? listsBy(keep.map((j) => groupCols[j])) : totalLists;
   if (!lists || !totalLists) return null;
   const rankers = new Map<string, Ranker>();
@@ -1256,6 +1268,15 @@ function resolveRank(model: DataModel, sn: SubNode & { kind: 'rank' }, groupCols
     total,
     dates: false,
   };
+}
+
+/** The column a table is related by on its one side, when its values are unique (one per row), or null. */
+function uniqueKey(model: DataModel, table: string): ColumnRef | null {
+  if (!model.hasTable(table)) return null;
+  const t = model.table(table);
+  for (const r of model.relationships())
+    if (r.toTable === table && t.hasColumn(r.toColumn) && t.distinct(r.toColumn).length === t.rowCount) return { table, column: r.toColumn };
+  return null;
 }
 
 /** Can a column of this table show a blank member (a related row without a match), which grouped queries skip? */
@@ -1273,12 +1294,12 @@ function hasBlankMember(model: DataModel, table: string): boolean {
  * transition (narrowing the group), so the body's values are a grouped query by (group columns + c). The body must be
  * BLANK for a value without rows, which iterators skip.
  */
-function resolveIter(model: DataModel, sn: SubNode & { kind: 'iter' }, groupCols: ColumnRef[], base: Filter[]): ResolvedSub | null {
+function resolveIter(model: DataModel, sn: SubNode & { kind: 'iter' }, groupCols: ColumnRef[], base: Filter[], wantTotals: boolean): ResolvedSub | null {
   const c = sn.col;
   if (hasBlankMember(model, c.table)) return null;
   const at = groupCols.findIndex((g) => g.table === c.table && g.column === c.column);
   const fold = (cols: ColumnRef[], keyLen: number) => {
-    const q = fastGroupQuery(model, cols, [sn.expr], base, undefined);
+    const q = fastGroupQuery(model, cols, [sn.expr], base, undefined, undefined, false);
     if (!q) return null;
     const accs = new Map<string, { sum: number; n: number; min: number; max: number }>();
     for (const r of q.rows) {
@@ -1296,7 +1317,7 @@ function resolveIter(model: DataModel, sn: SubNode & { kind: 'iter' }, groupCols
   };
   // the group's own key when it groups by the column; otherwise groups × column, keyed by the groups
   const byGroup = fold(at >= 0 ? groupCols : [...groupCols, c], groupCols.length);
-  const all = fold([c], 0);
+  const all = wantTotals ? fold([c], 0) : new Map<string, CellValue>();
   if (!byGroup || !all) return null;
   return { value: (keys) => byGroup.get(keys.map((x) => String(valueKey(x))).join('\u0001')) ?? null, total: all.get('') ?? null, dates: false };
 }

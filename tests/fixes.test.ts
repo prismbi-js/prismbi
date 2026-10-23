@@ -85,3 +85,20 @@ describe('context transition on a table row', () => {
     expect(new Set(r.rows.map((x) => x.values[0])).size).toBeGreaterThan(10);
   });
 });
+
+describe('omitted arguments', () => {
+  it('take their defaults: RANKX value, TOTALYTD filter, IF branch', async () => {
+    const { buildModel } = await import('../examples/model');
+    const m = buildModel()
+      .addMeasure('Asc', 'RANKX(ALL(Product[Name]), [Total Sales], , ASC)')
+      .addMeasure('Asc Full', 'RANKX(ALL(Product[Name]), [Total Sales], [Total Sales], ASC)')
+      .addMeasure('Fiscal', 'TOTALYTD([Total Sales], Date[Date], , "6/30")')
+      .addMeasure('Fiscal Full', 'TOTALYTD([Total Sales], Date[Date], ALL(Date[Year]), "6/30")')
+      .addMeasure('Skip', 'IF([Total Sales] > 100000, , 1)');
+    const r = m.query({ groupBy: ['Product[Name]'], values: ['Asc', 'Asc Full', 'Skip'] });
+    for (const row of r.rows) expect(row.values[0]).toBe(row.values[1]);
+    expect(r.rows.some((x) => x.values[2] === null) && r.rows.some((x) => x.values[2] === 1)).toBe(true);
+    const f = m.query({ groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Fiscal', 'Fiscal Full'] });
+    for (const row of f.rows) expect(row.values[0]).toBeCloseTo(row.values[1] as number, 6);
+  });
+});

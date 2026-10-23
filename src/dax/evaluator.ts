@@ -600,7 +600,7 @@ export class Evaluator {
     if ((fn !== 'VALUES' && fn !== 'DISTINCT') || source.args[0]?.type !== 'column' || ctx.rows?.length || ctx.selectedMeasure || !fastPathsEnabled()) return null;
     const col = t.columns[0];
     if (!col.table) return null;
-    const res = fastGroupQuery(this.model, [col], [expr], [...ctx.filters], undefined, () => t.tuples);
+    const res = fastGroupQuery(this.model, [col], [expr], [...ctx.filters], undefined, () => t.tuples, false);
     if (!res) return null;
     const byKey = new Map(res.rows.map((r) => [valueKey(r.keys[0]), r.values[0]]));
     return t.tuples.map((tu) => byKey.get(valueKey(tu[0])) ?? null);
@@ -774,6 +774,8 @@ export class Evaluator {
 
   /** Interpret a CALCULATE filter argument. */
   private filterArg(a: Expr, ctx: EvalContext): Modifier | { filters: Filter[]; clearTable?: string } {
+    // an omitted filter (`TOTALYTD(x, Date[Date], , "6/30")`) filters nothing
+    if (a.type === 'call' && a.name === 'BLANK' && !a.args.length) return { filters: [] };
     if (a.type === 'call') {
       switch (a.name) {
         case 'ALL':
