@@ -1,6 +1,6 @@
 # Where work stopped (handoff)
 
-Last updated 2026-10-22 (second session). Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
+Last updated 2026-10-23. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
 
 ## State
 
@@ -55,6 +55,12 @@ Agreed on 2026-10-17 to be done later, in this order. Before starting, check wit
   - run `sqlEngine` against DuckDB (or SQLite) and diff the results with the in-memory engine;
   - time page loads.
 - **Output:** a list of breakages and gaps, fixed one by one, each with a test.
+
+### Done on 2026-10-23 (session reactbi-78)
+
+Fast-path coverage for everyday measure shapes (CHANGELOG, Unreleased): scalar wrappers, VAR, MINX/MAXX/COUNTX, FILTER over the fact table, ALL/REMOVEFILTERS/ALLEXCEPT/ALLSELECTED shares, RANKX(ALL(col)), iterators over VALUES(col) with a measure, DATESINPERIOD rolling windows; compiled FILTER and cached column-only boolean filters in the evaluator. Equivalence tests in `tests/fastscalar.test.ts`. How it fits together (`src/data/fastQuery.ts`): `expr` tree nodes are evaluated by the evaluator on literal arguments; `sub` / `rank` nodes are coarser or finer grouped queries (`resolveSub`, `resolveRank`, `resolveIter`) that recurse into `fastGroupQuery`, with filter removal done by `evaluator.removeWith`; row tests come from `compileRowTest` (`src/dax/rowCompile.ts`). Core +4 KB (budgets raised). The bench budgets for the two new cases (900 / 300 ms) were set while another project's tests loaded the machine (timings about 4× normal); check them on an idle machine.
+
+**Not covered yet (still per group):** highlights (cross-highlighting) combined with ALL/RANKX/VALUES-iterator sub-results; RANKX over ALL(table) or with a measure that isn't BLANK for missing values; FILTER next to a time-intelligence filter in the same CALCULATE; ALL/RANKX nested inside another CALCULATE's filters or inside time intelligence.
 
 ### Done on 2026-10-22 (session reactbi-8c)
 

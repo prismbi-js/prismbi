@@ -35,7 +35,10 @@ function generate(n: number): DataModel {
     .addMeasure('YTD', 'TOTALYTD([Total Sales], Date[Date])')
     .addMeasure('LY', 'CALCULATE([Total Sales], SAMEPERIODLASTYEAR(Date[Date]))')
     .addMeasure('Growth', 'DIVIDE([Total Sales] - [LY], [LY])')
-    .addMeasure('C1 Sales', 'CALCULATE([Total Sales], Product[Category] = "C1")');
+    .addMeasure('C1 Sales', 'CALCULATE([Total Sales], Product[Category] = "C1")')
+    .addMeasure('Share', 'DIVIDE([Total Sales], CALCULATE([Total Sales], ALL(Product)))')
+    .addMeasure('Rank', 'RANKX(ALL(Product[Name]), [Total Sales])')
+    .addMeasure('Big Lines', 'CALCULATE(COUNTROWS(Sales), FILTER(Sales, Sales[Quantity] * Sales[SalesAmount] > 1000))');
 }
 
 const year = [{ target: 'Date[Year]', op: 'eq' as const, value: 2025 }];
@@ -48,6 +51,8 @@ const QUERIES: [string, QuerySpec, number][] = [
   ['day × YTD (time intelligence)', { groupBy: ['Date[Date]'], values: ['YTD'], filters: year }, 150],
   ['month × last year, growth', { groupBy: ['Date[Year]', 'Date[MonthNumber]'], values: ['Total Sales', 'LY', 'Growth'], totals: true }, 300],
   ['product × month, YTD and last year', { groupBy: ['Product[Name]', 'Date[MonthNumber]'], values: ['Total Sales', 'YTD', 'LY'], filters: year }, 600],
+  ['product × region, share and rank', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['Share', 'Rank'], filters: year }, 900],
+  ['product × region, FILTER over the fact', { groupBy: ['Product[Name]', 'Region[Region]'], values: ['Big Lines'], filters: year }, 300],
 ];
 
 it('scale benchmark', () => {

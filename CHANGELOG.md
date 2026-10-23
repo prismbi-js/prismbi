@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- **More measures in the single-pass grouped path.** Visuals with many groups (product × region at 200k rows, 16k groups) no longer fall back to one evaluation per group for everyday measure shapes. Results match the general engine (`tests/fastscalar.test.ts` compares both for every shape below).
+  - **Scalar wrappers:** `SWITCH`, `IF` with any condition, `ISBLANK`, `COALESCE`, `&&` / `||` / `NOT`, comparisons, `&`, `ABS`, `ROUND`, `MIN`/`MAX` of two values, `FORMAT` and other deterministic scalar functions, applied to per-group results by the evaluator itself. About 500 → 30 ms. Values that aren't BLANK for an empty group (`COALESCE([x], 0)`) take their groups from the general path's combinations.
+  - **`VAR` / `RETURN`**, including variables defined outside a `CALCULATE`.
+  - **Iterators over the fact table:** `MINX`, `MAXX`, `COUNTX`, `COUNTAX` (with `SUMX` / `AVERAGEX`); `COUNTROWS(VALUES(fact[col]))`.
+  - **`FILTER(fact, condition)` in `CALCULATE`** becomes a compiled row test (2.3 s → 43 ms). It keeps DAX's rule that filter arguments see the outer context.
+  - **Share of total:** `CALCULATE(x, ALL(…) | REMOVEFILTERS(…) | ALLEXCEPT(…) | ALLSELECTED(…), column filters…)` is answered by one coarser grouped query, with the evaluator applying the removals (about 600 → 40 ms).
+  - **`RANKX(ALL(T[c]) | ALLSELECTED(T[c]), x [, value, ASC|DESC, SKIP|DENSE])`:** one ranking list per coarse key, sorted once (5.4 s → 48 ms).
+  - **Iterators over a column's values with a measure body** (`AVERAGEX(VALUES(Date[Date]), [Sales])`, `MAXX`, `MINX`, `SUMX`, `COUNTX`): one grouped query at the finer grain, folded per group.
+  - **Rolling windows:** `DATESINPERIOD(D[Date], MAX(D[Date]) | LASTDATE | MIN | FIRSTDATE, n, DAY|MONTH|QUARTER|YEAR)` joins the single-pass time intelligence.
+- **Compiled `FILTER` in the general engine:** `FILTER(table, condition)` over table rows runs a compiled row test. Conditions on one column are judged once per distinct value by the evaluator (text comparison and BLANK rules unchanged); numeric comparisons run on typed views; `&&`, `||`, `AND`, `OR`, `NOT` combine them. `COUNTROWS(FILTER(Sales, …))` and friends are several times faster.
+- **Boolean `CALCULATE` filters that only read columns** (`Sales[Amount] > 400`, `Product[Name] = "P1"`) are computed once and reused across groups. A filter on a column the visual groups by went from 8.2 s to 30 ms at 16k groups.
+- **Size budgets raised deliberately** (`scripts/size.mjs`): the fast-path additions cost 4.0 KB min+gzip in the core (core api 96.6 → 100.6 KB, budget 98 → 102; core app 87 → 91; full 139 → 143 / 133 → 137; core + visual entries 94 → 98 / 107 → 111).
+- **Benchmark:** `npm run bench` adds product × region share-and-rank and `FILTER` cases.
+
 ## 0.10.0 (2026-10-22): real-world validation, new visuals and analyses, faster queries
 
 - **Validated on real Power BI projects** (a public five-report PBIP sample with calculated tables, a time-intelligence calculation group, field parameters, roles, translations and Northwind-style auto date/time). All five reports import and render without errors. Fixes from that run:

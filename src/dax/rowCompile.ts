@@ -145,3 +145,146 @@ function compile(model: DataModel, table: string, e: Expr, lenient: boolean): No
   }
   return null;
 }
+
+/** A compiled row condition: does row `row` of the iterated table pass? */
+export type RowTest = (row: number) => boolean;
+
+export interface RowTestPlan {
+  bind(): RowTest;
+}
+
+/**
+ * Which values of one column make a condition true, by dictionary slot (0 is BLANK, k + 1 is entry k of the column's
+ * dictionary). Supplied by the evaluator, so text comparison, BLANK handling and functions keep its exact semantics.
+ */
+export type Judge = (e: Expr, col: { table: string; column: string }) => Uint8Array;
+
+type TestNode = (m: DataModel) => RowTest;
+
+/**
+ * Compile a FILTER condition evaluated in a row context on `table`: `&&`, `||`, AND, OR and NOT over conditions that
+ * read one column of the table (or of a related one-side table, through RELATED or with `lenient`), each judged once
+ * per distinct value, and comparisons between numeric row expressions. Null when the full engine is needed.
+ */
+export function compileRowTest(model: DataModel, table: string, e: Expr, lenient: boolean, judge: Judge): RowTestPlan | null {
+  const node = compileTest(model, table, e, lenient, judge);
+  return node ? { bind: () => node(model) } : null;
+}
+
+const COMPARISONS = new Set(['=', '==', '<>', '<', '>', '<=', '>=']);
+/** Functions a judged condition may use: deterministic, reading only their arguments. */
+const PURE = new Set(['BLANK', 'TRUE', 'FALSE', 'DATE', 'NOT', 'AND', 'OR', 'IF', 'ISBLANK', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'SEARCH', 'FIND', 'YEAR', 'MONTH', 'DAY', 'QUARTER', 'WEEKDAY', 'ABS', 'ROUND', 'INT', 'VALUE', 'FORMAT', 'EXACT']);
+
+function compileTest(model: DataModel, table: string, e: Expr, lenient: boolean, judge: Judge): TestNode | null {
+  const both = (a: Expr, b: Expr, and: boolean): TestNode | null => {
+    const l = compileTest(model, table, a, lenient, judge);
+    const r = l && compileTest(model, table, b, lenient, judge);
+    if (!l || !r) return null;
+    return (m) => {
+      const x = l(m);
+      const y = r(m);
+      return and ? (row) => x(row) && y(row) : (row) => x(row) || y(row);
+    };
+  };
+  const not = (a: Expr): TestNode | null => {
+    const x = compileTest(model, table, a, lenient, judge);
+    return x && ((m) => ((f) => (row: number) => !f(row))(x(m)));
+  };
+  if (e.type === 'binary' && (e.op === '&&' || e.op === '||')) return both(e.left, e.right, e.op === '&&');
+  if (e.type === 'call' && (e.name === 'AND' || e.name === 'OR') && e.args.length === 2) return both(e.args[0], e.args[1], e.name === 'AND');
+  if ((e.type === 'unary' && e.op === 'NOT') || (e.type === 'call' && e.name === 'NOT' && e.args.length === 1)) return not(e.type === 'unary' ? e.operand : e.args[0]);
+  // numeric comparisons run on the typed views; other single-column conditions are judged per distinct value
+  if (e.type === 'binary' && COMPARISONS.has(e.op)) {
+    const l = compile(model, table, e.left, lenient);
+    const r = l && compile(model, table, e.right, lenient);
+    if (l && r) return compareNode(e.op, l, r);
+  }
+  const single = singleColumn(model, table, e, lenient);
+  return single ? judged(table, single.expr, single.col, judge) : null;
+}
+
+function compareNode(op: string, l: Node, r: Node): TestNode {
+  return (m) => {
+    const a = l(m);
+    const b = r(m);
+    return (row) => {
+      const x = a(row);
+      const y = b(row);
+      if (op === '==') return x === y;
+      // the evaluator compares BLANK as 0 against a number
+      const c = (x ?? 0) - (y ?? 0);
+      return op === '=' ? c === 0 : op === '<>' ? c !== 0 : op === '<' ? c < 0 : op === '>' ? c > 0 : op === '<=' ? c <= 0 : c >= 0;
+    };
+  };
+}
+
+/** The one column a pure condition reads, with RELATED(x) replaced by x for judging, or null. */
+function singleColumn(model: DataModel, table: string, e: Expr, lenient: boolean): { expr: Expr; col: { table: string; column: string } } | null {
+  let col: { table: string; column: string } | null = null;
+  let ok = true;
+  const use = (c: { table: string; column: string }, viaRelated: boolean) => {
+    if (!model.hasTable(c.table) || !model.table(c.table).hasColumn(c.column)) return (ok = false);
+    if (c.table !== table && !((viaRelated || lenient) && model.expanded(table).has(c.table) && model.relatedRows(table, c.table))) return (ok = false);
+    if (col && (col.table !== c.table || col.column !== c.column)) return (ok = false);
+    col = c;
+    return true;
+  };
+  const walk = (x: Expr): Expr => {
+    if (!ok) return x;
+    switch (x.type) {
+      case 'column':
+        use(x, false);
+        return x;
+      case 'number':
+      case 'string':
+      case 'boolean':
+        return x;
+      case 'unary':
+        return { ...x, operand: walk(x.operand) };
+      case 'binary':
+        return { ...x, left: walk(x.left), right: walk(x.right) };
+      case 'list':
+        return { ...x, items: x.items.map(walk) };
+      case 'call':
+        if (x.name === 'RELATED' && x.args.length === 1 && x.args[0].type === 'column') {
+          use(x.args[0], true);
+          return x.args[0];
+        }
+        if (!PURE.has(x.name.toUpperCase())) ok = false;
+        return { ...x, args: x.args.map(walk) };
+      default:
+        ok = false;
+        return x;
+    }
+  };
+  const expr = walk(e);
+  return ok && col ? { expr, col } : null;
+}
+
+function judged(table: string, expr: Expr, col: { table: string; column: string }, judge: Judge): TestNode {
+  // judged per dictionary: appended rows can extend it, so the verdicts are redone when it grows
+  let seen: unknown[] | null = null;
+  let size = -1;
+  let allowed = new Uint8Array(0);
+  const verdicts = (m: DataModel) => {
+    const { dict } = m.table(col.table).codes(col.column);
+    if (dict !== seen || dict.length !== size) (allowed = judge(expr, col)), (seen = dict), (size = dict.length);
+    return allowed;
+  };
+  if (col.table === table)
+    return (m) => {
+      const ok = verdicts(m);
+      const codes = m.table(table).codes(col.column).codes;
+      return (row) => ok[codes[row] + 1] === 1;
+    };
+  return (m) => {
+    const ok = verdicts(m);
+    const map = m.relatedRows(table, col.table)!;
+    const codes = m.table(col.table).codes(col.column).codes;
+    // a row without a related row sees BLANK
+    return (row) => {
+      const t = map[row];
+      return ok[t < 0 ? 0 : codes[t] + 1] === 1;
+    };
+  };
+}

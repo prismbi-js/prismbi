@@ -1,27 +1,37 @@
 import type { Expr } from '../dax/ast';
 import type { CellValue, ColumnRef } from './types';
 import { compareValues, valueKey } from './types';
-import type { Filter } from './filters';
+import type { ColumnsFilter, Filter } from './filters';
+import { compileFilter } from './filters';
 import type { DataModel } from './model';
 import type { QueryRow } from './query';
 import { compileRowExpr, type RowFn, type RowPlan } from '../dax/rowCompile';
-import { parallelPeriod, periodStart, shiftDates } from '../dax/timeIntel';
+import { parallelPeriod, periodStart, periodWindow, shiftDates } from '../dax/timeIntel';
 
-/** A CALCULATE column filter: the column's values that pass (by dictionary code; slot 0 is BLANK). */
-interface Pred {
+/**
+ * A CALCULATE filter on fact rows: a column filter (the column's values that pass, by dictionary code; slot 0 is
+ * BLANK), or `FILTER(fact, condition)`, whose rows also pass the filters in force where it is written (`within`):
+ * CALCULATE evaluates its filter arguments in the outer context.
+ */
+type Pred = {
   table: string;
-  column: string;
-  allowed: Uint8Array;
   /** Identity for de-duplicating aggregations. */
   key: string;
-}
+} & ({ column: string; allowed: Uint8Array; rows?: undefined } | { column?: undefined; rows: Expr; within: Pred[] });
+
+/** Identities of FILTER conditions (by AST node). */
+const filterIds = new WeakMap<Expr, number>();
+let nextFilterId = 0;
+
+/** Is this pred, or one a FILTER was written under, on one of these tables? */
+const predOn = (p: Pred, tables: Set<string>): boolean => tables.has(p.table) || (p.rows !== undefined && p.within.some((q) => predOn(q, tables)));
 
 /** A leaf aggregation computed in one pass over the fact table. */
 interface Agg {
-  kind: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'distinct' | 'rows' | 'sumx' | 'avgx';
+  kind: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'distinct' | 'rows' | 'sumx' | 'avgx' | 'minx' | 'maxx' | 'countx';
   column?: string;
   isDate?: boolean;
-  /** SUMX / AVERAGEX row expression. */
+  /** Iterator (SUMX, AVERAGEX, MINX, MAXX, COUNTX) row expression. */
   row?: RowPlan;
   /** CALCULATE filters every counted row must pass. */
   preds?: Pred[];
@@ -39,8 +49,18 @@ type Tree =
   | { t: 'num'; v: number }
   | { t: 'bin'; op: '+' | '-' | '*' | '/'; l: Tree; r: Tree }
   | { t: 'div'; a: Tree; b: Tree; alt?: Tree }
+  | { t: 'sub'; i: number }
+  /** RANKX: the value's rank in the group's list (sub-result i) */
+  | { t: 'rank'; i: number; v: Tree }
   /** IF(l op r, a, [b]) */
-  | { t: 'if'; op: string; l: Tree; r: Tree; a: Tree; b?: Tree };
+  | { t: 'if'; op: string; l: Tree; r: Tree; a: Tree; b?: Tree }
+  | { t: 'lit'; v: CellValue }
+  /** A pure scalar function or operator over sub-results, computed by the evaluator on literal arguments (exact semantics). */
+  | { t: 'expr'; model: DataModel; make: (args: Expr[]) => Expr; args: Tree[] };
+
+/** Scalar functions that only depend on their arguments: safe to apply to per-group results. */
+const SCALAR_FNS = new Set(['ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'INT', 'TRUNC', 'SQRT', 'POWER', 'EXP', 'LN', 'LOG', 'LOG10', 'MOD', 'SIGN', 'CEILING', 'FLOOR', 'COALESCE', 'ISBLANK', 'NOT', 'AND', 'OR', 'IF', 'SWITCH', 'FORMAT', 'CONCATENATE', 'VALUE', 'ISNUMBER', 'ISTEXT', 'LEFT', 'RIGHT', 'UPPER', 'LOWER', 'LEN']);
+const ITER_FN: Record<string, Agg['kind']> = { SUMX: 'sumx', AVERAGEX: 'avgx', MINX: 'minx', MAXX: 'maxx', COUNTX: 'countx', COUNTAX: 'countx' };
 
 const AGG_FN: Record<string, Agg['kind']> = { SUM: 'sum', AVERAGE: 'avg', MIN: 'min', MAX: 'max', COUNT: 'count', COUNTA: 'count', DISTINCTCOUNT: 'distinct' };
 
@@ -51,7 +71,25 @@ interface Plan {
   env?: CompileEnv;
   /** Time-intelligence sub-measures (top-level plan only). */
   ti?: TiNode[];
+  /** Measures under ALL / REMOVEFILTERS / ALLEXCEPT / ALLSELECTED, answered at a coarser grain (top-level plan only). */
+  subs?: SubNode[];
 }
+
+/**
+ * `CALCULATE(expr, ALL(…), …)`: `expr` evaluated with the removals applied to the query's filters and groups;
+ * `RANKX(ALL(T[c]), expr)`: `expr` for every value of the column, ranked per group; or `AVERAGEX(VALUES(T[c]), expr)`
+ * (any iterator): `expr` per value of the column within each group, folded.
+ */
+type SubNode =
+  | { kind: 'all'; mods: Expr[]; expr: Expr }
+  | { kind: 'rank'; col: ColumnRef; expr: Expr; asc: boolean; dense: boolean; selected: boolean }
+  | { kind: 'iter'; fn: Agg['kind']; col: ColumnRef; expr: Expr };
+
+/** A group's ranking: the rank of a value among the group's list. */
+type Ranker = (v: CellValue) => CellValue;
+
+const REMOVALS = new Set(['ALL', 'ALLNOBLANKROW', 'REMOVEFILTERS', 'ALLEXCEPT', 'ALLSELECTED']);
+const isRemoval = (x: Expr): boolean => x.type === 'call' && REMOVALS.has(x.name.toUpperCase());
 
 /**
  * A measure evaluated over a shifted or period-to-date set of dates: `CALCULATE(x, SAMEPERIODLASTYEAR(D[c]))`,
@@ -60,13 +98,17 @@ interface Plan {
  */
 interface TiNode {
   /** Which dates replace the group's: period to date, shifted, or a whole parallel period (rules in dax/timeIntel). */
-  rule: { fn: 'td'; period: 'year' | 'quarter' | 'month'; yearEnd?: string } | { fn: 'shift' | 'parallel'; n: number; unit: string };
+  rule:
+    | { fn: 'td'; period: 'year' | 'quarter' | 'month'; yearEnd?: string }
+    | { fn: 'shift' | 'parallel'; n: number; unit: string }
+    /** DATESINPERIOD from the last (or first) visible date: rolling windows */
+    | { fn: 'window'; n: number; unit: string; from: 'last' | 'first' };
   date: ColumnRef;
   sub: Plan;
   tree: Tree;
 }
 
-const TI_TABLES = new Set(['SAMEPERIODLASTYEAR', 'DATEADD', 'DATESYTD', 'DATESQTD', 'DATESMTD', 'PARALLELPERIOD', 'PREVIOUSMONTH', 'PREVIOUSQUARTER', 'PREVIOUSYEAR']);
+const TI_TABLES = new Set(['DATESINPERIOD', 'SAMEPERIODLASTYEAR', 'DATEADD', 'DATESYTD', 'DATESQTD', 'DATESMTD', 'PARALLELPERIOD', 'PREVIOUSMONTH', 'PREVIOUSQUARTER', 'PREVIOUSYEAR']);
 const TI_TOTALS: Record<string, string> = { TOTALYTD: 'DATESYTD', TOTALQTD: 'DATESQTD', TOTALMTD: 'DATESMTD' };
 const isTiTable = (x: Expr): boolean => x.type === 'call' && TI_TABLES.has(x.name.toUpperCase()) && x.args[0]?.type === 'column';
 
@@ -139,10 +181,21 @@ function predFor(model: DataModel, ref: { table: string; column: string }, filte
 }
 
 /** Compile a value expression into a tree of single-pass aggregations, or null when it needs the full engine. */
-function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds: Pred[] = []): Tree | null {
+function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds: Pred[] = [], vars: Map<string, Tree> = new Map()): Tree | null {
+  const sub = (x: Expr, p = preds) => compile(model, x, plan, seen, p, vars);
+  const scalar = (args: Expr[], make: (a: Expr[]) => Expr): Tree | null => {
+    const ts: Tree[] = [];
+    for (const a of args) {
+      const t = sub(a);
+      if (!t) return null;
+      ts.push(t);
+    }
+    return { t: 'expr', model, make, args: ts };
+  };
   const leaf = (table: string, agg: Agg): Tree | null => {
     if (plan.table === null) plan.table = table;
     if (plan.table !== table) return null; // one fact table per plan
+    if (preds.some((p) => p.rows !== undefined && p.table !== table)) return null;
     if (preds.length) agg.preds = preds;
     const k = `${agg.kind}|${agg.column ?? ''}|${preds.map((p) => p.key).join('&')}`;
     let i = plan.keys.get(k);
@@ -156,6 +209,21 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds
   switch (e.type) {
     case 'number':
       return { t: 'num', v: e.value };
+    case 'string':
+    case 'boolean':
+      return { t: 'lit', v: e.value };
+    case 'var': {
+      // bindings are evaluated where they're defined: their trees keep the CALCULATE filters around them
+      const inner = new Map(vars);
+      for (const b of e.bindings) {
+        const t = compile(model, b.value, plan, seen, preds, inner);
+        if (!t) return null;
+        inner.set(b.name, t);
+      }
+      return compile(model, e.body, plan, seen, preds, inner);
+    }
+    case 'varRef':
+      return vars.get(e.name) ?? null;
     case 'bracket': {
       if (!model.hasMeasure(e.name) || seen.has(e.name)) return null;
       seen.add(e.name);
@@ -164,40 +232,61 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds
       return r;
     }
     case 'unary':
+      if (e.op === 'NOT') return scalar([e.operand], ([x]) => ({ type: 'unary', op: 'NOT', operand: x }));
       if (e.op !== '-') return null;
-      return ((x) => (x ? { t: 'bin', op: '*', l: { t: 'num', v: -1 }, r: x } : null))(compile(model, e.operand, plan, seen, preds));
+      return ((x) => (x ? { t: 'bin', op: '*', l: { t: 'num', v: -1 }, r: x } : null))(sub(e.operand));
     case 'binary': {
-      if (!['+', '-', '*', '/'].includes(e.op)) return null;
-      const l = compile(model, e.left, plan, seen, preds);
-      const r = l && compile(model, e.right, plan, seen, preds);
+      if (!['+', '-', '*', '/'].includes(e.op)) {
+        if (!['=', '==', '<>', '<', '>', '<=', '>=', '&&', '||', '&'].includes(e.op)) return null;
+        const op = e.op;
+        return scalar([e.left, e.right], ([l, r]) => ({ type: 'binary', op, left: l, right: r }));
+      }
+      const l = sub(e.left);
+      const r = l && sub(e.right);
       return l && r ? { t: 'bin', op: e.op as '+', l, r } : null;
     }
     case 'call': {
       if (e.name.toUpperCase() === 'IF' && (e.args.length === 2 || e.args.length === 3)) {
         // IF(<measure comparison>, a, [b]): "only when there are sales" and similar guards
         const c = e.args[0];
-        if (c.type !== 'binary' || !['>', '<', '>=', '<=', '=', '<>'].includes(c.op)) return null;
-        const l = compile(model, c.left, plan, seen, preds);
-        const r = l && compile(model, c.right, plan, seen, preds);
-        const a = r && compile(model, e.args[1], plan, seen, preds);
-        const b = a && e.args[2] ? compile(model, e.args[2], plan, seen, preds) : undefined;
-        return l && r && a && b !== null ? { t: 'if', op: c.op, l, r, a, b } : null;
+        if (c.type === 'binary' && ['>', '<', '>=', '<=', '=', '<>'].includes(c.op)) {
+          const l = sub(c.left);
+          const r = l && sub(c.right);
+          const a = r && sub(e.args[1]);
+          const b = a && e.args[2] ? sub(e.args[2]) : undefined;
+          return l && r && a && b !== null ? { t: 'if', op: c.op, l, r, a, b } : null;
+        }
+      }
+      const upper = e.name.toUpperCase();
+      if (upper === 'BLANK' && !e.args.length) return { t: 'lit', v: null };
+      if ((upper === 'TRUE' || upper === 'FALSE') && !e.args.length) return { t: 'lit', v: upper === 'TRUE' };
+      if (SCALAR_FNS.has(upper) || ((upper === 'MIN' || upper === 'MAX') && e.args.length === 2)) {
+        const name = e.name;
+        return scalar(e.args, (args) => ({ type: 'call', name, args }));
       }
       if (e.name === 'DIVIDE' && (e.args.length === 2 || e.args.length === 3)) {
-        const a = compile(model, e.args[0], plan, seen, preds);
-        const b = a && compile(model, e.args[1], plan, seen, preds);
-        const alt = e.args[2] ? compile(model, e.args[2], plan, seen, preds) : undefined;
+        const a = sub(e.args[0]);
+        const b = a && sub(e.args[1]);
+        const alt = e.args[2] ? sub(e.args[2]) : undefined;
         return a && b && alt !== null ? { t: 'div', a, b, alt } : null;
       }
-      if ((e.name === 'SUMX' || e.name === 'AVERAGEX') && e.args.length === 2 && e.args[0].type === 'table') {
+      const over = e.args[0];
+      if (ITER_FN[e.name] && e.args.length === 2 && over?.type === 'call' && ['VALUES', 'DISTINCT'].includes(over.name.toUpperCase()) && over.args.length === 1 && over.args[0].type === 'column') {
+        // an iterator over a column's values with a measure body: one grouped query by (groups × column), folded
+        const c = over.args[0];
+        if (!plan.subs || preds.length || !model.hasTable(c.table) || !model.table(c.table).hasColumn(c.column)) return null;
+        plan.subs.push({ kind: 'iter', fn: ITER_FN[e.name], col: model.resolveColumn({ table: c.table, column: c.column }), expr: e.args[1] });
+        return { t: 'sub', i: plan.subs.length - 1 };
+      }
+      if (ITER_FN[e.name] && e.args.length === 2 && e.args[0].type === 'table') {
         const table = e.args[0].name;
         if (!model.hasTable(table)) return null;
         // a grouped query has no outer row context, so bare references to related tables follow relationships
         const row = compileRowExpr(model, table, e.args[1], true);
         if (!row) return null;
         if (plan.table === null) plan.table = table;
-        if (plan.table !== table) return null;
-        plan.aggs.push({ kind: e.name === 'SUMX' ? 'sumx' : 'avgx', row, ...(preds.length ? { preds } : {}) });
+        if (plan.table !== table || preds.some((p) => p.rows !== undefined && p.table !== table)) return null;
+        plan.aggs.push({ kind: ITER_FN[e.name], row, ...(preds.length ? { preds } : {}) });
         return { t: 'agg', i: plan.aggs.length - 1 };
       }
       const total = TI_TOTALS[e.name.toUpperCase()];
@@ -207,7 +296,22 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds
         const tis = e.args.slice(1).filter(isTiTable);
         if (tis.length !== 1) return null;
         const rest = e.args.slice(1).filter((a) => !isTiTable(a));
+        // a table filter next to the date set keeps the outer context's rows (and so its dates)
+        if (rest.some((a) => a.type === 'call' && (a.name.toUpperCase() === 'FILTER' || (a.name.toUpperCase() === 'KEEPFILTERS' && a.args[0]?.type === 'call' && a.args[0].name.toUpperCase() === 'FILTER')))) return null;
         return tiNode(model, rest.length ? { type: 'call', name: 'CALCULATE', args: [e.args[0], ...rest] } : e.args[0], tis[0] as Expr & { type: 'call'; args: Expr[] }, plan, seen, preds);
+      }
+      if (e.name === 'CALCULATE' && e.args.length >= 2 && e.args.slice(1).some(isRemoval)) {
+        // only where nothing outer filters the expression (the sub-query starts from the query's own filters); the
+        // other arguments must be column filters, which don't depend on the context they're evaluated in
+        if (!plan.subs || preds.length) return null;
+        const mods = e.args.slice(1).filter(isRemoval);
+        const others = e.args.slice(1).filter((a) => !isRemoval(a));
+        for (const o of others) {
+          const cond = o.type === 'call' && o.name.toUpperCase() === 'KEEPFILTERS' ? o.args[0] : o;
+          if (!cond || !onlyColumn(cond)) return null;
+        }
+        plan.subs.push({ kind: 'all', mods, expr: others.length ? { type: 'call', name: 'CALCULATE', args: [e.args[0], ...others] } : e.args[0] });
+        return { t: 'sub', i: plan.subs.length - 1 };
       }
       if (e.name === 'CALCULATE' && e.args.length >= 1) {
         // column filters become row predicates; one on a column the query groups or filters by would replace the
@@ -216,6 +320,16 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds
         for (const f of e.args.slice(1)) {
           const keep = f.type === 'call' && f.name.toUpperCase() === 'KEEPFILTERS';
           const cond = keep ? (f as { args: Expr[] }).args[0] : f;
+          if (cond?.type === 'call' && cond.name.toUpperCase() === 'FILTER' && cond.args.length === 2 && cond.args[0].type === 'table') {
+            // FILTER over the fact table: its rows within the outer filters, intersected with the rest
+            const t = cond.args[0].name;
+            if (!model.hasTable(t) || (plan.table !== null && plan.table !== t)) return null;
+            if (!model.evaluator.rowTest(t, cond.args[1], true)) return null;
+            let id = filterIds.get(cond.args[1]);
+            if (id === undefined) filterIds.set(cond.args[1], (id = nextFilterId++));
+            next = [...next, { table: t, rows: cond.args[1], within: preds, key: `FILTER#${id}(${preds.map((p) => p.key).join('&')})` }];
+            continue;
+          }
           const ref = cond && onlyColumn(cond);
           if (!ref || !model.hasTable(ref.table) || !model.table(ref.table).hasColumn(ref.column)) return null;
           const env = plan.env;
@@ -225,7 +339,30 @@ function compile(model: DataModel, e: Expr, plan: Plan, seen: Set<string>, preds
           // a nested filter on the same column replaces the outer one (KEEPFILTERS intersects)
           next = keep ? [...next, p] : [...next.filter((q) => q.table !== p.table || q.column !== p.column), p];
         }
-        return compile(model, e.args[0], plan, seen, next);
+        return sub(e.args[0], next);
+      }
+      if (upper === 'RANKX' && e.args.length >= 2 && e.args.length <= 5) {
+        // RANKX(ALL(T[c]), expr [, value [, order [, ties]]]): one ranking list per group outside the column
+        const tab = e.args[0];
+        if (!plan.subs || preds.length || tab.type !== 'call' || !['ALL', 'ALLSELECTED'].includes(tab.name.toUpperCase()) || tab.args.length !== 1 || tab.args[0].type !== 'column') return null;
+        const c = tab.args[0];
+        if (!model.hasTable(c.table) || !model.table(c.table).hasColumn(c.column)) return null;
+        const word = (x: Expr | undefined) => (x?.type === 'table' ? x.name.toUpperCase() : null);
+        const asc = word(e.args[3]) === 'ASC' || (e.args[3]?.type === 'number' && e.args[3].value === 1);
+        if (e.args[3] && !asc && word(e.args[3]) !== 'DESC' && !(e.args[3].type === 'number' && e.args[3].value === 0)) return null;
+        const dense = word(e.args[4]) === 'DENSE';
+        if (e.args[4] && !dense && word(e.args[4]) !== 'SKIP') return null;
+        const v = sub(e.args[2] ?? e.args[1]);
+        if (!v) return null;
+        plan.subs.push({ kind: 'rank', col: model.resolveColumn({ table: c.table, column: c.column }), expr: e.args[1], asc, dense, selected: tab.name.toUpperCase() === 'ALLSELECTED' });
+        return { t: 'rank', i: plan.subs.length - 1, v };
+      }
+      if (e.name === 'COUNTROWS' && e.args.length === 1 && e.args[0].type === 'call' && ['VALUES', 'DISTINCT'].includes(e.args[0].name) && e.args[0].args.length === 1 && e.args[0].args[0].type === 'column') {
+        // the distinct values of a fact-table column, BLANK included like DISTINCTCOUNT; a table on the one side of a
+        // relationship can gain a blank row, which only the full engine adds
+        const { table, column } = e.args[0].args[0];
+        if (!model.hasTable(table) || !model.table(table).hasColumn(column) || model.relationships().some((r) => r.toTable === table)) return null;
+        return leaf(table, { kind: 'distinct', column, isDate: model.table(table).column(column).type === 'date' });
       }
       if (e.name === 'COUNTROWS' && e.args.length === 1 && e.args[0].type === 'table') {
         if (!model.hasTable(e.args[0].name)) return null;
@@ -254,6 +391,16 @@ function tiRule(call: Expr & { type: 'call'; args: Expr[] }): TiNode['rule'] | n
   if (name === 'DATESYTD' && a.length <= 2) return a[1] === undefined ? { fn: 'td', period: 'year' } : a[1].type === 'string' ? { fn: 'td', period: 'year', yearEnd: a[1].value } : null;
   if ((name === 'DATESQTD' || name === 'DATESMTD') && a.length === 1) return { fn: 'td', period: name === 'DATESQTD' ? 'quarter' : 'month' };
   if (name === 'SAMEPERIODLASTYEAR' && a.length === 1) return { fn: 'shift', n: -1, unit: 'YEAR' };
+  if (name === 'DATESINPERIOD') {
+    // the start must be the visible dates' last or first one, on the same column: MAX(D[c]), LASTDATE(D[c]), …
+    const st = a[1];
+    const d = a[0] as Expr & { type: 'column' };
+    const fn = st?.type === 'call' && st.args.length === 1 && st.args[0].type === 'column' && st.args[0].table === d.table && st.args[0].column === d.column ? st.name.toUpperCase() : '';
+    const from = fn === 'MAX' || fn === 'LASTDATE' ? 'last' : fn === 'MIN' || fn === 'FIRSTDATE' ? 'first' : null;
+    const n = lit(a[2]);
+    const u = unit(a[3]);
+    return from && n !== null && u && ['DAY', 'MONTH', 'QUARTER', 'YEAR'].includes(u) && a.length === 4 ? { fn: 'window', n, unit: u, from } : null;
+  }
   if (name.startsWith('PREVIOUS') && a.length === 1) return { fn: 'parallel', n: -1, unit: name.slice(8) };
   const n = lit(a[1]);
   const u = unit(a[2]);
@@ -275,7 +422,7 @@ function tiNode(model: DataModel, inner: Expr, call: Expr & { type: 'call'; args
   const sub: Plan = { table: plan.table, aggs: [], keys: new Map(), env: plan.env };
   const tree = compile(model, inner, sub, seen, preds);
   if (!tree || !blankPreserving(tree)) return null;
-  if (sub.aggs.some((a) => a.kind === 'distinct' || a.isDate || a.preds?.some((p) => exp.has(p.table)))) return null;
+  if (sub.aggs.some((a) => a.kind === 'distinct' || a.isDate || a.preds?.some((p) => predOn(p, exp)))) return null;
   if (plan.table === null) plan.table = sub.table;
   if (sub.table === null || plan.table !== sub.table) return null;
   plan.ti.push({ rule, date, sub, tree });
@@ -297,23 +444,50 @@ function blankPreserving(t: Tree): boolean {
       return blankPreserving(t.a) && (t.alt === undefined || blankPreserving(t.alt));
     case 'if':
       return blankPreserving(t.a) && (t.b === undefined || blankPreserving(t.b));
+    case 'lit':
+      return t.v === null;
+    case 'sub':
+      // its rows can come from another table than the group's: groups come from the general path's combinations
+      return false;
+    case 'rank':
+      return blankPreserving(t.v);
+    case 'expr':
+      // what an empty group (every aggregation BLANK) gives
+      return evalTree(t, [], []) === null;
   }
+}
+
+/** A per-group result as a literal for the evaluator. */
+function literal(v: CellValue): Expr {
+  if (v === null) return { type: 'call', name: 'BLANK', args: [] };
+  if (typeof v === 'number') return { type: 'number', value: v };
+  if (typeof v === 'boolean') return { type: 'boolean', value: v };
+  return { type: 'string', value: String(v) };
 }
 
 const num = (v: CellValue) => (v === null ? 0 : typeof v === 'number' ? v : v instanceof Date ? v.getTime() / 86_400_000 : Number(v));
 
 /** Evaluate a tree with the evaluator's exact BLANK arithmetic. */
-function evalTree(t: Tree, vals: CellValue[], ti: CellValue[] = []): CellValue {
+function evalTree(t: Tree, vals: CellValue[], ti: CellValue[] = [], sv: (CellValue | Ranker)[] = []): CellValue {
   switch (t.t) {
     case 'agg':
-      return vals[t.i];
+      return vals[t.i] ?? null;
     case 'ti':
-      return ti[t.i];
+      return ti[t.i] ?? null;
+    case 'sub':
+      return (sv[t.i] as CellValue) ?? null;
+    case 'rank': {
+      const r = sv[t.i] as Ranker | undefined;
+      return r ? r(evalTree(t.v, vals, ti, sv)) : null;
+    }
     case 'num':
+    case 'lit':
       return t.v;
+    case 'expr':
+      return t.model.evaluator.evalScalar(t.make(t.args.map((a) => literal(evalTree(a, vals, ti, sv)))), { filters: [] });
     case 'bin': {
-      const a = evalTree(t.l, vals, ti);
-      const b = evalTree(t.r, vals, ti);
+      const a = evalTree(t.l, vals, ti, sv);
+      const b = evalTree(t.r, vals, ti, sv);
       if (t.op === '+' || t.op === '-') {
         if (a === null && b === null) return null;
         return t.op === '+' ? num(a) + num(b) : num(a) - num(b);
@@ -325,14 +499,14 @@ function evalTree(t: Tree, vals: CellValue[], ti: CellValue[] = []): CellValue {
     }
     case 'if': {
       // the evaluator's comparison: BLANK compares as 0 against a number
-      const c = compareValues(evalTree(t.l, vals, ti) ?? 0, evalTree(t.r, vals, ti) ?? 0);
+      const c = compareValues(evalTree(t.l, vals, ti, sv) ?? 0, evalTree(t.r, vals, ti, sv) ?? 0);
       const ok = t.op === '>' ? c > 0 : t.op === '<' ? c < 0 : t.op === '>=' ? c >= 0 : t.op === '<=' ? c <= 0 : t.op === '=' ? c === 0 : c !== 0;
-      return ok ? evalTree(t.a, vals, ti) : t.b ? evalTree(t.b, vals, ti) : null;
+      return ok ? evalTree(t.a, vals, ti, sv) : t.b ? evalTree(t.b, vals, ti, sv) : null;
     }
     case 'div': {
-      const a = evalTree(t.a, vals, ti);
-      const b = evalTree(t.b, vals, ti);
-      if (b === null || num(b) === 0) return t.alt ? evalTree(t.alt, vals, ti) : null;
+      const a = evalTree(t.a, vals, ti, sv);
+      const b = evalTree(t.b, vals, ti, sv);
+      if (b === null || num(b) === 0) return t.alt ? evalTree(t.alt, vals, ti, sv) : null;
       if (a === null) return null;
       return num(a) / num(b);
     }
@@ -368,6 +542,12 @@ class Acc {
         case 'avg':
         case 'avgx':
           return this.cnt[i] ? this.sum[i] / this.cnt[i] : null;
+        case 'minx':
+          return this.cnt[i] ? this.min[i] : null;
+        case 'maxx':
+          return this.cnt[i] ? this.max[i] : null;
+        case 'countx':
+          return this.cnt[i] || null;
         case 'min':
           return this.cnt[i] ? (a.isDate ? new Date(this.min[i]) : this.min[i]) : null;
         case 'max':
@@ -390,7 +570,7 @@ const UNMATCHED = -2;
 /** Date-valued aggregations only survive as a whole measure (date arithmetic has calendar semantics). */
 function datesOnlyAtTop(t: Tree, aggs: Agg[]): boolean {
   const walk = (x: Tree): boolean =>
-    x.t === 'agg' ? !aggs[x.i].isDate : x.t === 'num' || x.t === 'ti' ? true : x.t === 'bin' ? walk(x.l) && walk(x.r) : x.t === 'if' ? walk(x.l) && walk(x.r) && walk(x.a) && (!x.b || walk(x.b)) : walk(x.a) && walk(x.b) && (!x.alt || walk(x.alt));
+    x.t === 'agg' ? !aggs[x.i].isDate : x.t === 'num' || x.t === 'ti' || x.t === 'lit' || x.t === 'sub' ? true : x.t === 'expr' ? x.args.every(walk) : x.t === 'rank' ? walk(x.v) : x.t === 'bin' ? walk(x.l) && walk(x.r) : x.t === 'if' ? walk(x.l) && walk(x.r) && walk(x.a) && (!x.b || walk(x.b)) : walk(x.a) && walk(x.b) && (!x.alt || walk(x.alt));
   return t.t === 'agg' || walk(t);
 }
 
@@ -653,7 +833,10 @@ function timeIntelligence(model: DataModel, fact: string, nodes: TiNode[], mainA
       out.push(...new Set(ps));
       if (unrestricted) out.push(ORPHAN);
     } else if (rule.fn === 'td') for (let p = lowerBound(periodStart(new Date(sorted[last]), rule.period, rule.yearEnd).getTime()); p <= last; p++) out.push(p);
-    else if (rule.fn === 'parallel') {
+    else if (rule.fn === 'window') {
+      const [start, end] = periodWindow(new Date(sorted[rule.from === 'last' ? last : first]), rule.n, rule.unit);
+      for (let p = lowerBound(start.getTime()); p < sorted.length && sorted[p] <= end.getTime() + 1e-3; p++) out.push(p);
+    } else if (rule.fn === 'parallel') {
       const [start, end] = parallelPeriod(new Date(sorted[first]), rule.unit, rule.n);
       for (let p = lowerBound(start.getTime()); p < sorted.length && sorted[p] <= end.getTime(); p++) out.push(p);
     } else
@@ -735,15 +918,38 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     if (f.kind === 'columns') for (const c of f.columns) touched.add(refKey(c.table, c.column));
     else if (f.kind === 'rows') touchedTables.add(f.table);
   }
-  const plan: Plan = { table: null, aggs: [], keys: new Map(), env: { touched, touchedTables }, ti: [] };
+  const plan: Plan = { table: null, aggs: [], keys: new Map(), env: { touched, touchedTables }, ti: [], subs: [] };
   const trees: Tree[] = [];
+  // a value that isn't BLANK for an empty group (COALESCE(x, 0)) shows every combination, as in the general path
+  let everyCombo = false;
   for (const v of values) {
     const t = compile(model, v, plan, new Set());
-    if (!t || !blankPreserving(t) || !datesOnlyAtTop(t, plan.aggs)) return null;
+    if (!t || !datesOnlyAtTop(t, plan.aggs)) return null;
+    if (!blankPreserving(t)) everyCombo = true;
     trees.push(t);
   }
+  if (everyCombo && (highlight || !combos)) return null;
+  const subs: ResolvedSub[] = [];
+  for (const sn of plan.subs!) {
+    const r = highlight ? null : resolveSub(model, sn, groupCols, base);
+    if (!r) return null;
+    subs.push(r);
+  }
+  const subVals = (keys: CellValue[]) => subs.map((x) => x.value(keys));
+  const subTotals = () => subs.map((x) => x.total);
+  if (subs.some((x) => x.dates)) return null;
   const fact = plan.table;
-  if (!fact) return null;
+  if (!fact) {
+    // only coarser sub-results (CALCULATE([x], ALL(Product), …)): each existing combination takes its coarse value
+    if (!subs.length || !combos) return null;
+    const rows: QueryRow[] = [];
+    for (const keys of combos()) {
+      const sv = subVals(keys);
+      const vals = trees.map((t) => evalTree(t, [], [], sv));
+      if (!vals.every((v) => v === null)) rows.push({ keys, values: vals });
+    }
+    return { rows, totals: trees.map((t) => evalTree(t, [], [], subTotals())) };
+  }
   const keyCodes = groupCols.map((c) => groupCodes(model, fact, c));
   if (keyCodes.some((k) => !k)) return null;
   const kc = keyCodes as Int32Array[];
@@ -757,7 +963,14 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     // CALCULATE predicates: the filtered column's code for each fact row (through the relationship for dimensions)
     const predTests = aggs.map((a) => {
       if (!a.preds?.length) return null;
-      const tests = a.preds.map((p) => {
+      const testOf = (p: Pred): ((r: number) => boolean) | null => {
+        if (p.rows !== undefined) {
+          const t = p.table === fact ? model.evaluator.rowTest(fact, p.rows, true) : null;
+          const within = p.within.map(testOf);
+          if (!t || within.some((w) => !w)) return null;
+          const ws = within as ((r: number) => boolean)[];
+          return ws.length ? (r: number) => t(r) && ws.every((w) => w(r)) : t;
+        }
         const codes = model.table(p.table).codes(p.column).codes;
         if (p.table === fact) return (r: number) => p.allowed[codes[r] + 1] === 1;
         const map = model.relatedRows(fact, p.table);
@@ -767,7 +980,8 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
           const t = map[r];
           return p.allowed[t < 0 ? 0 : codes[t] + 1] === 1;
         };
-      });
+      };
+      const tests = a.preds.map(testOf);
       if (tests.some((t) => !t)) return undefined;
       const ts = tests as ((r: number) => boolean)[];
       return ts.length === 1 ? ts[0] : (r: number) => ts.every((t) => t(r));
@@ -791,12 +1005,14 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
           const v = cols[i]![r];
           if (v !== null && v !== '') acc.cnt[i]++;
         } else if (a.kind === 'distinct') acc.distinct[i]!.add(codes[i]![r]);
-        else if (a.kind === 'sumx' || a.kind === 'avgx') {
+        else if (a.row) {
           // unlike stored columns, NaN here is a computed value (0/0), not BLANK
           const v = rowFns[i]!(r);
           if (v === null) continue;
           acc.cnt[i]++;
           acc.sum[i] += v;
+          if (v < acc.min[i]) acc.min[i] = v;
+          if (v > acc.max[i]) acc.max[i] = v;
         } else {
           const v = nums[i]![r];
           if (v !== v) continue;
@@ -877,7 +1093,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   }
   const empty = new Acc(plan.aggs).result(plan.aggs);
   const rows: QueryRow[] = [];
-  if (ti) {
+  if (ti || everyCombo) {
     // groups come from the date table, as in the general path: a month without sales still has last year's
     const codeOf = dicts.map((d) => new Map(d.map((v, k) => [valueKey(v), k])));
     for (const keys of combos?.() ?? []) {
@@ -887,20 +1103,21 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
         k = numeric ? (k as number) * radix[j] + c + 1 : `${k}${j ? '|' : ''}${c}`;
       });
       const gi = lookup(k);
-      const tv = ti.group(keys);
+      const tv: { ti: CellValue[]; main?: CellValue[] } = ti ? ti.group(keys) : { ti: [] };
       const aggVals = tv.main ?? (gi === undefined ? empty : accs[gi].result(plan.aggs));
-      const vals = trees.map((t) => evalTree(t, aggVals, tv.ti));
+      const vals = trees.map((t) => evalTree(t, aggVals, tv.ti, subs.length ? subVals(keys) : undefined));
       if (vals.every((v) => v === null)) continue;
       rows.push({ keys, values: vals });
     }
-    const tt = ti.total();
-    return { rows, totals: trees.map((t) => evalTree(t, tt.main ?? total.result(plan.aggs), tt.ti)) };
+    const tt: { ti: CellValue[]; main?: CellValue[] } = ti ? ti.total() : { ti: [] };
+    return { rows, totals: trees.map((t) => evalTree(t, tt.main ?? total.result(plan.aggs), tt.ti, subTotals())) };
   }
   accs.forEach((acc, gi) => {
     const aggVals = acc.result(plan.aggs);
-    const vals = trees.map((t) => evalTree(t, aggVals));
-    if (vals.every((v) => v === null)) return;
     const keys = groupKeys[gi].map((code, j) => (code < 0 ? null : dicts[j][code]));
+    const sv = subs.length ? subVals(keys) : undefined;
+    const vals = trees.map((t) => evalTree(t, aggVals, undefined, sv));
+    if (vals.every((v) => v === null)) return;
     const row: QueryRow = { keys, values: vals };
     if (hl) {
       const h = hl[gi]?.result(plan.aggs) ?? empty;
@@ -908,7 +1125,165 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     }
     rows.push(row);
   });
-  return { rows, totals: trees.map((t) => evalTree(t, total.result(plan.aggs))) };
+  return { rows, totals: trees.map((t) => evalTree(t, total.result(plan.aggs), undefined, subTotals())) };
+}
+
+interface ResolvedSub {
+  value(keys: CellValue[]): CellValue | Ranker;
+  total: CellValue | Ranker;
+  /** Date results would meet the tree's arithmetic, which doesn't follow DAX's date rules. */
+  dates: boolean;
+}
+
+/**
+ * Answer a measure under removal modifiers for every group at once. The evaluator applies the removals to the query's
+ * filters (exact CALCULATE semantics); a group column stays when its group filter survives them. The rest is a
+ * coarser grouped query in one pass (null when that query can't take it).
+ */
+function resolveSub(model: DataModel, sn: SubNode, groupCols: ColumnRef[], base: Filter[]): ResolvedSub | null {
+  if (sn.kind === 'rank') return resolveRank(model, sn, groupCols, base);
+  if (sn.kind === 'iter') return resolveIter(model, sn, groupCols, base);
+  const ev = model.evaluator;
+  const rest = ev.removeWith(base, sn.mods);
+  if (!rest) return null;
+  const groupF = (c: ColumnRef, v: CellValue): ColumnsFilter => {
+    const f = compileFilter({ target: c, op: 'eq', value: v });
+    return { ...f, origin: 'group', key: `${f.key}@group` };
+  };
+  const keep: number[] = [];
+  for (let j = 0; j < groupCols.length; j++) {
+    const left = ev.removeWith([groupF(groupCols[j], null)], sn.mods);
+    if (!left) return null;
+    if (left.length) keep.push(j);
+  }
+  const total = ev.evalScalar(sn.expr, { filters: rest });
+  let dates = total instanceof Date;
+  if (!keep.length) return { value: () => total, total, dates };
+  const cols = keep.map((j) => groupCols[j]);
+  const keyOf = (keys: CellValue[]) => keep.map((j) => String(valueKey(keys[j]))).join('\u0001');
+  const fast = fastGroupQuery(model, cols, [sn.expr], rest, undefined);
+  if (fast) {
+    const byKey = new Map<string, CellValue>();
+    for (const r of fast.rows) {
+      byKey.set(r.keys.map((v) => String(valueKey(v))).join('\u0001'), r.values[0]);
+      if (r.values[0] instanceof Date) dates = true;
+    }
+    return { value: (keys) => byKey.get(keyOf(keys)) ?? null, total, dates };
+  }
+  return null;
+}
+
+/**
+ * RANKX(ALL(T[c]), expr): the iterated rows set T[c] by context transition, which overrides the query's filters on that
+ * column and keeps the others, so each group's list is `expr` by (group columns other than c) × c, from one grouped
+ * query, sorted once per coarse key. `expr` must be BLANK for a value without rows (those drop out of the list either
+ * way), and every row must have a related T row, so that ALL(T[c]) has no blank member the grouped query can't see.
+ */
+function resolveRank(model: DataModel, sn: SubNode & { kind: 'rank' }, groupCols: ColumnRef[], base: Filter[]): ResolvedSub | null {
+  const c = sn.col;
+  // ALLSELECTED lists the values the query's own filters leave: the same as ALL unless they filter the column itself
+  if (sn.selected && base.some((f) => (f.kind === 'rows' ? f.table === c.table : f.kind === 'columns' && f.columns.some((x) => x.table === c.table && x.column === c.column)))) return null;
+  if (hasBlankMember(model, c.table)) return null;
+  const rest = model.evaluator.removeWith(base, [{ type: 'call', name: 'REMOVEFILTERS', args: [{ type: 'column', table: c.table, column: c.column }] }]);
+  if (!rest) return null;
+  const keep = groupCols.flatMap((g, j) => (g.table === c.table && g.column === c.column ? [] : [j]));
+  const listsBy = (cols: ColumnRef[]) => {
+    const q = fastGroupQuery(model, [...cols, c], [sn.expr], rest, undefined);
+    if (!q) return null;
+    const lists = new Map<string, number[]>();
+    for (const r of q.rows) {
+      const v = r.values[0];
+      if (v === null) continue;
+      if (typeof v !== 'number' || v !== v) return null;
+      const k = r.keys.slice(0, cols.length).map((x) => String(valueKey(x))).join('\u0001');
+      const l = lists.get(k);
+      if (l) l.push(v);
+      else lists.set(k, [v]);
+    }
+    return lists;
+  };
+  const ranker = (list: number[] | undefined): Ranker => {
+    const sorted = Float64Array.from(list ?? []).sort();
+    const xs = sn.dense ? Float64Array.from(new Set(sorted)) : sorted;
+    // how many entries are below (or above) v, by binary search
+    const below = (v: number, orEqual: boolean) => {
+      let lo = 0;
+      let hi = xs.length;
+      while (lo < hi) {
+        const m = (lo + hi) >> 1;
+        if (xs[m] < v || (orEqual && xs[m] === v)) lo = m + 1;
+        else hi = m;
+      }
+      return lo;
+    };
+    return (v) => {
+      if (v === null) return null;
+      if (typeof v !== 'number') {
+        // the evaluator's comparison, for values of another type
+        const cmp = (x: number) => (sn.asc ? compareValues(x, v) < 0 : compareValues(x, v) > 0);
+        return xs.filter(cmp).length + 1;
+      }
+      return (sn.asc ? below(v, false) : xs.length - below(v, true)) + 1;
+    };
+  };
+  const totalLists = listsBy([]);
+  const lists = keep.length ? listsBy(keep.map((j) => groupCols[j])) : totalLists;
+  if (!lists || !totalLists) return null;
+  const rankers = new Map<string, Ranker>();
+  const total = ranker(totalLists.get(''));
+  return {
+    value: (keys) => {
+      const k = keep.map((j) => String(valueKey(keys[j]))).join('\u0001');
+      let r = rankers.get(k);
+      if (!r) rankers.set(k, (r = ranker(lists.get(k))));
+      return r;
+    },
+    total,
+    dates: false,
+  };
+}
+
+/** Can a column of this table show a blank member (a related row without a match), which grouped queries skip? */
+function hasBlankMember(model: DataModel, table: string): boolean {
+  for (const r of model.relationships())
+    if (r.active && r.toTable === table) {
+      const map = model.relatedRows(r.fromTable, table);
+      if (!map || map.some((x) => x < 0)) return true;
+    }
+  return false;
+}
+
+/**
+ * An iterator over VALUES(T[c]) with a measure body: within a group, each value of the column sets T[c] by context
+ * transition (narrowing the group), so the body's values are a grouped query by (group columns + c). The body must be
+ * BLANK for a value without rows, which iterators skip.
+ */
+function resolveIter(model: DataModel, sn: SubNode & { kind: 'iter' }, groupCols: ColumnRef[], base: Filter[]): ResolvedSub | null {
+  const c = sn.col;
+  if (hasBlankMember(model, c.table)) return null;
+  const at = groupCols.findIndex((g) => g.table === c.table && g.column === c.column);
+  const fold = (cols: ColumnRef[], keyLen: number) => {
+    const q = fastGroupQuery(model, cols, [sn.expr], base, undefined);
+    if (!q) return null;
+    const accs = new Map<string, { sum: number; n: number; min: number; max: number }>();
+    for (const r of q.rows) {
+      const v = r.values[0];
+      if (v === null) continue;
+      if (typeof v !== 'number') return null;
+      const k = r.keys.slice(0, keyLen).map((x) => String(valueKey(x))).join('\u0001');
+      const a = accs.get(k);
+      if (a) (a.sum += v), a.n++, (a.min = Math.min(a.min, v)), (a.max = Math.max(a.max, v));
+      else accs.set(k, { sum: v, n: 1, min: v, max: v });
+    }
+    const out = new Map<string, CellValue>();
+    for (const [k, a] of accs) out.set(k, sn.fn === 'sumx' ? a.sum : sn.fn === 'avgx' ? a.sum / a.n : sn.fn === 'minx' ? a.min : sn.fn === 'maxx' ? a.max : a.n);
+    return out;
+  };
+  // the group's own key when it groups by the column; otherwise groups × column, keyed by the groups
+  const byGroup = fold(at >= 0 ? groupCols : [...groupCols, c], groupCols.length);
+  const all = fold([c], 0);
+  if (!byGroup || !all) return null;
+  return { value: (keys) => byGroup.get(keys.map((x) => String(valueKey(x))).join('\u0001')) ?? null, total: all.get('') ?? null, dates: false };
 }
 
 export type FastQueryMode = 'auto' | 'always' | 'off';

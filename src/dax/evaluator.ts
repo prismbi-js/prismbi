@@ -8,7 +8,7 @@ import type { DataModel } from '../data/model';
 import { formatValue } from '../format/format';
 import { PartialAggregates, type PartialKind } from '../data/partials';
 import { fastGroupQuery, fastPathsEnabled } from '../data/fastQuery';
-import { compileRowExpr, type RowFn, type RowPlan } from './rowCompile';
+import { compileRowExpr, compileRowTest, type RowFn, type RowPlan, type RowTest, type RowTestPlan } from './rowCompile';
 import { addMonths, MS_DAY, parallelPeriod, periodStart, periodWindow, shiftDates } from './timeIntel';
 
 export class DaxError extends Error {
@@ -69,8 +69,36 @@ const CONTEXT_FUNCS = new Set([
 ]);
 
 
+/** Deterministic scalar functions: a boolean filter made only of these and columns doesn't depend on the context. */
+const PURE_FUNCS = new Set([
+  'BLANK', 'TRUE', 'FALSE', 'DATE', 'TIME', 'NOT', 'AND', 'OR', 'IF', 'SWITCH', 'COALESCE', 'ISBLANK', 'ISNUMBER', 'ISTEXT', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM',
+  'SUBSTITUTE', 'CONCATENATE', 'EXACT', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'SEARCH', 'FIND', 'YEAR', 'MONTH', 'DAY', 'QUARTER', 'WEEKDAY', 'WEEKNUM', 'ABS', 'ROUND', 'ROUNDUP',
+  'ROUNDDOWN', 'INT', 'TRUNC', 'MOD', 'VALUE', 'FORMAT', 'DIVIDE',
+]);
+
 const UNHANDLED = Symbol('unhandled');
 const FAST_AGGS = new Set(['SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'DISTINCTCOUNT']);
+
+/** True when an expression reads only columns, literals and deterministic functions (no measures, variables or context). */
+function isPureFilter(e: Expr): boolean {
+  switch (e.type) {
+    case 'column':
+    case 'number':
+    case 'string':
+    case 'boolean':
+      return true;
+    case 'unary':
+      return isPureFilter(e.operand);
+    case 'binary':
+      return isPureFilter(e.left) && isPureFilter(e.right);
+    case 'list':
+      return e.items.every(isPureFilter);
+    case 'call':
+      return (PURE_FUNCS.has(e.name.toUpperCase()) || ((e.name === 'MIN' || e.name === 'MAX') && e.args.length === 2)) && e.args.every(isPureFilter);
+    default:
+      return false;
+  }
+}
 
 function isTable(v: Value): v is TableValue {
   return v !== null && typeof v === 'object' && !(v instanceof Date) && 'kind' in v;
@@ -115,12 +143,16 @@ export class Evaluator {
   private stack: string[] = [];
   /** Compiled row expressions per AST node and iterated table (WeakMap: ad-hoc ASTs don't accumulate). */
   private rowPlans = new WeakMap<Expr, Map<string, RowPlan | null>>();
+  /** Compiled FILTER conditions, keyed like {@link rowPlans}. */
+  private testPlans = new WeakMap<Expr, Map<string, RowTestPlan | null>>();
   /** Each date column's distinct dates in order, with their times, for range lookups by binary search. */
   private dateIndex = new Map<string, { times: Float64Array; dates: Date[] }>();
   /** DATESINPERIOD results by column, start, length and unit: rolling windows repeat across groups. */
   private windows = new Map<string, TuplesTable>();
   /** Filters made from table values (the same date window filters many evaluations). */
   private tableFilters = new WeakMap<TableValue, Filter>();
+  /** Boolean CALCULATE filters that only read columns (`Sales[Amount] > 400`): the same in every context. */
+  private boolFilters = new WeakMap<Expr, ColumnsFilter>();
   /**
    * Time-intelligence date tables by the visible dates they derive from (a cached list, so identity is the key) and
    * the function's arguments: groups that don't filter the calendar (products, say) all shift the same dates.
@@ -136,9 +168,11 @@ export class Evaluator {
     this.measureCache.clear();
     this.partials.clear();
     this.rowPlans = new WeakMap();
+    this.testPlans = new WeakMap();
     this.dateIndex.clear();
     this.windows.clear();
     this.tableFilters = new WeakMap();
+    this.boolFilters = new WeakMap();
     this.tiMemo = new WeakMap();
   }
 
@@ -599,6 +633,30 @@ export class Evaluator {
     return plan ? plan.bind() : null;
   }
 
+  /**
+   * A FILTER condition compiled for rows of `table` (see compileRowTest), or null. `lenient` only without an outer row
+   * context, as for {@link rowFn}.
+   */
+  rowTest(table: string, expr: Expr, lenient: boolean): RowTest | null {
+    if (!fastPathsEnabled()) return null;
+    let byTable = this.testPlans.get(expr);
+    if (!byTable) this.testPlans.set(expr, (byTable = new Map()));
+    const key = lenient ? `${table}|lenient` : table;
+    let plan = byTable.get(key);
+    if (plan === undefined) byTable.set(key, (plan = this.model.hasTable(table) ? compileRowTest(this.model, table, expr, lenient, (e, col) => this.judge(e, col)) : null));
+    return plan ? plan.bind() : null;
+  }
+
+  /** Whether a condition on one column holds for each of its values, by dictionary slot (0 is BLANK). */
+  private judge(e: Expr, col: ColumnRef): Uint8Array {
+    const { dict } = this.model.table(col.table).codes(col.column);
+    const out = new Uint8Array(dict.length + 1);
+    const at = (v: CellValue) => (truthy(this.evalScalar(e, { filters: [], rows: [{ kind: 'tuple', columns: [col], values: [v] }] })) ? 1 : 0);
+    out[0] = at(null);
+    for (let k = 0; k < dict.length; k++) out[k + 1] = at(dict[k]);
+    return out;
+  }
+
   /** SUMX / AVERAGEX: compiled row expressions are summed in place, without materialising the values. */
   private sumX(name: 'SUMX' | 'AVERAGEX', args: Expr[], ctx: EvalContext): CellValue {
     const t = this.evalTable(args[0], ctx);
@@ -659,6 +717,26 @@ export class Evaluator {
     for (const m of removals) filters = this.removeFilters(filters, m);
     filters = overrideFilters(filters, adds);
     return [...filters, ...keep];
+  }
+
+  /**
+   * The filters left after CALCULATE's removal modifiers (ALL, ALLNOBLANKROW, REMOVEFILTERS, ALLEXCEPT, ALLSELECTED), or
+   * null when an argument is anything else.
+   */
+  removeWith(filters: Filter[], mods: Expr[]): Filter[] | null {
+    let out = filters;
+    for (const a of mods) {
+      if (a.type !== 'call' || !['ALL', 'ALLNOBLANKROW', 'REMOVEFILTERS', 'ALLEXCEPT', 'ALLSELECTED'].includes(a.name.toUpperCase())) return null;
+      let r: ReturnType<Evaluator['filterArg']>;
+      try {
+        r = this.filterArg({ ...a, name: a.name.toUpperCase() }, { filters: [] });
+      } catch {
+        return null;
+      }
+      if (!('mod' in r) || r.mod === 'keep') return null;
+      out = this.removeFilters(out, r);
+    }
+    return out;
   }
 
   private removeFilters(filters: Filter[], m: Modifier): Filter[] {
@@ -750,6 +828,15 @@ export class Evaluator {
 
   /** `Products[Color] = "Red"` → FILTER(ALL(Products[Color]), ...) → `in` filter. */
   private booleanFilter(a: Expr, ctx: EvalContext): ColumnsFilter {
+    const pure = isPureFilter(a);
+    const hit = pure ? this.boolFilters.get(a) : undefined;
+    if (hit) return hit;
+    const f = this.computeBooleanFilter(a, ctx);
+    if (pure) this.boolFilters.set(a, f);
+    return f;
+  }
+
+  private computeBooleanFilter(a: Expr, ctx: EvalContext): ColumnsFilter {
     const cols = this.freeColumns(a);
     if (cols.length === 0) throw new DaxError('A boolean filter expression must reference a column');
     const table = cols[0].table;
@@ -1049,6 +1136,8 @@ export class Evaluator {
       }
       case 'FILTER': {
         const t = this.evalTable(args[0], ctx);
+        const test = t.kind === 'rows' ? this.rowTest(t.table, args[1], !ctx.rows?.length) : null;
+        if (test && t.kind === 'rows') return { kind: 'rows', table: t.table, rows: t.rows.filter(test) };
         const keep = this.iterate(t, args[1], ctx).map(truthy);
         if (t.kind === 'rows') return { kind: 'rows', table: t.table, rows: t.rows.filter((_, i) => keep[i]) };
         return { ...t, tuples: t.tuples.filter((_, i) => keep[i]) };
