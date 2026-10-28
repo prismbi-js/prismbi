@@ -142,10 +142,9 @@ All in `CHANGELOG.md` under Unreleased. Highlights:
 
 ## Publishing (deferred by the owner: "we will deploy later")
 
-- **Package:** `@prismbi/prismbi@0.9.0` is ready (npm org `prismbi` created 2026-10-19). npm rejected the unscoped name `prismbi` as too close to `prisma` and `prismjs`.
+- **Package:** `@prismbi/prismbi@0.11.0` is ready (npm org `prismbi` created 2026-10-19). npm rejected the unscoped name `prismbi` as too close to `prisma` and `prismjs`.
 - **Before publishing:** the owner creates the free npm organization `prismbi` on npmjs.com.
 - **Then:** run `npm publish --access public --auth-type=web` in a real terminal, since the passkey prompt opens in the browser.
-- **Bump first:** Phases 7–9 landed after 0.6.0. Bump to 0.9.0, merge the two unreleased CHANGELOG sections under it with the date, then publish.
 
 ## Remaining Phase 6 items (do in this order)
 
