@@ -260,4 +260,32 @@ describe('studio', () => {
     expect(again.report.visualIds()).toHaveLength(1);
     again.destroy();
   });
+
+  it('quick measures creates template DAX measures', () => {
+    const st = open({ starter: 'blank' });
+    st.quickMeasure();
+    const modal = q('.pbs-modal');
+    expect(modal).toBeTruthy();
+    const nameInput = q<HTMLInputElement>('input[aria-label="Measure name"]', modal!)!;
+    expect(nameInput.value).toContain('YoY %');
+    const createBtn = qa<HTMLButtonElement>('.pbs-btn', modal!).find((b) => b.textContent === 'Create')!;
+    createBtn.click();
+    expect(st.model.hasMeasure(nameInput.value)).toBe(true);
+    expect(modal?.parentElement).toBeNull(); // modal closed
+    st.destroy();
+  });
+
+  it('layers panel allows toggling visual visibility', () => {
+    const st = open({ starter: 'blank' });
+    const id = st.addVisual('card', { value: 'Total Sales' });
+    const layersBtn = qa<HTMLButtonElement>('.pbs-top .pbs-btn').find((b) => b.textContent?.includes('Layers'))!;
+    layersBtn.click();
+    const layersList = q('.pbs-layers');
+    expect(layersList).toBeTruthy();
+    const hideBtn = qa<HTMLButtonElement>('.pbs-layers .pbs-icon-btn').find((b) => b.title.includes('Hide'))!;
+    expect(hideBtn).toBeTruthy();
+    hideBtn.click();
+    expect(st.report.visual(id).spec.hidden).toBe(true);
+    st.destroy();
+  });
 });

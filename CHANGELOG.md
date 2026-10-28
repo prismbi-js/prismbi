@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Studio UX & visual authoring enhancements:**
+  - **Quick measures:** Guided modal for generating standard DAX time-intelligence and statistical patterns without manual authoring (Year-over-Year %, YTD, Running Total, Rolling 3M Average, Month-over-Month Change, % of Total).
+  - **Selection / Layers pane:** Manage visual stack order, rename elements, select visuals, and toggle visual visibility directly from the Studio side pane.
+  - **Visual visibility toggle:** `hideVisual(id)` / `showVisual(id)` API and persisted hidden state in `ReportSpec` and DOM display.
+  - **Smart alignment guides:** Dynamic visual snap guides and distance indicators during canvas drag-and-drop / resize operations.
+  - **Model diagram auto-layout:** Automated hierarchical layered graph layout for relationship model diagrams based on connectivity and cardinality.
 - **DAX functions:** `TIME(<hour>, <minute>, <second>)`, `TIMEVALUE(<text>)`, `CONTAINSSTRINGEXACT(<within>, <find>)`, and `CALENDARAUTO([<fiscalYearEndMonth>])`.
 - **Fix:** `TIME` and `CONTAINSSTRINGEXACT` were listed in pure functions and compiler allowlists but lacked evaluator cases and function catalog entries.
 - **Fix:** dynamic imports in `tests/visual-entries.test.ts` now include an explicit `.ts` static extension to prevent Vite bundler warnings.

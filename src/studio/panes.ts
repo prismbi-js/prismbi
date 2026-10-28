@@ -233,3 +233,94 @@ export function renderWells(ctx: StudioContext, container: HTMLElement): void {
     );
   }
 }
+
+/** Visuals / Layers selection pane: reorder z-index, toggle visibility, select or rename visuals. */
+export function renderSelectionPane(ctx: StudioContext, container: HTMLElement): void {
+  container.replaceChildren();
+  const r = ctx.report;
+  const ids = r.visualIds();
+  if (!ids.length) {
+    container.append(h('div', { class: 'pbs-hint' }, 'No visuals on this page yet.'));
+    return;
+  }
+  const sel = ctx.selected();
+  const list = h('div', { class: 'pbs-sel-list', role: 'listbox', 'aria-label': 'Visual layers' });
+
+  // Display top-most visual first (reverse order of layout)
+  const reversed = ids.slice().reverse();
+
+  for (const id of reversed) {
+    const handle = r.visual(id);
+    const spec = handle.spec;
+    const def = getVisual(spec.type);
+    const title = spec.title || def.displayName;
+    const isSelected = sel === id;
+    const isHidden = !!spec.hidden;
+
+    const row = h('div', {
+      class: `pbs-sel-item${isSelected ? ' is-selected' : ''}${isHidden ? ' is-hidden' : ''}`,
+      role: 'option',
+      'aria-selected': String(isSelected),
+      'data-id': id,
+    });
+
+    const iconSpan = h('span', { class: 'pbs-svg', style: 'width:16px;height:16px;flex-shrink:0' });
+    iconSpan.innerHTML = VISUAL_ICONS[spec.type] ?? FALLBACK_ICON;
+
+    const labelSpan = h('span', { title: 'Click to select, double-click to rename' }, title);
+    labelSpan.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const current = spec.title || '';
+      const input = h('input', { type: 'text', value: current, style: 'width:100%;padding:2px 4px;font-size:12px' }) as HTMLInputElement;
+      labelSpan.replaceWith(input);
+      input.focus();
+      const commit = () => {
+        const val = input.value.trim();
+        r.updateVisual(id, { title: val || undefined });
+        ctx.commit();
+        renderSelectionPane(ctx, container);
+      };
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') commit();
+        else if (ev.key === 'Escape') renderSelectionPane(ctx, container);
+      });
+    });
+
+    const upBtn = h('button', { type: 'button', class: 'pbs-sel-btn', title: 'Bring forward', 'aria-label': 'Bring forward' }, '▲');
+    upBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      r.arrange(id, 'forward');
+      ctx.commit();
+      renderSelectionPane(ctx, container);
+    });
+
+    const downBtn = h('button', { type: 'button', class: 'pbs-sel-btn', title: 'Send backward', 'aria-label': 'Send backward' }, '▼');
+    downBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      r.arrange(id, 'backward');
+      ctx.commit();
+      renderSelectionPane(ctx, container);
+    });
+
+    const hideBtn = h('button', { type: 'button', class: 'pbs-sel-btn', title: isHidden ? 'Show visual' : 'Hide visual', 'aria-label': isHidden ? 'Show' : 'Hide' }, isHidden ? '👁️‍🗨️' : '👁');
+    hideBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      r.updateVisual(id, { hidden: !isHidden });
+      ctx.commit();
+      renderSelectionPane(ctx, container);
+    });
+
+    row.addEventListener('click', () => {
+      ctx.report.setActiveVisual(id);
+    });
+
+    row.append(iconSpan, labelSpan, upBtn, downBtn, hideBtn);
+    list.append(row);
+  }
+
+  container.append(
+    h('div', { class: 'pbs-pane-h', style: 'padding:8px 10px 4px' }, h('span', {}, 'Visual Layers'), h('small', {}, `${ids.length} visuals`)),
+    list,
+  );
+}

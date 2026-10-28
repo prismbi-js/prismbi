@@ -194,6 +194,34 @@ export class EditController {
     d.current = next;
     const el = p.visuals.get(d.id);
     if (el) for (const k of ['x', 'y', 'w', 'h'] as const) el.style.setProperty(`--${k}`, String(next[k]));
+    this.updateGuides(p, d.id, next, col, row);
+  }
+
+  private updateGuides(p: EditPageInfo, id: string, cur: VisualLayout, colPx: number, rowPx: number): void {
+    p.el.querySelectorAll('.pbi-guide').forEach((g) => g.remove());
+    const others = p.specs.filter((s) => s.id !== id && s.layout);
+    for (const o of others) {
+      const ol = o.layout!;
+      if (cur.x === ol.x || cur.x === ol.x + ol.w) {
+        p.el.append(h('div', { class: 'pbi-guide pbi-guide-v', style: `left:${cur.x * colPx + p.gap}px` }));
+        break;
+      }
+      if (cur.x + cur.w === ol.x + ol.w || cur.x + cur.w === ol.x) {
+        p.el.append(h('div', { class: 'pbi-guide pbi-guide-v', style: `left:${(cur.x + cur.w) * colPx + p.gap}px` }));
+        break;
+      }
+    }
+    for (const o of others) {
+      const ol = o.layout!;
+      if (cur.y === ol.y || cur.y === ol.y + ol.h) {
+        p.el.append(h('div', { class: 'pbi-guide pbi-guide-h', style: `top:${cur.y * rowPx + p.gap}px` }));
+        break;
+      }
+      if (cur.y + cur.h === ol.y + ol.h || cur.y + cur.h === ol.y) {
+        p.el.append(h('div', { class: 'pbi-guide pbi-guide-h', style: `top:${(cur.y + cur.h) * rowPx + p.gap}px` }));
+        break;
+      }
+    }
   }
 
   private end(_e: PointerEvent): void {
@@ -201,6 +229,7 @@ export class EditController {
     if (!d) return;
     this.drag = null;
     const p = this.host.page();
+    p?.el.querySelectorAll('.pbi-guide').forEach((g) => g.remove());
     p?.visuals.get(d.id)?.classList.remove('is-dragging');
     const c = d.current;
     const s = d.start;

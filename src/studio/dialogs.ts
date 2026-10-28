@@ -214,3 +214,94 @@ export function columnDialog(host: HTMLElement, model: DataModel, existing: Calc
 export function confirmDialog(host: HTMLElement, title: string, message: string, confirmLabel: string, onConfirm: () => void): void {
   openDialog(host, title, h('p', { style: 'margin:0' }, message), [{ label: 'Cancel' }, { label: confirmLabel, primary: true, onClick: () => void onConfirm() }]);
 }
+
+/** Quick measure calculation templates for common DAX patterns. */
+export function quickMeasureDialog(host: HTMLElement, model: DataModel, onSave: (def: MeasureDef) => void, defaultBase?: string): void {
+  const allFields = model.fields();
+  const measures = model.measureList().map((m) => m.name);
+  const dateCols = allFields.filter((f) => f.kind === 'column' && f.type === 'date').map((f) => f.ref);
+  const catCols = allFields.filter((f) => f.kind === 'column' && f.type === 'string').map((f) => f.ref);
+  const tables = model.tableNames();
+
+  const TEMPLATES: { id: string; label: string; kind: 'date' | 'cat'; defaultFmt?: string; gen: (b: string, d?: string, c?: string) => { name: string; expr: string } }[] = [
+    { id: 'yoy', label: 'Year-over-year change %', kind: 'date', defaultFmt: '0.0%', gen: (b, d) => ({ name: `${b} YoY %`, expr: `DIVIDE([${b}] - CALCULATE([${b}], SAMEPERIODLASTYEAR(${d})), CALCULATE([${b}], SAMEPERIODLASTYEAR(${d})))` }) },
+    { id: 'ytd', label: 'Year-to-date total', kind: 'date', gen: (b, d) => ({ name: `${b} YTD`, expr: `TOTALYTD([${b}], ${d})` }) },
+    { id: 'running', label: 'Running total', kind: 'date', gen: (b, d) => ({ name: `${b} Running Total`, expr: `CALCULATE([${b}], DATESBETWEEN(${d}, BLANK(), MAX(${d})))` }) },
+    { id: 'rolling3', label: 'Rolling 3-month average', kind: 'date', gen: (b, d) => ({ name: `${b} 3M Avg`, expr: `AVERAGEX(DATESINPERIOD(${d}, LASTDATE(${d}), -3, MONTH), [${b}])` }) },
+    { id: 'mom', label: 'Month-over-month change', kind: 'date', gen: (b, d) => ({ name: `${b} MoM Change`, expr: `[${b}] - CALCULATE([${b}], DATEADD(${d}, -1, MONTH))` }) },
+    { id: 'share', label: 'Share of category total %', kind: 'cat', defaultFmt: '0.0%', gen: (b, _, c) => ({ name: `${b} % of Total`, expr: `DIVIDE([${b}], CALCULATE([${b}], ALLSELECTED(${c})))` }) },
+  ];
+
+  const calcSelect = h('select', { 'aria-label': 'Calculation' }) as HTMLSelectElement;
+  for (const t of TEMPLATES) calcSelect.append(h('option', { value: t.id }, t.label));
+
+  const baseSelect = h('select', { 'aria-label': 'Base measure' }) as HTMLSelectElement;
+  for (const m of measures) baseSelect.append(h('option', { value: m, selected: m === defaultBase }, m));
+
+  const dateSelect = h('select', { 'aria-label': 'Date column' }) as HTMLSelectElement;
+  for (const d of dateCols) dateSelect.append(h('option', { value: d }, d));
+
+  const catSelect = h('select', { 'aria-label': 'Category column' }) as HTMLSelectElement;
+  for (const c of catCols) catSelect.append(h('option', { value: c }, c));
+
+  const homeTable = h('select', { 'aria-label': 'Home table' }) as HTMLSelectElement;
+  for (const t of tables) homeTable.append(h('option', { value: t }, t));
+
+  const nameInput = h('input', { type: 'text', 'aria-label': 'Measure name' }) as HTMLInputElement;
+  const editor = new ExpressionEditor(model, '');
+  const fmt = formatSelect();
+  const error = h('div', { class: 'pbs-diag' });
+
+  const dateRow = field('Date column', dateSelect);
+  const catRow = field('Category column', catSelect);
+
+  const sync = () => {
+    const tmpl = TEMPLATES.find((t) => t.id === calcSelect.value) ?? TEMPLATES[0];
+    dateRow.hidden = tmpl.kind !== 'date';
+    catRow.hidden = tmpl.kind !== 'cat';
+    const b = baseSelect.value || (measures[0] ?? 'Sales');
+    const d = dateSelect.value || (dateCols[0] ?? 'Date[Date]');
+    const c = catSelect.value || (catCols[0] ?? 'Product[Category]');
+    const generated = tmpl.gen(b, d, c);
+    nameInput.value = generated.name;
+    editor.value = generated.expr;
+    if (tmpl.defaultFmt) fmt.set(tmpl.defaultFmt);
+  };
+
+  calcSelect.addEventListener('change', sync);
+  baseSelect.addEventListener('change', sync);
+  dateSelect.addEventListener('change', sync);
+  catSelect.addEventListener('change', sync);
+  sync();
+
+  const body = h(
+    'div',
+    { style: 'display:flex;flex-direction:column;gap:10px' },
+    field('Calculation', calcSelect),
+    h('div', { class: 'pbs-row2' }, field('Base measure', baseSelect), field('Home table', homeTable)),
+    dateRow,
+    catRow,
+    field('Name', nameInput),
+    field('Expression', editor.el),
+    field('Format', fmt.el),
+    error,
+  );
+
+  openDialog(host, 'Quick measure', body, [
+    { label: 'Cancel' },
+    {
+      label: 'Create',
+      primary: true,
+      onClick: () => {
+        const n = nameInput.value.trim();
+        const clash = model.hasMeasure(n);
+        const msg = !n ? 'Give the measure a name' : clash ? `A measure named "${n}" already exists` : editor.problems()[0];
+        if (msg) {
+          error.replaceChildren(h('div', { class: 'error' }, msg));
+          return false;
+        }
+        onSave({ name: n, expression: editor.value.trim(), table: homeTable.value, format: fmt.value() });
+      },
+    },
+  ]);
+}

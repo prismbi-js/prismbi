@@ -1,3 +1,4 @@
+import type { DataModel } from '../data/model';
 import { valueKey } from '../data/types';
 import { formatValue } from '../format/format';
 import { h, s } from '../render/svg';
@@ -67,22 +68,29 @@ export interface ModelViewState {
   positions: Record<string, { x: number; y: number }>;
 }
 
+export function autoLayoutModel(model: DataModel, state: ModelViewState, force = false): void {
+  const tables = model.tableNames();
+  if (!tables.length) return;
+  if (!force && tables.every((t: string) => state.positions[t])) return;
+  const outgoingCount = new Map<string, number>();
+  for (const r of model.relationships()) outgoingCount.set(r.fromTable, (outgoingCount.get(r.fromTable) ?? 0) + 1);
+  const sorted = [...tables].sort((a, b) => (outgoingCount.get(b) ?? 0) - (outgoingCount.get(a) ?? 0) || model.table(b).rowCount - model.table(a).rowCount);
+  sorted.forEach((t, i) => {
+    if (!force && state.positions[t]) return;
+    const col = i === 0 ? 1 : i % 3 === 1 ? 0 : i % 3 === 2 ? 2 : 3;
+    const row = i === 0 ? 0 : Math.floor((i - 1) / 3);
+    state.positions[t] = { x: 30 + col * 260, y: 30 + row * 300 };
+  });
+}
+
 /** Relationship diagram. Drag table headers to arrange, drag a column onto another table's column to relate them. */
 export function renderModelView(ctx: StudioContext, container: HTMLElement, state: ModelViewState, onLayoutChange: () => void): void {
   const { model } = ctx;
   const tables = model.tableNames();
-  // auto layout: facts (most rows) in the middle column, dimensions around
-  const missing = tables.filter((t) => !state.positions[t]);
-  if (missing.length) {
-    const sorted = [...tables].sort((a, b) => model.table(b).rowCount - model.table(a).rowCount);
-    sorted.forEach((t, i) => {
-      if (state.positions[t]) return;
-      const col = i === 0 ? 1 : i % 3 === 1 ? 0 : i % 3 === 2 ? 2 : 3;
-      const row = i === 0 ? 0 : Math.floor((i - 1) / 3);
-      state.positions[t] = { x: 30 + col * 260, y: 30 + row * 300 };
-    });
-  }
+  autoLayoutModel(model, state);
   const wrap = h('div', { class: 'pbs-model', tabindex: 0, 'aria-label': 'Model diagram' });
+  const autoBtn = h('button', { type: 'button', class: 'pbs-btn', style: 'position:absolute;top:12px;right:12px;z-index:10' }, 'Auto layout');
+  wrap.append(autoBtn);
   const svgEl = s('svg', { class: 'pbs-model-svg', width: 1, height: 1 });
   const defs = s('defs');
   const marker = (id: string) => {
@@ -211,6 +219,16 @@ export function renderModelView(ctx: StudioContext, container: HTMLElement, stat
       lines.append(s('text', { x: b.x + (fromLeft ? 6 : -12), y: b.y - 4, 'font-size': 12, fill: 'var(--pbi-fg-2)' }, r.cardinality === 'manyToMany' ? '*' : '1'));
     });
   };
+  autoBtn.addEventListener('click', () => {
+    autoLayoutModel(model, state, true);
+    for (const [t, card] of cards) {
+      const p = state.positions[t];
+      card.style.left = `${p.x}px`;
+      card.style.top = `${p.y}px`;
+    }
+    drawLines();
+    onLayoutChange();
+  });
   container.replaceChildren(wrap);
   drawLines();
   requestAnimationFrame?.(() => drawLines());

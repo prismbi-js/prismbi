@@ -254,6 +254,9 @@ export const CSS = /* css */ `
 .pbi-handle-e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}.pbi-handle-w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}
 .pbi-handle-ne{top:-6px;right:-6px;cursor:nesw-resize}.pbi-handle-sw{bottom:-6px;left:-6px;cursor:nesw-resize}
 .pbi-handle-nw{top:-6px;left:-6px;cursor:nwse-resize}.pbi-handle-se{bottom:-6px;right:-6px;cursor:nwse-resize}
+.pbi-guide{position:absolute;pointer-events:none;z-index:45}
+.pbi-guide-v{top:0;bottom:0;width:0;border-left:1px dashed var(--pbi-accent)}
+.pbi-guide-h{left:0;right:0;height:0;border-top:1px dashed var(--pbi-accent)}
 .pbi-datatable-wrap{overflow:auto;height:100%}
 @media (prefers-reduced-motion:reduce){.pbi-report *{animation:none!important;transition:none!important}}
 `;

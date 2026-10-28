@@ -22,7 +22,7 @@ import { autoReport } from './autoReport';
 import type { StudioContext } from './context';
 import { FIELD_MIME } from './context';
 import type { CalcColumnDef, ExpressionCopilot } from './dialogs';
-import { columnDialog, confirmDialog, measureDialog } from './dialogs';
+import { columnDialog, confirmDialog, measureDialog, quickMeasureDialog } from './dialogs';
 import { renderFormat } from './formatPane';
 import { History } from './history';
 import { RAIL_ICONS } from './icons';
@@ -113,7 +113,7 @@ export class Studio implements StudioContext {
   private openSections = new Set<string>(['general']);
   private fieldQuery = '';
   private showHidden = false;
-  private rightTab: 'build' | 'format' | 'filters' = 'build';
+  private rightTab: 'build' | 'format' | 'filters' | 'layers' = 'build';
   private dataState = { table: undefined as string | undefined, limit: 200 };
   private els: Record<string, HTMLElement> = {};
   private storageKey?: string;
@@ -374,6 +374,15 @@ export class Studio implements StudioContext {
     }, this.copilot);
   }
 
+  quickMeasure(defaultBase?: string): void {
+    quickMeasureDialog(this.root, this.model, (def) => {
+      this.model.addMeasure(def);
+      this.commit();
+      this.refreshPanes(false);
+      this.toast(`Added quick measure ${def.name}`);
+    }, defaultBase);
+  }
+
   deleteMeasure(name: string): void {
     const uses = this.measureUsage(name);
     const imp = impactOf(this.model, { kind: 'measure', name }, this.report.toJSON());
@@ -487,9 +496,15 @@ export class Studio implements StudioContext {
       label.addEventListener('click', (e) => (e.ctrlKey || e.shiftKey || e.metaKey ? this.report.toggleVisualSelection(v.id!) : this.report.setActiveVisual(v.id!)));
       const up = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': 'Bring forward', title: 'Bring forward' }, '↑');
       const down = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': 'Send backward', title: 'Send backward' }, '↓');
+      const hide = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': v.hidden ? 'Show' : 'Hide', title: v.hidden ? 'Show visual' : 'Hide visual' }, v.hidden ? '◌' : '●');
       up.addEventListener('click', () => (this.report.arrange(v.id!, 'forward'), this.commit(), this.renderLayers()));
       down.addEventListener('click', () => (this.report.arrange(v.id!, 'backward'), this.commit(), this.renderLayers()));
-      list.append(h('li', {}, label, up, down));
+      hide.addEventListener('click', () => {
+        this.report.updateVisual(v.id!, { hidden: !v.hidden });
+        this.commit();
+        this.renderLayers();
+      });
+      list.append(h('li', {}, label, up, down, hide));
     }
     this.root.append(list);
   }
@@ -811,6 +826,7 @@ export class Studio implements StudioContext {
       redo,
       h('span', { class: 'pbs-sep' }),
       btn('New measure', () => this.editMeasure()),
+      btn('Quick measure', () => this.quickMeasure()),
       btn('New column', () => this.editColumn()),
       btn('Auto page', () => {
         const id = this.report.addPage(autoReport(this.model, { name: `Overview ${this.report.pageList.length + 1}` }));
