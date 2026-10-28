@@ -102,6 +102,8 @@ Press **📱 Phone** in the top bar to arrange the current page for phones:
 
 Phone layouts are saved on the page as `mobile` and used automatically below 640 px:
 
+![The rendered phone layout displaying responsive mobile dashboard visuals](../images/report-phone.png)
+
 ```ts
 { id: 'overview', name: 'Overview', visuals: [/* … */],
   mobile: { columns: 4, visuals: [{ id: 'k-sales', layout: { x: 0, y: 0, w: 2, h: 3 } }, /* … */] } }

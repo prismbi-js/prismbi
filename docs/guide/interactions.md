@@ -104,6 +104,8 @@ Right-clicking any data point, table row or matrix row opens a menu:
 
 ## Drill-through pages
 
+![A multi-page analytical dashboard with deep cross-filtering and drill-through](../images/report-analysis.png)
+
 ```ts
 {
   id: 'product-detail',

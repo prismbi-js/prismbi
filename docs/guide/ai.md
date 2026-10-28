@@ -1,5 +1,7 @@
 # AI: questions, explanations, insights and agents
 
+![The demo insights report page featuring Q&A, automated insights, and smart narratives](../images/report-insights.png)
+
 `@prismbi/prismbi/ai` adds four things. Everything runs offline on the model by default, with no API keys or network calls:
 
 - **Ask:** a plain-language question becomes a visual.
