@@ -292,7 +292,7 @@ describe('studio', () => {
   it('data view virtualizes large tables', () => {
     const st = open({ starter: 'blank' });
     st.model.addTable('BigTable', Array.from({ length: 500 }, (_, i) => ({ id: i, name: `Item ${i}` })));
-    st.dataState.table = 'BigTable';
+    (st as any).dataState.table = 'BigTable';
     st.setView('data');
     const grid = q('.pbs-grid');
     expect(grid).toBeTruthy();

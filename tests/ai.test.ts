@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ask, askSync, contextToPrompt, createAgentTools, explain, findInsights, getAIContext, runTool, suggestQuestions, toAnthropicTools, toMcpTools, toOpenAITools } from '@prismbi/prismbi/ai';
+import { ask, askSync, contextToPrompt, createAgentTools, createMcpServer, explain, findInsights, getAIContext, runTool, suggestQuestions, toAnthropicTools, toMcpTools, toOpenAITools } from '@prismbi/prismbi/ai';
 import { Report, createVisual } from '../src/index';
 import { buildModel } from '../examples/model';
 
@@ -149,6 +149,34 @@ describe('agent context and tools', () => {
     expect(((await runTool(tools, 'find_insights', { measure: 'Total Sales', max: 3 })) as unknown[]).length).toBeLessThanOrEqual(3);
     // read-only tool set
     expect(createAgentTools({ model }).map((x) => x.name)).not.toContain('create_measure');
+    report.destroy();
+    el.remove();
+  });
+
+  it('creates an MCP server and answers initialize, tools/list, and tools/call JSON-RPC messages', async () => {
+    const { el, report } = mountReport();
+    const server = createMcpServer({ model: report.model, report });
+    // initialize
+    const initRes = (await server.handleMessage({ jsonrpc: '2.0', id: 1, method: 'initialize' })) as any;
+    expect(initRes.result.serverInfo.name).toBe('prismbi');
+    expect(initRes.result.protocolVersion).toBe('2024-11-05');
+
+    // tools/list
+    const listRes = (await server.handleMessage({ jsonrpc: '2.0', id: 2, method: 'tools/list' })) as any;
+    expect(listRes.result.tools.some((t: any) => t.name === 'evaluate_dax')).toBe(true);
+
+    // tools/call
+    const callRes = (await server.handleMessage({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: { name: 'evaluate_dax', arguments: { expression: '1 + 1' } },
+    })) as any;
+    expect(callRes.result.content[0].text).toContain('2');
+
+    // notification returns null
+    const notif = await server.handleMessage({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    expect(notif).toBeNull();
     report.destroy();
     el.remove();
   });

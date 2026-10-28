@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DataModel, Report, buildXlsx, excelFormat, resultToSheet } from '../src/index';
+import { DataModel, Report, PPTX_MIME, buildPptx, buildXlsx, excelFormat, resultToSheet } from '../src/index';
 import { makeModel } from './fixtures';
 import { columnLetter, crc32, excelDate } from '../src/report/xlsx';
 
@@ -127,5 +127,47 @@ describe('xlsx export', () => {
     expect(sheet.getElementsByTagName('row').length).toBe(r.visual('cols').data()!.rows.length + 1);
     r.destroy();
     el.remove();
+  });
+
+  describe('pptx export', () => {
+    it('creates a compliant multi-slide PowerPoint deck with embedded images', () => {
+      const img1 = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+      const img2 = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      const bytes = buildPptx([
+        { image: img1, title: 'Slide 1 - Summary', width: 1920, height: 1080 },
+        { image: img2, title: 'Slide 2 - Details', format: 'png' },
+      ]);
+
+      expect(PPTX_MIME).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+      expect(bytes.byteLength).toBeGreaterThan(500);
+
+      const files = unzip(bytes);
+      expect(files.has('[Content_Types].xml')).toBe(true);
+      expect(files.has('_rels/.rels')).toBe(true);
+      expect(files.has('ppt/presentation.xml')).toBe(true);
+      expect(files.has('ppt/_rels/presentation.xml.rels')).toBe(true);
+      expect(files.has('ppt/slides/slide1.xml')).toBe(true);
+      expect(files.has('ppt/slides/slide2.xml')).toBe(true);
+      expect(files.has('ppt/slides/_rels/slide1.xml.rels')).toBe(true);
+      expect(files.has('ppt/slides/_rels/slide2.xml.rels')).toBe(true);
+
+      // Verify valid XML structure
+      for (const [name, xml] of files.entries()) {
+        if (name.endsWith('.xml') || name.endsWith('.rels')) {
+          parse(xml);
+        }
+      }
+
+      const pres = parse(files.get('ppt/presentation.xml')!);
+      const slideIds = pres.getElementsByTagName('p:sldId');
+      expect(slideIds.length).toBe(2);
+
+      const sld1 = parse(files.get('ppt/slides/slide1.xml')!);
+      const pic1 = sld1.getElementsByTagName('p:cNvPr');
+      expect(pic1[1]?.getAttribute('name')).toBe('Slide 1 - Summary');
+
+      // Verify throws on empty slides
+      expect(() => buildPptx([])).toThrow('buildPptx needs at least one slide');
+    });
   });
 });

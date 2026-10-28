@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DataModel } from '@prismbi/prismbi/core';
-import { createVisual } from '../src/index';
+import { createVisual, renderSparkline } from '../src/index';
 
 const mount = () => {
   const el = document.createElement('div');
@@ -140,6 +140,65 @@ describe('virtualized matrix', () => {
     v.flush();
     expect(el.querySelectorAll('tbody tr.pbi-spacer')).toHaveLength(1);
     v.destroy();
+    el.remove();
+  });
+
+  it('supports non-stepped layout with distinct columns per row field', () => {
+    const m = new DataModel()
+      .addTable('T', [
+        { a: 'Category 1', b: 'Product A', v: 100 },
+        { a: 'Category 1', b: 'Product B', v: 200 },
+        { a: 'Category 2', b: 'Product C', v: 300 },
+      ])
+      .addMeasure('V', 'SUM(T[v])');
+
+    const el = mount();
+    const r = createVisual(el, {
+      model: m,
+      type: 'matrix',
+      fields: { rows: ['T[a]', 'T[b]'], values: 'V' },
+      format: { matrix: { stepped: false, expandAll: true } } as never,
+    });
+    r.flush();
+
+    // In non-stepped mode, thead should have separate headers for each row field
+    const ths = [...el.querySelectorAll('thead th')].map((th) => th.textContent);
+    expect(ths).toContain('a');
+    expect(ths).toContain('b');
+    expect(ths).toContain('V');
+
+    // Row cells should have non-stepped structure with indent columns
+    expect(el.querySelectorAll('tbody td.pbi-indent').length).toBeGreaterThan(0);
+
+    r.destroy();
+    el.remove();
+  });
+
+  it('renders standalone and in-cell sparklines', () => {
+    const svgLine = renderSparkline([10, 25, 15, 30], { type: 'line', width: 80, height: 20 });
+    expect(svgLine.tagName.toLowerCase()).toBe('svg');
+    expect(svgLine.getAttribute('width')).toBe('80');
+    expect(svgLine.getAttribute('height')).toBe('20');
+    expect(svgLine.querySelector('polyline')).not.toBeNull();
+
+    const svgCol = renderSparkline([10, 25, 15, 30], { type: 'column' });
+    expect(svgCol.querySelectorAll('rect').length).toBe(4);
+
+    const m = new DataModel()
+      .addTable('T', [{ a: 'Cat', v: 50 }])
+      .addMeasure('V', 'SUM(T[v])');
+
+    const el = mount();
+    const r = createVisual(el, {
+      model: m,
+      type: 'matrix',
+      fields: { rows: 'T[a]', values: 'V' },
+      format: { matrix: { sparklines: { V: { type: 'line' } } } } as never,
+    });
+    r.flush();
+
+    expect(el.querySelectorAll('.pbi-sparkline').length).toBeGreaterThan(0);
+    r.destroy();
     el.remove();
   });
 });

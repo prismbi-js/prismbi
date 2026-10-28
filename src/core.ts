@@ -74,8 +74,12 @@ export { registerBoundaries, getBoundaries, featureCentroid, clusterPoints, quan
 export { referenceValue, linearFit } from './visuals/analytics';
 export { timeScale, logScale } from './render/scales';
 export { buildPdf } from './report/pdf';
+export { buildPptx, PPTX_MIME } from './report/pptx';
+export type { PptxSlide } from './report/pptx';
 export { buildXlsx, resultToSheet, excelFormat, XLSX_MIME } from './report/xlsx';
 export type { XlsxSheet, XlsxColumn } from './report/xlsx';
+export { renderSparkline } from './visuals/table';
+export type { SparklineOptions, MatrixFormat } from './visuals/table';
 
 // report runtime
 export { Report, reviveDates, registerMenuItems, autoMobileLayout } from './report/report';

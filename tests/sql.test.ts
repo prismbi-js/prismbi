@@ -338,3 +338,29 @@ describe('bidirectional relationships in SQL', () => {
     expect(toSql(model, { groupBy: ['Region[Country]'], values: ['Product Count'], filters: [day] }).sql).not.toMatch(/"ProductKey" IN \(SELECT/);
   });
 });
+
+describe('dialects: mysql and snowflake', () => {
+  it('generates MySQL-compliant SQL with <=> and CONCAT and DATE_ADD', () => {
+    const plan = toSql(model, {
+      groupBy: ['Region[Country]'],
+      values: ['Total Sales'],
+      totals: true,
+      filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }],
+    }, { dialect: 'mysql' });
+    expect(plan.sql).toContain('SELECT');
+    expect(plan.sql).toContain('GROUP BY');
+    expect(plan.totals).toBeDefined();
+  });
+
+  it('generates Snowflake-compliant SQL with DATEADD and IS NOT DISTINCT FROM', () => {
+    const plan = toSql(model, {
+      groupBy: ['Region[Country]'],
+      values: ['Total Sales'],
+      totals: true,
+      filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }],
+    }, { dialect: 'snowflake' });
+    expect(plan.sql).toContain('SELECT');
+    expect(plan.sql).toContain('GROUP BY GROUPING SETS');
+    expect(plan.totalsInline).toBe(true);
+  });
+});

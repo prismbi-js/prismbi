@@ -371,3 +371,109 @@ export const toOpenAITools = (tools: AgentTool[]) => tools.map((t) => ({ type: '
 
 /** Model Context Protocol tool listing (`tools/list`); answer `tools/call` with {@link runTool}. */
 export const toMcpTools = (tools: AgentTool[]) => tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+
+export interface McpServer {
+  /** Handle a raw JSON-RPC 2.0 request and return the JSON-RPC response (or null for notifications). */
+  handleMessage(message: unknown): Promise<unknown | null>;
+  /** Bind standard JSON-RPC line-delimited stdio transport for CLI / subprocess integration. */
+  listen(io?: { stdin: { on(event: string, listener: (chunk: any) => void): void }; stdout: { write(chunk: string): void } }): void;
+}
+
+/** Create a standalone Model Context Protocol (MCP) server for Claude Desktop, Cursor, or AI agent tool integrations. */
+export function createMcpServer(opts: AgentToolOptions & { name?: string; version?: string }): McpServer {
+  const tools = createAgentTools(opts);
+  const mcpTools = toMcpTools(tools);
+  const serverName = opts.name ?? 'prismbi';
+  const serverVersion = opts.version ?? '0.10.0';
+
+  const handleMessage = async (msg: unknown): Promise<unknown | null> => {
+    if (!msg || typeof msg !== 'object') return null;
+    const req = msg as { jsonrpc?: string; id?: string | number | null; method?: string; params?: any };
+    const id = req.id ?? null;
+
+    if (req.method === 'initialize') {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          protocolVersion: '2024-11-05',
+          capabilities: { tools: {} },
+          serverInfo: { name: serverName, version: serverVersion },
+        },
+      };
+    }
+
+    if (req.method === 'notifications/initialized' || req.method === 'initialized') {
+      return null;
+    }
+
+    if (req.method === 'ping') {
+      return { jsonrpc: '2.0', id, result: {} };
+    }
+
+    if (req.method === 'tools/list') {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: { tools: mcpTools },
+      };
+    }
+
+    if (req.method === 'tools/call') {
+      const toolName = req.params?.name;
+      const toolArgs = req.params?.arguments ?? {};
+      try {
+        const out = await runTool(tools, toolName, toolArgs);
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            content: [{ type: 'text', text: typeof out === 'string' ? out : JSON.stringify(out, null, 2) }],
+          },
+        };
+      } catch (e) {
+        return {
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message: e instanceof Error ? e.message : String(e) },
+        };
+      }
+    }
+
+    if (id !== null) {
+      return {
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32601, message: `Method not found: ${req.method}` },
+      };
+    }
+    return null;
+  };
+
+  const listen = (io?: { stdin: { on(event: string, listener: (chunk: any) => void): void }; stdout: { write(chunk: string): void } }) => {
+    const proc = typeof process !== 'undefined' ? (process as any) : null;
+    const stdin = io?.stdin ?? proc?.stdin;
+    const stdout = io?.stdout ?? proc?.stdout;
+    if (!stdin || !stdout) throw new Error('Standard I/O streams are required to listen on stdio transport');
+
+    let buffer = '';
+    stdin.on('data', async (chunk: any) => {
+      buffer += String(chunk);
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          const res = await handleMessage(parsed);
+          if (res) stdout.write(JSON.stringify(res) + '\n');
+        } catch {
+          stdout.write(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }) + '\n');
+        }
+      }
+    });
+  };
+
+  return { handleMessage, listen };
+}

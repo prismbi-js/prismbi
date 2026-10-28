@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Enterprise SQL pushdown dialects:**
+  - **MySQL & Snowflake support:** Extended `SqlDialect` with `'mysql'` and `'snowflake'`. Generates native pushdown queries with dialect-specific functions (`<=>` null-safe equality, `MAKEDATE`, `DATE_ADD`, `DATEDIFF` for MySQL; `DATEADD`, `DATEDIFF(day, ...)`, `LAST_DAY`, `DATE_TRUNC` for Snowflake), identifier escaping, and parameter substitution.
+- **Reporting & visual enhancements:**
+  - **Matrix stepped layout toggle:** `format.matrix.stepped = false` (Power BI matrix "Stepped layout: Off") displays distinct column headers and dedicated columns per row hierarchy level instead of single-column indented stepping.
+  - **In-cell SVG sparklines:** `renderSparkline(values, opts)` SVG renderer (`line` and `column` modes) and `format.matrix.sparklines` configuration for embedding compact trend lines and bars directly inside matrix and table cells.
+- **Standalone PowerPoint (.pptx) presentation export:**
+  - Zero-dependency OpenXML `.pptx` presentation generator (`buildPptx`, `PPTX_MIME`, `PptxSlide`) in `src/report/pptx.ts`. Generates standard 16:9 full-bleed slide decks with embedded PNG/JPEG snapshots using native ZIP packaging.
+- **Model Context Protocol (MCP) server:**
+  - Embedded JSON-RPC 2.0 MCP server (`createMcpServer`, `McpServer`) in `src/ai/agent.ts` with stdio line-delimited streaming transport, exposing data exploration and DAX querying tools to external AI agents.
+
 - **Scale, streaming ingestion & multi-worker execution:**
   - **Zero-copy columnar CSV ingestion:** `parseCsvColumns(text, opts)` parses directly into columnar arrays without intermediate `{ [col]: value }` row objects, saving GC overhead on large files.
   - **Streaming CSV parser:** `streamCsv(stream, opts)` parses chunks incrementally with multiline quote preservation and `onBatch` progressive emission for streaming loads.

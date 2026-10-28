@@ -12,7 +12,7 @@
 import { parseDax, resolveGroupField, resolveValueField, visualCalcPlan } from '@prismbi/prismbi';
 import type { CellValue, DataModel, Expr, Filter, FilterSpec, QueryField, QueryResult, QueryRow, QuerySpec } from '@prismbi/prismbi';
 
-export type SqlDialect = 'duckdb' | 'postgres' | 'sqlite';
+export type SqlDialect = 'duckdb' | 'postgres' | 'sqlite' | 'mysql' | 'snowflake';
 
 export interface SqlOptions {
   /** Model table → SQL table or view (default: the same name). May be schema-qualified: `'analytics.sales'`. */
@@ -159,7 +159,7 @@ class Translator {
     if (v === null || v === undefined) return 'NULL';
     if (v instanceof Date) {
       const d = ymd(v);
-      return this.dialect === 'sqlite' ? `'${d}'` : `DATE '${d}'`;
+      return this.dialect === 'sqlite' || this.dialect === 'mysql' ? `'${d}'` : `DATE '${d}'`;
     }
     if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
     if (typeof v === 'boolean') return this.dialect === 'sqlite' ? (v ? '1' : '0') : v ? 'TRUE' : 'FALSE';
@@ -330,8 +330,9 @@ class Translator {
 
   /** DAX `&`: text concatenation where BLANK is an empty string (SQL's `||` would give NULL). */
   concat(a: string, b: string): string {
-    const text = (x: string) => `COALESCE(CAST(${x} AS ${this.dialect === 'duckdb' ? 'VARCHAR' : 'TEXT'}), '')`;
-    return `(${text(a)} || ${text(b)})`;
+    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
+    const text = (x: string) => `COALESCE(CAST(${x} AS ${type}), '')`;
+    return this.dialect === 'mysql' ? `CONCAT(${text(a)}, ${text(b)})` : `(${text(a)} || ${text(b)})`;
   }
 
   datePart(n: 'YEAR' | 'MONTH' | 'DAY', x: string): string {
@@ -344,14 +345,15 @@ class Translator {
     const p = f?.type === 'string' ? f.value : '';
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const name = (len?: number) => `(CASE ${this.datePart('MONTH', x)} ${months.map((m, i) => `WHEN ${i + 1} THEN '${len ? m.slice(0, len) : m}'`).join(' ')} END)`;
-    const pad = (n: string) => (this.dialect === 'sqlite' ? `substr('0' || CAST(${n} AS TEXT), -2)` : `lpad(CAST(${n} AS ${this.dialect === 'duckdb' ? 'VARCHAR' : 'TEXT'}), 2, '0')`);
+    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
+    const pad = (n: string) => (this.dialect === 'sqlite' ? `substr('0' || CAST(${n} AS TEXT), -2)` : `lpad(CAST(${n} AS ${type}), 2, '0')`);
     switch (p.toLowerCase()) {
       case 'mmmm':
         return name();
       case 'mmm':
         return name(3);
       case 'yyyy':
-        return `CAST(${this.datePart('YEAR', x)} AS ${this.dialect === 'duckdb' ? 'VARCHAR' : 'TEXT'})`;
+        return `CAST(${this.datePart('YEAR', x)} AS ${type})`;
       case 'mm':
         return pad(this.datePart('MONTH', x));
       case 'dd':
@@ -598,7 +600,9 @@ class ContextTranslator {
   }
 
   isNotDistinct(a: string, b: string): string {
-    return this.dialect === 'sqlite' ? `${a} IS ${b}` : `${a} IS NOT DISTINCT FROM ${b}`;
+    if (this.dialect === 'sqlite') return `${a} IS ${b}`;
+    if (this.dialect === 'mysql') return `${a} <=> ${b}`;
+    return `${a} IS NOT DISTINCT FROM ${b}`;
   }
 
   /**
@@ -675,18 +679,23 @@ WHERE ${inner.join(' AND ')})`);
       return `MIN(date(${col}, 'start of month', '${months >= 0 ? '+' : ''}${months} months', '+' || (CAST(strftime('%d', ${col}) AS INTEGER) - 1) || ' days'), date(${col}, 'start of month', '${months + 1 >= 0 ? '+' : ''}${months + 1} months', '-1 day'))`;
     }
     if (this.dialect === 'postgres') return `CAST(${col} + make_interval(months => ${months}, days => ${days}) AS DATE)`;
+    if (this.dialect === 'snowflake') return months ? `DATEADD(month, ${months}, ${col})` : `DATEADD(day, ${days}, ${col})`;
+    if (this.dialect === 'mysql') return months ? `DATE_ADD(${col}, INTERVAL ${months} MONTH)` : `DATE_ADD(${col}, INTERVAL ${days} DAY)`;
     return months ? `CAST(${col} + to_months(${months}) AS DATE)` : `CAST(${col} + to_days(${days}) AS DATE)`;
   }
 
   daysBetween(a: string, b: string): string {
     if (this.dialect === 'sqlite') return `CAST(julianday(${b}) - julianday(${a}) AS INTEGER)`;
     if (this.dialect === 'postgres') return `(${b} - ${a})`;
+    if (this.dialect === 'mysql') return `DATEDIFF(${b}, ${a})`;
+    if (this.dialect === 'snowflake') return `DATEDIFF(day, ${a}, ${b})`;
     return `date_diff('day', ${a}, ${b})`;
   }
 
   monthEnd(x: string): string {
     if (this.dialect === 'sqlite') return `date(${x}, 'start of month', '+1 month', '-1 day')`;
     if (this.dialect === 'postgres') return `CAST(date_trunc('month', ${x}) + INTERVAL '1 month - 1 day' AS DATE)`;
+    if (this.dialect === 'snowflake') return `LAST_DAY(${x}, 'month')`;
     return `last_day(${x})`;
   }
 
@@ -732,10 +741,18 @@ WHERE ${inner.join(' AND ')})`);
   }
 
   startOf(unit: 'year' | 'quarter' | 'month', x: string): string {
-    if (this.dialect !== 'sqlite') return `CAST(date_trunc('${unit}', ${x}) AS DATE)`;
-    if (unit === 'year') return `date(${x}, 'start of year')`;
-    if (unit === 'month') return `date(${x}, 'start of month')`;
-    return `date(${x}, 'start of month', '-' || ((CAST(strftime('%m', ${x}) AS INTEGER) - 1) % 3) || ' months')`;
+    if (this.dialect === 'sqlite') {
+      if (unit === 'year') return `date(${x}, 'start of year')`;
+      if (unit === 'month') return `date(${x}, 'start of month')`;
+      return `date(${x}, 'start of month', '-' || ((CAST(strftime('%m', ${x}) AS INTEGER) - 1) % 3) || ' months')`;
+    }
+    if (this.dialect === 'mysql') {
+      if (unit === 'year') return `MAKEDATE(YEAR(${x}), 1)`;
+      if (unit === 'month') return `DATE_SUB(${x}, INTERVAL DAYOFMONTH(${x}) - 1 DAY)`;
+      return `DATE_ADD(MAKEDATE(YEAR(${x}), 1), INTERVAL (QUARTER(${x}) - 1) * 3 MONTH)`;
+    }
+    if (this.dialect === 'snowflake') return `CAST(DATE_TRUNC('${unit}', ${x}) AS DATE)`;
+    return `CAST(date_trunc('${unit}', ${x}) AS DATE)`;
   }
 
   /** Dates in the current context, as a subquery over the date table: `(SELECT <agg>(x.Date) FROM Date x WHERE …)`. */
@@ -1209,7 +1226,7 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
     // group-only scalars are computed once per group, in a layer around the combinations
     // (a materialized CTE, so SQLite's query flattener doesn't inline them back into every fact row)
     // FILTER sets with measures are materialized per group as well
-    const mat = dialect === 'duckdb' ? '' : 'MATERIALIZED ';
+    const mat = dialect === 'duckdb' || dialect === 'mysql' || dialect === 'snowflake' ? '' : 'MATERIALIZED ';
     const ctes = hoisted.length || sets.length ? [`hz AS ${mat}(SELECT c.*${hoisted.length ? `, ${hoisted.join(',\n  ')}` : ''}\nFROM ${combos} AS c)`, ...sets.map(([sql, name]) => `${name} AS ${mat}(${sql})`)] : [];
     const withClause = ctes.length ? `WITH ${ctes.join(',\n')}\n` : '';
     const parts = [`${withClause}SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${ctes.length ? 'hz' : combos} AS c) AS r`];
@@ -1272,8 +1289,8 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
 
   const tr = new Translator(model, dialect);
   for (const g of groups) tr.touched.add(`${g.column!.table}[${g.column!.column}]`);
-  // DuckDB and Postgres return the grand totals with the grouped rows (one round trip); SQLite runs a second statement
-  const inline = !!spec.totals && values.length > 0 && groups.length > 0 && dialect !== 'sqlite';
+  // DuckDB, Postgres and Snowflake return the grand totals with the grouped rows; SQLite and MySQL run a second statement
+  const inline = !!spec.totals && values.length > 0 && groups.length > 0 && dialect !== 'sqlite' && dialect !== 'mysql';
   const build = (extra: FilterSpec[], grouped: boolean, withTotals = false): string => {
     const s = new Scope(model, opts, base, (sc, e) => tr.rowExpr(sc, e));
     const all = [...filters, ...extra];

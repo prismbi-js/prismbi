@@ -26,9 +26,9 @@ const PACKAGE_ALIASES = Object.fromEntries(
 
 /** [name, source, budget in KB min+gzip, optional base scenario: report only the increment over it] */
 const SCENARIOS = [
-  ['core (api)', `export * from '${dist}/core.js';`, 102],
+  ['core (api)', `export * from '${dist}/core.js';`, 104],
   ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 92],
-  ['full (api)', `export * from '${dist}/index.js';`, 144],
+  ['full (api)', `export * from '${dist}/index.js';`, 146],
   ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 138],
   ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 128],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 98],

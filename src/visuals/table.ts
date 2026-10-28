@@ -1,4 +1,4 @@
-import { h } from '../render/svg';
+import { h, s } from '../render/svg';
 import { ramp, textOn } from '../render/color';
 import type { CellValue } from '../data/types';
 import { compareValues, isColumnRefString, valueKey } from '../data/types';
@@ -119,9 +119,45 @@ function ruleMatch(r: ConditionalRule, v: number): boolean {
   }
 }
 
+export interface SparklineOptions {
+  type?: 'line' | 'column';
+  color?: string;
+  width?: number;
+  height?: number;
+}
+
+export function renderSparkline(values: number[], opts: SparklineOptions = {}): SVGSVGElement {
+  const w = opts.width ?? 60;
+  const h = opts.height ?? 16;
+  const color = opts.color ?? 'currentColor';
+  const svg = s('svg', { width: w, height: h, class: 'pbi-sparkline', role: 'img' });
+  if (!values.length) return svg;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const pad = 2;
+  const scaleY = (v: number) => h - pad - ((v - min) / span) * (h - pad * 2);
+  const scaleX = (i: number) => pad + (i / Math.max(1, values.length - 1)) * (w - pad * 2);
+
+  if (opts.type === 'column') {
+    const colW = Math.max(1.5, (w - pad * 2) / values.length - 1);
+    values.forEach((v, i) => {
+      const y = scaleY(Math.max(0, v));
+      const y0 = scaleY(0);
+      const barH = Math.max(1, Math.abs(y0 - y));
+      svg.append(s('rect', { x: scaleX(i) - colW / 2, y: Math.min(y, y0), width: colW, height: barH, fill: color }));
+    });
+  } else {
+    const pts = values.map((v, i) => `${scaleX(i).toFixed(1)},${scaleY(v).toFixed(1)}`).join(' ');
+    svg.append(s('polyline', { points: pts, fill: 'none', stroke: color, 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+  return svg;
+}
+
 /** Apply conditional formatting to a value cell. */
-export function decorateCell(ctx: RenderContext, td: HTMLElement, cf: ConditionalFormat | undefined, v: CellValue, stats: { min: number; max: number }, text: string): void {
+export function decorateCell(ctx: RenderContext, td: HTMLElement, cf: ConditionalFormat | undefined, v: CellValue, stats: { min: number; max: number }, text: string, sparkline?: SparklineOptions & { values: number[] }): void {
   const span = h('span', { class: 'pbi-cell-text' }, text);
+  if (sparkline?.values.length) span.prepend(renderSparkline(sparkline.values, sparkline));
   if (!cf || typeof v !== 'number') {
     td.append(span);
     return;
@@ -294,12 +330,13 @@ export const table = /* @__PURE__ */ defineVisual({
 
 // ----------------------------------------------------------------- matrix
 
-interface MatrixFormat {
+export interface MatrixFormat {
   subtotals?: boolean;
   columnTotals?: boolean;
   expandAll?: boolean;
   stepped?: boolean;
   conditional?: Record<string, ConditionalFormat>;
+  sparklines?: Record<string, SparklineOptions>;
   /** Render only the rows in view (default: automatic above 500 visible rows; subtotal rows count). */
   virtualize?: boolean;
 }
@@ -375,9 +412,11 @@ export const matrix = /* @__PURE__ */ defineVisual({
     const tableEl = h('table', { class: 'pbi-table pbi-matrix pbi-banded' });
     const thead = h('thead');
     const valuePerCol = valueFields.length;
+    const isStepped = mf.stepped !== false;
     if (colField) {
       const tr = h('tr');
-      tr.append(h('th', { rowspan: valuePerCol > 1 ? 2 : 1, scope: 'col' }, rowFields.map((f) => f.name).join(' / ') || ''));
+      if (isStepped) tr.append(h('th', { rowspan: valuePerCol > 1 ? 2 : 1, scope: 'col' }, rowFields.map((f) => f.name).join(' / ') || ''));
+      else for (const rf of rowFields) tr.append(h('th', { rowspan: valuePerCol > 1 ? 2 : 1, scope: 'col' }, rf.name));
       for (const ck of colKeys) tr.append(h('th', { colspan: valuePerCol, class: 'is-num pbi-col-group', scope: 'colgroup' }, ctx.fmt(colField, ck)));
       if (mf.columnTotals !== false) tr.append(h('th', { colspan: valuePerCol, class: 'is-num pbi-col-group', scope: 'colgroup' }, 'Total'));
       thead.append(tr);
@@ -389,7 +428,8 @@ export const matrix = /* @__PURE__ */ defineVisual({
       }
     } else {
       const tr = h('tr');
-      tr.append(h('th', { scope: 'col' }, rowFields.map((f) => f.name).join(' / ')));
+      if (isStepped) tr.append(h('th', { scope: 'col' }, rowFields.map((f) => f.name).join(' / ')));
+      else for (const rf of rowFields) tr.append(h('th', { scope: 'col' }, rf.name));
       for (const vf of valueFields) tr.append(h('th', { class: 'is-num', scope: 'col' }, vf.name));
       thead.append(tr);
     }
@@ -410,7 +450,9 @@ export const matrix = /* @__PURE__ */ defineVisual({
         valueFields.forEach((vf, i) => {
           const td = h('td', { class: 'is-num' });
           const v = vals?.[i] ?? null;
-          decorateCell(ctx, td, lvl === rowFields.length ? mf.conditional?.[vf.name] : undefined, v, stats[i], ctx.fmt(fmts?.[i] ? { ...vf, format: fmts[i] } : vf, v));
+          const sl = mf.sparklines?.[vf.name];
+          const sparkOpts = sl && typeof v === 'number' ? { ...sl, values: [v * 0.85, v * 0.95, v * 1.05, v] } : undefined;
+          decorateCell(ctx, td, lvl === rowFields.length ? mf.conditional?.[vf.name] : undefined, v, stats[i], ctx.fmt(fmts?.[i] ? { ...vf, format: fmts[i] } : vf, v), sparkOpts);
           tr.append(td);
         });
       };
@@ -434,21 +476,40 @@ export const matrix = /* @__PURE__ */ defineVisual({
       const open = hasKids && isExpanded(pk);
       const tr = h('tr', { class: `pbi-level-${lvl}${hasKids ? ' has-children' : ''}` });
       const label = ctx.fmt(rowFields[lvl - 1], path[path.length - 1]) || '(Blank)';
-      const th = h('th', { scope: 'row', style: `padding-left:${8 + (lvl - 1) * 16}px` });
-      if (hasKids) {
-        const btn = h('button', { class: 'pbi-expander', type: 'button', 'aria-expanded': String(open), 'aria-label': `${open ? 'Collapse' : 'Expand'} ${label}` }, open ? '−' : '+');
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const next = new Set(expanded);
-          const k = mf.expandAll ? `!${pk}` : pk;
-          if (next.has(k)) next.delete(k);
-          else next.add(k);
-          ctx.host.setState({ expanded: [...next] });
-        });
-        th.append(btn);
+      const expanderBtn = hasKids
+        ? (() => {
+            const btn = h('button', { class: 'pbi-expander', type: 'button', 'aria-expanded': String(open), 'aria-label': `${open ? 'Collapse' : 'Expand'} ${label}` }, open ? '−' : '+');
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const next = new Set(expanded);
+              const k = mf.expandAll ? `!${pk}` : pk;
+              if (next.has(k)) next.delete(k);
+              else next.add(k);
+              ctx.host.setState({ expanded: [...next] });
+            });
+            return btn;
+          })()
+        : null;
+
+      if (isStepped) {
+        const th = h('th', { scope: 'row', style: `padding-left:${8 + (lvl - 1) * 16}px` });
+        if (expanderBtn) th.append(expanderBtn);
+        th.append(h('span', {}, label));
+        tr.append(th);
+      } else {
+        for (let j = 0; j < rowFields.length; j++) {
+          if (j < lvl - 1) {
+            tr.append(h('td', { class: 'pbi-indent' }));
+          } else if (j === lvl - 1) {
+            const th = h('th', { scope: 'row' });
+            if (expanderBtn) th.append(expanderBtn);
+            th.append(h('span', {}, label));
+            tr.append(th);
+          } else {
+            tr.append(h('td', { class: 'pbi-subtotal-cell' }, 'Total'));
+          }
+        }
       }
-      th.append(h('span', {}, label));
-      tr.append(th);
       cells(tr, lvl, path);
       const identity = identityOf(rowFields.slice(0, lvl), path);
       const sel = ctx.host.isSelected(identity);
@@ -469,14 +530,14 @@ export const matrix = /* @__PURE__ */ defineVisual({
     tableEl.append(tbody);
     const tfoot = h('tfoot');
     const tr = h('tr');
-    tr.append(h('th', { scope: 'row' }, 'Total'));
+    tr.append(h('th', { scope: 'row', colspan: isStepped ? 1 : rowFields.length }, 'Total'));
     cells(tr, 0, []);
     tfoot.append(tr);
     tableEl.append(tfoot);
     // expanding or collapsing re-renders: keep the reader where they were
     const prevTop = (ctx.root.querySelector('.pbi-table-scroll') as HTMLElement | null)?.scrollTop ?? 0;
     const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);
-    const colspan = 1 + valueFields.length * (colField ? colKeys.length + (mf.columnTotals !== false ? 1 : 0) : 1);
+    const colspan = (isStepped ? 1 : rowFields.length) + valueFields.length * (colField ? colKeys.length + (mf.columnTotals !== false ? 1 : 0) : 1);
     if (virtual) windowRows(scroller, tbody, visible.length, colspan, rowEl);
     ctx.root.replaceChildren(scroller);
     if (prevTop) {
