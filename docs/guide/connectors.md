@@ -19,10 +19,15 @@ All network loaders accept `headers`, `signal` (an `AbortSignal`) and `fetch` (a
 ```ts
 parseCsv(text, { delimiter?, header = true, dynamicTyping = true, skipEmptyLines = true, maxRows? }): Row[]
 loadCsv(url, options): Promise<Row[]>
+parseCsvColumns(text, options): { columns, schema, rowCount }
+loadCsvColumns(url, options): Promise<{ columns, schema, rowCount }>
+streamCsv(urlOrStream, { batchSize = 5000, onBatch, ...options }): Promise<StreamCsvResult>
+streamCsvUrl(url, options): Promise<StreamCsvResult>
 ```
 
 - RFC 4180: quoted fields, `""` escapes, delimiters and newlines inside quotes, CRLF or LF, byte-order mark.
 - The delimiter is detected from the first line (`,` `;` tab `|`) unless you pass one.
+- **Columnar & Streaming Ingestion:** `parseCsvColumns` and `loadCsvColumns` parse directly into columnar arrays without intermediate row objects, feeding directly into `DataModel.addColumns`. `streamCsv` and `streamCsvUrl` stream large CSVs in progressive chunks with `onBatch` callbacks.
 - Types are decided per column, not per cell. A column becomes numeric only when every non-empty value is a plain number, so ZIP codes like `02134` stay text. `true`/`false` columns become booleans and empty cells become blank. ISO dates are typed by the table (`DataTable` infers `date` columns).
 - Duplicate or empty headers are made unique (`a`, `a_2`, `Column3`). `header: false` names columns `Column1…n`.
 

@@ -54,7 +54,10 @@ Used inside `CALCULATE`, these clear the other filters on the date table (Power 
 `USERELATIONSHIP` · `CROSSFILTER` · `TREATAS(table, col…)` · `LOOKUPVALUE(result, searchCol, value, …, [alternate])` · `CONTAINS(table, col, value, …)`
 
 ### Table functions
-`SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `NATURALINNERJOIN` · `NATURALLEFTOUTERJOIN` · `SAMPLE(n, table, orderBy, [ASC|DESC]…)` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · table constructors `{ 1, 2 }` (column `Value`) and `{ (1, "a"), (2, "b") }` (`Value1`, `Value2`) · `GENERATESERIES` · `CALENDAR` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
+`SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `NATURALINNERJOIN` · `NATURALLEFTOUTERJOIN` · `SAMPLE(n, table, orderBy, [ASC|DESC]…)` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · table constructors `{ 1, 2 }` (column `Value`) and `{ (1, "a"), (2, "b") }` (`Value1`, `Value2`) · `GENERATESERIES` · `CALENDAR` · `CALENDARAUTO([fiscalYearEndMonth])` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
+
+### Financial
+`XNPV(table, values, dates, rate)` · `XIRR(table, values, dates, [guess])`
 
 ### Statistical
 `STDEV.S` · `STDEV.P` · `VAR.S` · `VAR.P` · `STDEVX.S` · `STDEVX.P` · `VARX.S` · `VARX.P` · `PERCENTILE.INC` · `PERCENTILE.EXC` · `PERCENTILEX.INC` · `PERCENTILEX.EXC` · `GEOMEAN` · `GEOMEANX` · `AVERAGEA` · `MAXA` · `MINA`
@@ -69,13 +72,13 @@ Used inside `CALCULATE`, these clear the other filters on the date table (Power 
 `IF` · `IFERROR` · `SWITCH` (including `SWITCH(TRUE(), …)`) · `AND` · `OR` · `NOT` · `TRUE` · `FALSE` · `BLANK` · `ISBLANK` · `ISNUMBER` · `ISTEXT` · `ISEMPTY` · `COALESCE`
 
 ### Math
-`DIVIDE` · `ABS` · `ROUND` · `ROUNDUP` · `ROUNDDOWN` · `TRUNC` · `INT` · `CEILING` · `FLOOR` · `SQRT` · `POWER` · `MOD` · `EXP` · `LN` · `LOG` · `LOG10` · `SIGN` · `PI`
+`DIVIDE` · `ABS` · `ROUND` · `ROUNDUP` · `ROUNDDOWN` · `TRUNC` · `INT` · `CEILING` · `FLOOR` · `SQRT` · `POWER` · `MOD` · `EXP` · `LN` · `LOG` · `LOG10` · `SIGN` · `PI` · `BITAND` · `BITOR` · `BITXOR` · `BITLSHIFT` · `BITRSHIFT`
 
 ### Text
-`CONCATENATE` · `COMBINEVALUES` · `UPPER` · `LOWER` · `LEN` · `TRIM` · `LEFT` · `RIGHT` · `MID` · `SUBSTITUTE` · `REPT` · `SEARCH` · `FIND` · `CONTAINSSTRING` · `EXACT` · `VALUE` · `FORMAT(value, "format")`
+`CONCATENATE` · `COMBINEVALUES` · `UPPER` · `LOWER` · `LEN` · `TRIM` · `LEFT` · `RIGHT` · `MID` · `SUBSTITUTE` · `REPT` · `SEARCH` · `FIND` · `CONTAINSSTRING` · `CONTAINSSTRINGEXACT` · `EXACT` · `VALUE` · `FORMAT(value, "format")`
 
 ### Date and time
-`DATE` · `DATEVALUE` · `TODAY` · `NOW` · `UTCNOW` · `UTCTODAY` · `YEAR` · `QUARTER` · `MONTH` · `DAY` · `HOUR` · `MINUTE` · `SECOND` · `WEEKDAY(date, [1|2|3])` · `WEEKNUM` · `EOMONTH` · `EDATE` · `NETWORKDAYS` · `DATEDIFF(start, end, DAY|WEEK|MONTH|QUARTER|YEAR|HOUR|MINUTE|SECOND)` · date arithmetic (`date + 1` adds a day, `date - date` gives days)
+`DATE` · `DATEVALUE` · `TIME` · `TIMEVALUE` · `TODAY` · `NOW` · `UTCNOW` · `UTCTODAY` · `YEAR` · `QUARTER` · `MONTH` · `DAY` · `HOUR` · `MINUTE` · `SECOND` · `WEEKDAY(date, [1|2|3])` · `WEEKNUM` · `EOMONTH` · `EDATE` · `NETWORKDAYS` · `DATEDIFF(start, end, DAY|WEEK|MONTH|QUARTER|YEAR|HOUR|MINUTE|SECOND)` · date arithmetic (`date + 1` adds a day, `date - date` gives days)
 
 ## Querying with table expressions
 

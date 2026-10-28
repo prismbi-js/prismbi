@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 (2026-10-28): Financial & bitwise DAX, T-SQL & BigQuery pushdown, streaming ingestion, PPTX & MCP server, Studio UX enhancements
 
 - **Financial DAX functions:**
   - Added `XNPV(<table>, <values>, <dates>, <rate>)` and `XIRR(<table>, <values>, <dates>, [<guess>])` supporting irregular cash flow schedules, Newton-Raphson numerical solving, and table iterators or column vectors.

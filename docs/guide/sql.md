@@ -1,6 +1,6 @@
-# SQL pushdown: DuckDB, Postgres and SQLite
+# SQL pushdown: DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server and BigQuery
 
-`@prismbi/prismbi/sql` translates visual queries into SQL and runs them in a database. Large fact tables stay in DuckDB (DuckDB-Wasm in the browser, or DuckDB, Postgres or SQLite on a server) instead of being loaded into memory. The report doesn't change: pass the engine as `ReportOptions.engine`.
+`@prismbi/prismbi/sql` translates visual queries into SQL and runs them in a database. Large fact tables stay in DuckDB (DuckDB-Wasm in the browser, or DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server or BigQuery on a server) instead of being loaded into memory. The report doesn't change: pass the engine as `ReportOptions.engine`.
 
 ```ts
 import * as duckdb from '@duckdb/duckdb-wasm';
@@ -22,7 +22,7 @@ const engine = sqlEngine(model, { run: duckdbRunner(conn) });
 new Report(el, { model, engine, pages });
 ```
 
-- **Other databases:** `run` is any `(sql, signal) => Promise<rows>`, so you can send the SQL to your own server for Postgres, DuckDB or SQLite. Set `dialect: 'postgres' | 'sqlite'` (default `'duckdb'`).
+- **Other databases:** `run` is any `(sql, signal) => Promise<rows>`, so you can send the SQL to your own server for DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server (T-SQL) or Google BigQuery. Set `dialect: 'duckdb' | 'postgres' | 'sqlite' | 'mysql' | 'snowflake' | 'mssql' | 'bigquery'` (default `'duckdb'`). Set `parameterized: true` to generate parameterized statements (`?`) with values extracted to `SqlPlan.params`.
 - **Different names:** `tables` maps model tables to SQL tables or views (`{ Sales: 'analytics.fact_sales' }`). `columns` maps column names per table (`{ Sales: { SalesAmount: 'amount' } }`).
 - **Aggregation tables:** with an [aggregation table](advanced-modeling.md#aggregation-tables) in memory, `sqlEngine` answers the queries it covers locally and sends only the rest to the database.
 - **Caching:** `cache: true` (or `{ max, ttlMs }`) runs each distinct statement once: re-renders, visuals asking the same thing and concurrent duplicates share one result. Model changes clear it; call `engine.clearCache()` after reloading the database, and `engine.dispose()` when you drop the engine.

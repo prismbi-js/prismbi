@@ -384,7 +384,7 @@ export function createMcpServer(opts: AgentToolOptions & { name?: string; versio
   const tools = createAgentTools(opts);
   const mcpTools = toMcpTools(tools);
   const serverName = opts.name ?? 'prismbi';
-  const serverVersion = opts.version ?? '0.10.0';
+  const serverVersion = opts.version ?? '0.11.0';
 
   const handleMessage = async (msg: unknown): Promise<unknown | null> => {
     if (!msg || typeof msg !== 'object') return null;
