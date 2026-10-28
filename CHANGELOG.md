@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Bitwise DAX functions:**
+  - Added `BITAND(<n1>, <n2>)`, `BITOR(<n1>, <n2>)`, `BITXOR(<n1>, <n2>)`, `BITLSHIFT(<n>, <shift>)`, and `BITRSHIFT(<n>, <shift>)` supporting full 64-bit integer precision and row-compilation.
+- **Visual copy image to clipboard:**
+  - Added `visual.copyImage()` to `VisualHandle` and visual header export menu ("Copy image: Clipboard"), writing full-bleed raster PNG snapshots directly to system clipboard via the Async Clipboard API (`navigator.clipboard.write([new ClipboardItem(...)])`).
+
 - **Enterprise SQL pushdown dialects:**
   - **MySQL & Snowflake support:** Extended `SqlDialect` with `'mysql'` and `'snowflake'`. Generates native pushdown queries with dialect-specific functions (`<=>` null-safe equality, `MAKEDATE`, `DATE_ADD`, `DATEDIFF` for MySQL; `DATEADD`, `DATEDIFF(day, ...)`, `LAST_DAY`, `DATE_TRUNC` for Snowflake), identifier escaping, and parameter substitution.
 - **Reporting & visual enhancements:**

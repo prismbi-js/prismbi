@@ -207,6 +207,8 @@ export interface VisualHandle {
   toSvg(): string;
   /** Download as PNG or SVG. */
   exportImage(type?: 'png' | 'svg', filename?: string): Promise<void>;
+  /** Copy high-resolution PNG image directly to system clipboard. */
+  copyImage(): Promise<boolean>;
 }
 
 const DATE_TAG = '$date';
@@ -1553,6 +1555,7 @@ export class Report implements ReportRuntime {
       expandAll: () => getHost().expandAll(),
       toSvg: () => getHost().toSvg(),
       exportImage: (type, name) => getHost().exportImage(type, name),
+      copyImage: () => getHost().copyImage(),
     };
   }
 

@@ -600,6 +600,7 @@ export class VisualHost {
       this.rt.menu(r.left, r.bottom + 4, [
         { label: 'Export data', hint: 'CSV', onClick: () => this.exportCsv() },
         { label: 'Export data', hint: 'Excel', onClick: () => void this.exportXlsx() },
+        { label: 'Copy image', hint: 'Clipboard', onClick: () => void this.copyImage() },
         { label: 'Export image', hint: 'PNG', onClick: () => void this.exportImage('png') },
         { label: 'Export image', hint: 'SVG', onClick: () => void this.exportImage('svg') },
       ]);
@@ -624,6 +625,25 @@ export class VisualHost {
     const canvas = await svgToCanvas(svgText, this.rt.theme.surface);
     const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG export failed'))), 'image/png'));
     download(blob, filename);
+  }
+
+  /** Copy the visual as a high-resolution PNG image directly to the system clipboard. */
+  async copyImage(): Promise<boolean> {
+    const svgText = this.toSvg();
+    const canvas = await svgToCanvas(svgText, this.rt.theme.surface);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      if (!canvas.toBlob) return resolve(new Blob([svgText], { type: 'image/svg+xml' }));
+      canvas.toBlob((b) => resolve(b), 'image/png');
+    });
+    if (blob && typeof navigator !== 'undefined' && navigator.clipboard && typeof (navigator.clipboard as any).write === 'function' && typeof ClipboardItem !== 'undefined') {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   private afterDrill(): void {

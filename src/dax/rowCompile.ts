@@ -173,7 +173,7 @@ export function compileRowTest(model: DataModel, table: string, e: Expr, lenient
 
 const COMPARISONS = new Set(['=', '==', '<>', '<', '>', '<=', '>=']);
 /** Functions a judged condition may use: deterministic, reading only their arguments. */
-const PURE = new Set(['BLANK', 'TRUE', 'FALSE', 'DATE', 'TIME', 'TIMEVALUE', 'NOT', 'AND', 'OR', 'IF', 'ISBLANK', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'SEARCH', 'FIND', 'YEAR', 'MONTH', 'DAY', 'QUARTER', 'WEEKDAY', 'ABS', 'ROUND', 'INT', 'VALUE', 'FORMAT', 'EXACT']);
+const PURE = new Set(['BLANK', 'TRUE', 'FALSE', 'DATE', 'TIME', 'TIMEVALUE', 'NOT', 'AND', 'OR', 'IF', 'ISBLANK', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'SEARCH', 'FIND', 'YEAR', 'MONTH', 'DAY', 'QUARTER', 'WEEKDAY', 'ABS', 'ROUND', 'INT', 'VALUE', 'FORMAT', 'EXACT', 'BITAND', 'BITOR', 'BITXOR', 'BITLSHIFT', 'BITRSHIFT']);
 
 function compileTest(model: DataModel, table: string, e: Expr, lenient: boolean, judge: Judge): TestNode | null {
   const both = (a: Expr, b: Expr, and: boolean): TestNode | null => {

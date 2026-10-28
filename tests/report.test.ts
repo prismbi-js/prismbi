@@ -195,4 +195,62 @@ describe('Report', () => {
       host.remove();
     }
   });
+
+  it('copies visual image to clipboard', async () => {
+    const r = new Report(el, { model: makeModel(), ...definition() });
+    r.flush();
+
+    let clipboardWritten: unknown = null;
+    class FakeClipboardItem {
+      types: string[];
+      data: Record<string, Blob>;
+      constructor(data: Record<string, Blob>) {
+        this.data = data;
+        this.types = Object.keys(data);
+      }
+    }
+    const origClipboardItem = (globalThis as any).ClipboardItem;
+    const origImage = globalThis.Image;
+    const origToBlob = HTMLCanvasElement.prototype.toBlob;
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+
+    try {
+      (globalThis as any).ClipboardItem = FakeClipboardItem;
+      class MockImage {
+        onload: (() => void) | null = null;
+        width = 200;
+        height = 100;
+        set src(_v: string) {
+          setTimeout(() => this.onload?.(), 0);
+        }
+      }
+      (globalThis as any).Image = MockImage;
+      HTMLCanvasElement.prototype.toBlob = function (cb: (b: Blob | null) => void) {
+        cb(new Blob(['fake-png'], { type: 'image/png' }));
+      };
+      HTMLCanvasElement.prototype.getContext = (() => ({
+        fillRect() {},
+        scale() {},
+        drawImage() {},
+      })) as never;
+
+      Object.assign(navigator, {
+        clipboard: {
+          write: async (items: unknown[]) => {
+            clipboardWritten = items;
+          },
+        },
+      });
+
+      const ok = await r.visual('card').copyImage();
+      expect(ok).toBe(true);
+      expect(clipboardWritten).not.toBeNull();
+    } finally {
+      (globalThis as any).ClipboardItem = origClipboardItem;
+      globalThis.Image = origImage;
+      HTMLCanvasElement.prototype.toBlob = origToBlob;
+      HTMLCanvasElement.prototype.getContext = origGetContext;
+      r.destroy();
+    }
+  });
 });

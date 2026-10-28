@@ -150,6 +150,11 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
     ['LOG10', 'LOG10(<number>)', 'Base-10 logarithm.'],
     ['SIGN', 'SIGN(<number>)', '-1, 0 or 1.'],
     ['PI', 'PI()', 'π.'],
+    ['BITAND', 'BITAND(<number1>, <number2>)', 'Bitwise AND of two integers.'],
+    ['BITOR', 'BITOR(<number1>, <number2>)', 'Bitwise OR of two integers.'],
+    ['BITXOR', 'BITXOR(<number1>, <number2>)', 'Bitwise XOR of two integers.'],
+    ['BITLSHIFT', 'BITLSHIFT(<number>, <shift>)', 'Bitwise left shift.'],
+    ['BITRSHIFT', 'BITRSHIFT(<number>, <shift>)', 'Bitwise right shift.'],
   ]),
   ...F('Statistical', [
     ['STDEV.S', 'STDEV.S(<column>)', 'Sample standard deviation.'],

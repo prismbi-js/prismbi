@@ -278,4 +278,18 @@ describe('found by importing a real Power BI project', () => {
     expect(fiscalLast.getMonth()).toBe(5); // June 30
     expect(fiscalLast.getDate()).toBe(30);
   });
+
+  it('evaluates bitwise functions BITAND, BITOR, BITXOR, BITLSHIFT, BITRSHIFT', () => {
+    expect(ev('BITAND(13, 7)')).toBe(5);
+    expect(ev('BITAND(0, 5)')).toBe(0);
+    expect(ev('BITOR(10, 3)')).toBe(11);
+    expect(ev('BITOR(0, 0)')).toBe(0);
+    expect(ev('BITXOR(10, 3)')).toBe(9);
+    expect(ev('BITXOR(7, 7)')).toBe(0);
+    expect(ev('BITLSHIFT(4, 2)')).toBe(16);
+    expect(ev('BITLSHIFT(16, -2)')).toBe(4);
+    expect(ev('BITRSHIFT(16, 2)')).toBe(4);
+    expect(ev('BITRSHIFT(4, -2)')).toBe(16);
+    expect(ev('BITAND(4294967295, 255)')).toBe(255);
+  });
 });

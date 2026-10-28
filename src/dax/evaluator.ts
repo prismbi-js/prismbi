@@ -73,7 +73,7 @@ const CONTEXT_FUNCS = new Set([
 const PURE_FUNCS = new Set([
   'BLANK', 'TRUE', 'FALSE', 'DATE', 'TIME', 'TIMEVALUE', 'NOT', 'AND', 'OR', 'IF', 'SWITCH', 'COALESCE', 'ISBLANK', 'ISNUMBER', 'ISTEXT', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM',
   'SUBSTITUTE', 'CONCATENATE', 'EXACT', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'SEARCH', 'FIND', 'YEAR', 'MONTH', 'DAY', 'QUARTER', 'WEEKDAY', 'WEEKNUM', 'ABS', 'ROUND', 'ROUNDUP',
-  'ROUNDDOWN', 'INT', 'TRUNC', 'MOD', 'VALUE', 'FORMAT', 'DIVIDE',
+  'ROUNDDOWN', 'INT', 'TRUNC', 'MOD', 'VALUE', 'FORMAT', 'DIVIDE', 'BITAND', 'BITOR', 'BITXOR', 'BITLSHIFT', 'BITRSHIFT',
 ]);
 
 const UNHANDLED = Symbol('unhandled');
@@ -1399,6 +1399,24 @@ export class Evaluator {
         return Math.sign(num(s(0)));
       case 'PI':
         return Math.PI;
+      case 'BITAND':
+        return Number(BigInt(Math.trunc(num(s(0)))) & BigInt(Math.trunc(num(s(1)))));
+      case 'BITOR':
+        return Number(BigInt(Math.trunc(num(s(0)))) | BigInt(Math.trunc(num(s(1)))));
+      case 'BITXOR':
+        return Number(BigInt(Math.trunc(num(s(0)))) ^ BigInt(Math.trunc(num(s(1)))));
+      case 'BITLSHIFT': {
+        const n = BigInt(Math.trunc(num(s(0))));
+        const shift = Math.trunc(num(s(1)));
+        if (shift < 0) return Number(n >> BigInt(-shift));
+        return Number(n << BigInt(shift));
+      }
+      case 'BITRSHIFT': {
+        const n = BigInt(Math.trunc(num(s(0))));
+        const shift = Math.trunc(num(s(1)));
+        if (shift < 0) return Number(n << BigInt(-shift));
+        return Number(n >> BigInt(shift));
+      }
 
       // ---- text
       case 'CONCATENATE':
