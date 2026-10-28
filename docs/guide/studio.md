@@ -128,4 +128,16 @@ Visuals not listed in `mobile.visuals` are hidden on phones. Pages without a pho
   - bring to front, bring forward, send backward, send to back
 - **Layers:** lists the page front to back. Click to select, use the arrows to reorder.
 
+![The Layers pane in Studio showing visual z-order, lock and visibility](../images/studio-layers.png)
+
 In code: `report.selectedVisuals`, `selectVisuals(ids)`, `toggleVisualSelection(id)`, `alignVisuals(how, ids?)`, `distributeVisuals(axis, ids?)`, `groupVisuals(ids?)`, `ungroupVisuals(ids?)`, `arrange(id, 'front' | 'forward' | 'backward' | 'back')` and `commitLayouts(updates)`. All of them work on whichever layout is showing, desktop or phone.
+
+## Quick measures
+
+The **Quick measure** button in the Studio top bar opens a modal wizard generating parameterized DAX measures:
+1. **Year-over-Year Growth**: `DIVIDE([M] - CALCULATE([M], SAMEPERIODLASTYEAR(Date[Date])), CALCULATE([M], SAMEPERIODLASTYEAR(Date[Date])))`
+2. **Running Total**: `CALCULATE([M], DATESBETWEEN(Date[Date], BLANK(), MAX(Date[Date])))`
+3. **Rolling 3-Month Average**: `AVERAGEX(DATESINPERIOD(Date[Date], LASTDATE(Date[Date]), -3, MONTH), [M])`
+4. **Share of Category Total**: `DIVIDE([M], CALCULATE([M], ALLSELECTED(Table[Category])))`
+
+![Quick measures wizard dialog with pre-built DAX templates](../images/studio-quick-measures.png)

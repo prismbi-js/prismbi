@@ -39,6 +39,8 @@ const SHOTS = [
   { name: 'studio-dax-copilot', url: '/studio.html', setup: `studio.editMeasure(); (() => { const d = document.querySelector('[role=dialog]'); d.querySelector('input[aria-label="Describe the measure"]').value = 'sales yoy % for bikes'; [...d.querySelectorAll('button')].find((b) => b.textContent === '✦ Write DAX').click(); setTimeout(() => [...d.querySelectorAll('button')].find((b) => b.textContent === 'Explain').click(), 300); })()`, clip: '[role=dialog]', wait: 1200 },
   { name: 'studio-transforms', url: '/studio.html', setup: `studio.editTransforms('Sales')`, clip: '[role=dialog]' },
   { name: 'studio-schedules', url: '/studio.html', setup: `studio.editSchedules()`, clip: '[role=dialog]' },
+  { name: 'studio-quick-measures', url: '/studio.html', setup: `studio.quickMeasure()`, clip: '[role=dialog]', wait: 500 },
+  { name: 'studio-layers', url: '/studio.html', setup: `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Layers')?.click()`, wait: 500 },
   { name: 'studio-model-view', url: '/studio.html', setup: `studio.setView('model')` },
   { name: 'studio-data-view', url: '/studio.html', setup: `studio.setView('data')` },
   { name: 'studio-phone', url: '/studio.html', setup: `studio.setPhoneLayout(true)` },
