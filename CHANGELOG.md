@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **DAX functions:** `TIME(<hour>, <minute>, <second>)`, `TIMEVALUE(<text>)`, `CONTAINSSTRINGEXACT(<within>, <find>)`, and `CALENDARAUTO([<fiscalYearEndMonth>])`.
+- **Fix:** `TIME` and `CONTAINSSTRINGEXACT` were listed in pure functions and compiler allowlists but lacked evaluator cases and function catalog entries.
+- **Fix:** dynamic imports in `tests/visual-entries.test.ts` now include an explicit `.ts` static extension to prevent Vite bundler warnings.
 - **Omitted arguments** parse as their default (BLANK): `RANKX(ALL(Product[Name]), [Sales], , ASC)` (the omitted value is the expression itself), `TOTALYTD([Sales], Date[Date], , "6/30")` (no filter), `IF(cond, , x)`. They were syntax errors.
 - **`RANKX(ALL(Table) | ALLSELECTED(Table), …)` on the single-pass path:** rows of a table with a unique key (the one side of a relationship) are ranked by that key.
 - **No totals, less work:** when a visual has no totals row, the single pass doesn't accumulate grand totals, and rank and iterator sub-queries skip their totals pass. Product × region share and rank at 1M rows: 799 → 300 ms.

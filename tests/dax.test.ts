@@ -228,4 +228,54 @@ describe('found by importing a real Power BI project', () => {
     const q1 = q.rows.filter((r) => (r.keys[0] as number) <= 3).reduce((a, r) => a + (r.values[1] as number), 0);
     expect(march.values[0] as number).toBeCloseTo(q1, 6);
   });
+
+  it('TIME and TIMEVALUE create and parse times', () => {
+    const t = ev('TIME(14, 30, 45)') as Date;
+    expect(t instanceof Date).toBe(true);
+    expect(t.getHours()).toBe(14);
+    expect(t.getMinutes()).toBe(30);
+    expect(t.getSeconds()).toBe(45);
+    expect(ev('HOUR(TIME(9, 15, 0))')).toBe(9);
+    expect(ev('MINUTE(TIME(9, 15, 0))')).toBe(15);
+    expect(ev('SECOND(TIME(9, 15, 23))')).toBe(23);
+
+    const tv1 = ev('TIMEVALUE("16:45:10")') as Date;
+    expect(tv1.getHours()).toBe(16);
+    expect(tv1.getMinutes()).toBe(45);
+    expect(tv1.getSeconds()).toBe(10);
+
+    const tv2 = ev('TIMEVALUE("2:30 PM")') as Date;
+    expect(tv2.getHours()).toBe(14);
+    expect(tv2.getMinutes()).toBe(30);
+  });
+
+  it('CONTAINSSTRINGEXACT performs case-sensitive matching', () => {
+    expect(ev('CONTAINSSTRING("Hello World", "world")')).toBe(true);
+    expect(ev('CONTAINSSTRINGEXACT("Hello World", "world")')).toBe(false);
+    expect(ev('CONTAINSSTRINGEXACT("Hello World", "World")')).toBe(true);
+  });
+
+  it('CALENDARAUTO generates dates based on model date columns', () => {
+    const auto = m.evaluateTable('CALENDARAUTO()');
+    expect(auto.columns).toEqual(['Date']);
+    expect(auto.rows.length).toBeGreaterThan(365);
+    const firstDate = auto.rows[0][0] as Date;
+    const lastDate = auto.rows[auto.rows.length - 1][0] as Date;
+    // Model fixtures have dates in 2024 and 2025
+    expect(firstDate.getFullYear()).toBe(2024);
+    expect(firstDate.getMonth()).toBe(0);
+    expect(firstDate.getDate()).toBe(1);
+    expect(lastDate.getFullYear()).toBe(2025);
+    expect(lastDate.getMonth()).toBe(11);
+    expect(lastDate.getDate()).toBe(31);
+
+    // Fiscal year ending in June (month 6)
+    const fiscal = m.evaluateTable('CALENDARAUTO(6)');
+    const fiscalFirst = fiscal.rows[0][0] as Date;
+    const fiscalLast = fiscal.rows[fiscal.rows.length - 1][0] as Date;
+    expect(fiscalFirst.getMonth()).toBe(6); // July 1
+    expect(fiscalFirst.getDate()).toBe(1);
+    expect(fiscalLast.getMonth()).toBe(5); // June 30
+    expect(fiscalLast.getDate()).toBe(30);
+  });
 });

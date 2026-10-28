@@ -71,7 +71,7 @@ const CONTEXT_FUNCS = new Set([
 
 /** Deterministic scalar functions: a boolean filter made only of these and columns doesn't depend on the context. */
 const PURE_FUNCS = new Set([
-  'BLANK', 'TRUE', 'FALSE', 'DATE', 'TIME', 'NOT', 'AND', 'OR', 'IF', 'SWITCH', 'COALESCE', 'ISBLANK', 'ISNUMBER', 'ISTEXT', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM',
+  'BLANK', 'TRUE', 'FALSE', 'DATE', 'TIME', 'TIMEVALUE', 'NOT', 'AND', 'OR', 'IF', 'SWITCH', 'COALESCE', 'ISBLANK', 'ISNUMBER', 'ISTEXT', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM',
   'SUBSTITUTE', 'CONCATENATE', 'EXACT', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'SEARCH', 'FIND', 'YEAR', 'MONTH', 'DAY', 'QUARTER', 'WEEKDAY', 'WEEKNUM', 'ABS', 'ROUND', 'ROUNDUP',
   'ROUNDDOWN', 'INT', 'TRUNC', 'MOD', 'VALUE', 'FORMAT', 'DIVIDE',
 ]);
@@ -811,7 +811,7 @@ export class Evaluator {
         }
       }
     }
-    if (a.type === 'binary' || (a.type === 'unary' && a.op === 'NOT') || (a.type === 'call' && ['NOT', 'AND', 'OR', 'CONTAINSSTRING', 'ISBLANK'].includes(a.name))) {
+    if (a.type === 'binary' || (a.type === 'unary' && a.op === 'NOT') || (a.type === 'call' && ['NOT', 'AND', 'OR', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'ISBLANK'].includes(a.name))) {
       return { filters: [this.booleanFilter(a, ctx)] };
     }
     const t = this.evalTable(a, ctx);
@@ -950,6 +950,12 @@ export class Evaluator {
     const unit = interval.toUpperCase();
     if (!['DAY', 'MONTH', 'QUARTER', 'YEAR'].includes(unit)) throw new DaxError(`Unknown interval ${interval}`);
     return this.memoDates(source, `shift\u0001${col.table}\u0001${col.column}\u0001${n}\u0001${unit}`, () => this.datesTable(col, shiftDates(visible, new Set(all.map((d) => d.getTime())), n, unit)));
+  }
+
+  private datesRange(a: Date, b: Date): TuplesTable {
+    const tuples: CellValue[][] = [];
+    for (let d = new Date(a.getFullYear(), a.getMonth(), a.getDate()); d <= b && tuples.length < 200_000; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) tuples.push([d]);
+    return { kind: 'tuples', columns: [{ table: '', column: 'Date' }], tuples };
   }
 
   private intervalArg(e: Expr | undefined): string {
@@ -1431,6 +1437,8 @@ export class Evaluator {
       }
       case 'CONTAINSSTRING':
         return this.text(s(0)).toLowerCase().includes(this.text(s(1)).toLowerCase());
+      case 'CONTAINSSTRINGEXACT':
+        return this.text(s(0)).includes(this.text(s(1)));
       case 'EXACT':
         return this.text(s(0)) === this.text(s(1));
       case 'VALUE':
@@ -1441,6 +1449,8 @@ export class Evaluator {
       // ---- date
       case 'DATE':
         return new Date(num(s(0)), num(s(1)) - 1, num(s(2)));
+      case 'TIME':
+        return new Date(1899, 11, 30, Math.floor(num(s(0))), Math.floor(num(s(1))), Math.floor(num(s(2))));
       case 'TODAY': {
         const d = new Date();
         return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -1742,9 +1752,29 @@ export class Evaluator {
         const a = s(0);
         const b = s(1);
         if (!(a instanceof Date) || !(b instanceof Date)) throw new DaxError('CALENDAR expects two dates');
-        const tuples: CellValue[][] = [];
-        for (let d = new Date(a.getFullYear(), a.getMonth(), a.getDate()); d <= b && tuples.length < 200_000; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) tuples.push([d]);
-        return { kind: 'tuples', columns: [{ table: '', column: 'Date' }], tuples };
+        return this.datesRange(a, b);
+      }
+      case 'CALENDARAUTO': {
+        const fEnd = args.length ? Math.min(12, Math.max(1, Math.floor(num(s(0))))) : 12;
+        let min = Infinity;
+        let max = -Infinity;
+        for (const t of this.model.tableNames()) {
+          for (const col of this.model.table(t).columns.values()) {
+            if (col.type === 'date') {
+              for (const v of col.values) {
+                if (v instanceof Date) {
+                  const y = v.getFullYear();
+                  if (y < min) min = y;
+                  if (y > max) max = y;
+                }
+              }
+            }
+          }
+        }
+        if (!Number.isFinite(min)) min = max = new Date().getFullYear();
+        const start = fEnd === 12 ? new Date(min, 0, 1) : new Date(min - 1, fEnd, 1);
+        const end = fEnd === 12 ? new Date(max, 11, 31) : new Date(max + 1, fEnd, 0);
+        return this.datesRange(start, end);
       }
       case 'TREATAS': {
         const t = this.toTuples(this.evalTable(args[0], ctx));
@@ -1918,6 +1948,16 @@ export class Evaluator {
         const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
         const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(t);
         return Number.isNaN(d.getTime()) ? null : d;
+      }
+      case 'TIMEVALUE': {
+        const v = s(0);
+        if (v instanceof Date) return v;
+        const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i.exec(this.text(v).trim());
+        if (!m) return null;
+        let h = +m[1];
+        if (m[4]?.toUpperCase() === 'PM' && h < 12) h += 12;
+        else if (m[4]?.toUpperCase() === 'AM' && h === 12) h = 0;
+        return new Date(1899, 11, 30, h, +m[2], m[3] ? +m[3] : 0);
       }
       case 'SECOND': {
         const v = s(0);

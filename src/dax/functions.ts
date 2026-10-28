@@ -92,6 +92,7 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
     ['DATATABLE', 'DATATABLE("Col", TYPE, ..., {{v1, v2}, ...})', 'An inline table of constants.'],
     ['GENERATESERIES', 'GENERATESERIES(<start>, <end>, [<step>])', 'A one-column table of numbers ([Value]).'],
     ['CALENDAR', 'CALENDAR(<start>, <end>)', 'A one-column table of dates ([Date]).'],
+    ['CALENDARAUTO', 'CALENDARAUTO([<fiscalYearEndMonth>])', 'A one-column table of dates covering all dates in the model ([Date]).'],
     ['CONTAINS', 'CONTAINS(<table>, <column>, <value>, ...)', 'TRUE when a row matches all column/value pairs.'],
   ]),
   ...F('Time intelligence', [
@@ -181,6 +182,7 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
     ['SEARCH', 'SEARCH(<find>, <within>, [<start>], [<notFound>])', 'Position of text (case-insensitive).'],
     ['FIND', 'FIND(<find>, <within>, [<start>], [<notFound>])', 'Position of text (case-sensitive).'],
     ['CONTAINSSTRING', 'CONTAINSSTRING(<within>, <find>)', 'TRUE when the text contains another (case-insensitive).'],
+    ['CONTAINSSTRINGEXACT', 'CONTAINSSTRINGEXACT(<within>, <find>)', 'TRUE when the text contains another (case-sensitive).'],
     ['EXACT', 'EXACT(<text1>, <text2>)', 'Case-sensitive equality.'],
     ['VALUE', 'VALUE(<text>)', 'Text to number.'],
     ['FORMAT', 'FORMAT(<value>, <format>)', 'Formats a value with a format string.'],
@@ -188,6 +190,8 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
   ...F('Date', [
     ['DATE', 'DATE(<year>, <month>, <day>)', 'A date.'],
     ['DATEVALUE', 'DATEVALUE(<text>)', 'Text to date.'],
+    ['TIME', 'TIME(<hour>, <minute>, <second>)', 'Converts hours, minutes, and seconds to a time.'],
+    ['TIMEVALUE', 'TIMEVALUE(<text>)', 'Converts a text time to a time.'],
     ['TODAY', 'TODAY()', 'Today (no time).'],
     ['NOW', 'NOW()', 'Current date and time.'],
     ['UTCNOW', 'UTCNOW()', 'Current UTC date and time.'],

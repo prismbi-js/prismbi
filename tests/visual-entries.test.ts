@@ -24,9 +24,11 @@ describe('per-visual entry points', () => {
 
   it('cover every built-in visual', async () => {
     const all = Object.values(await import('../src/visuals')).map((d) => (d as { type: string }).type);
-    const files = readdirSync('src/visuals/entries').filter((f: string) => f.endsWith('.ts'));
+    const names = readdirSync('src/visuals/entries')
+      .filter((f: string) => f.endsWith('.ts'))
+      .map((f: string) => f.replace(/\.ts$/, ''));
     const covered = new Set<string>();
-    for (const f of files) for (const d of Object.values(await import(`../src/visuals/entries/${f}`))) covered.add((d as { type: string }).type);
+    for (const name of names) for (const d of Object.values(await import(`../src/visuals/entries/${name}.ts`))) covered.add((d as { type: string }).type);
     expect(all.filter((t) => !covered.has(t))).toEqual([]);
     expect(all.length).toBeGreaterThan(30);
   });
