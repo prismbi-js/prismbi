@@ -94,6 +94,7 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
     ['CALENDAR', 'CALENDAR(<start>, <end>)', 'A one-column table of dates ([Date]).'],
     ['CALENDARAUTO', 'CALENDARAUTO([<fiscalYearEndMonth>])', 'A one-column table of dates covering all dates in the model ([Date]).'],
     ['CONTAINS', 'CONTAINS(<table>, <column>, <value>, ...)', 'TRUE when a row matches all column/value pairs.'],
+    ['CONTAINSROW', 'CONTAINSROW(<table>, <value>...)', 'TRUE when the table contains a row with the specified values.'],
   ]),
   ...F('Time intelligence', [
     ['TOTALYTD', 'TOTALYTD(<expression>, <dates>, [<filter>], [<yearEnd>])', 'Year-to-date value.'],

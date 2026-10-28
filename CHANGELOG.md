@@ -4,6 +4,9 @@
 
 - **Financial DAX functions:**
   - Added `XNPV(<table>, <values>, <dates>, <rate>)` and `XIRR(<table>, <values>, <dates>, [<guess>])` supporting irregular cash flow schedules, Newton-Raphson numerical solving, and table iterators or column vectors.
+- **DAX tuple matching & CONTAINSROW:**
+  - Added `CONTAINSROW(<table>, <value>...)` for positional tuple matching across tables and inline constructors.
+  - Extended binary `IN` operator to support row tuples: `(v1, v2) IN Table` matching multi-column table rows.
 - **Extended SQL pushdown dialects & parameterized mode:**
   - Added **Microsoft SQL Server (T-SQL)** dialect (`'mssql'`): bracket identifier quoting (`[Table].[Column]`), `OFFSET 0 ROWS FETCH NEXT n ROWS ONLY` paging, `DATEPART` temporal extraction, and null-safe ordering.
   - Added **Google BigQuery** dialect (`'bigquery'`): backtick identifiers, `IEEE_DIVIDE` safe division, `CONCAT`, and grouping sets.

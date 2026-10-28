@@ -250,9 +250,13 @@ export class Evaluator {
     if (op === '&&') return truthy(this.evalScalar(l, ctx)) && truthy(this.evalScalar(r, ctx));
     if (op === '||') return truthy(this.evalScalar(l, ctx)) || truthy(this.evalScalar(r, ctx));
     if (op === 'IN') {
-      const a = this.evalScalar(l, ctx);
       const t = this.evalTableValue(this.eval(r, ctx));
       const tuples = this.tableTuples(t);
+      if (l.type === 'list' && l.row) {
+        const vals = l.items.map((it) => this.evalScalar(it, ctx));
+        return tuples.some((tu) => vals.every((v, i) => valueKey(tu[i]) === valueKey(v)));
+      }
+      const a = this.evalScalar(l, ctx);
       return tuples.some((tu) => valueKey(tu[0]) === valueKey(a));
     }
     const a = this.evalScalar(l, ctx);
@@ -1811,6 +1815,13 @@ export class Evaluator {
         }
         if (conds.some((c) => c.idx < 0)) throw new DaxError('CONTAINS: columns must belong to the table');
         return tt.tuples.some((tu) => conds.every((c) => valueKey(tu[c.idx]) === valueKey(c.v)));
+      }
+      case 'CONTAINSROW': {
+        const t = this.evalTable(args[0], ctx);
+        const tt = this.toTuples(t);
+        const vals: CellValue[] = [];
+        for (let i = 1; i < args.length; i++) vals.push(s(i));
+        return tt.tuples.some((tu) => vals.every((v, idx) => valueKey(tu[idx]) === valueKey(v)));
       }
 
       // ---- lookups & row context

@@ -19,6 +19,8 @@ describe('parser', () => {
     expect(ev(`-- line comment
       COUNTROWS('Products') /* block */`)).toBe(5);
     expect(ev('3 IN {1, 2, 3}')).toBe(true);
+    expect(ev('(1, "a") IN {(1, "a"), (2, "b")}')).toBe(true);
+    expect(ev('(1, "x") IN {(1, "a"), (2, "b")}')).toBe(false);
   });
 
   it('reports syntax errors with position', () => {
@@ -311,5 +313,12 @@ describe('found by importing a real Power BI project', () => {
 
     const irrCol = m.evaluate('XIRR(CashFlows[Amount], CashFlows[Date])') as number;
     expect(irrCol).toBeCloseTo(irr, 4);
+  });
+
+  it('evaluates CONTAINSROW table and tuple presence', () => {
+    expect(ev('CONTAINSROW({(1, "a"), (2, "b")}, 1, "a")')).toBe(true);
+    expect(ev('CONTAINSROW({(1, "a"), (2, "b")}, 1, "x")')).toBe(false);
+    expect(ev('CONTAINSROW(Products, 1, "Road Bike", "Bikes", "Red")')).toBe(true);
+    expect(ev('CONTAINSROW(Products, 999, "Road Bike", "Bikes", "Red")')).toBe(false);
   });
 });

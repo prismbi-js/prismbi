@@ -51,7 +51,7 @@ These need a date table related to your facts. See [data-model.md](data-model.md
 Used inside `CALCULATE`, these clear the other filters on the date table (Power BI "mark as date table" behaviour). So `CALCULATE([Sales], SAMEPERIODLASTYEAR(Date[Date]))` works inside a visual grouped by `Date[Year]`.
 
 ### Relationships & lookups
-`USERELATIONSHIP` · `CROSSFILTER` · `TREATAS(table, col…)` · `LOOKUPVALUE(result, searchCol, value, …, [alternate])` · `CONTAINS(table, col, value, …)`
+`USERELATIONSHIP` · `CROSSFILTER` · `TREATAS(table, col…)` · `LOOKUPVALUE(result, searchCol, value, …, [alternate])` · `CONTAINS(table, col, value, …)` · `CONTAINSROW(table, value…)`
 
 ### Table functions
 `SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `NATURALINNERJOIN` · `NATURALLEFTOUTERJOIN` · `SAMPLE(n, table, orderBy, [ASC|DESC]…)` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · table constructors `{ 1, 2 }` (column `Value`) and `{ (1, "a"), (2, "b") }` (`Value1`, `Value2`) · `GENERATESERIES` · `CALENDAR` · `CALENDARAUTO([fiscalYearEndMonth])` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
