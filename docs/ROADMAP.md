@@ -19,7 +19,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with ~160 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈82 KB min+gzip**. A typical dashboard with five visuals is **≈101 KB**, everything (34 visuals) is **≈125 KB**, and the full studio app (`@prismbi/prismbi/studio`) is **≈122 KB** (measured by `npm run size`). Connectors (≈4.4 KB) and the worker engine (≈2 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with over 170 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈82 KB min+gzip**. A typical dashboard with five visuals is **≈101 KB**, everything (36 visuals) is **≈125 KB**, and the full studio app (`@prismbi/prismbi/studio`) is **≈122 KB** (measured by `npm run size`). Connectors (≈4.4 KB) and the worker engine (≈2 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -358,6 +358,26 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - A sample `.pbip` report imports and renders with measures matching.
 - The agent panel builds a three-visual page from one prompt with undo.
 - The playground runs every guide example.
+
+## Phase 10: Enterprise & Scale ✅
+
+**Goal:** high-cardinality single-pass analytics, multi-worker parallel execution, enterprise financial modeling, multi-dialect SQL pushdown, and presentation export.
+
+**Done:**
+- [x] **High-cardinality BigInt group keys:** Single-pass grouped evaluation (`src/data/fastQuery.ts`) extended beyond 4M key combinations using 64-bit integer encoding (`BigInt64Array`), supporting high-cardinality multi-column cross-tabulations without falling back to slow row scans.
+- [x] **Multi-worker parallel query pool:** `createWorkerPool` (`src/worker.ts`) enables sharded execution across browser Web Workers (`navigator.hardwareConcurrency`) with automatic mutations replication and partial aggregation reduction.
+- [x] **Financial & Bitwise DAX functions:** Over 170 DAX functions, including `XNPV`, `XIRR` (with Newton-Raphson solver), `BITAND`, `BITOR`, `BITXOR`, `BITLSHIFT`, `BITRSHIFT`, `CALENDARAUTO`, `TIME`, `TIMEVALUE`, `CONTAINSSTRINGEXACT`, and `CONTAINSROW` / tuple `(v1, v2) IN table` filtering.
+- [x] **Expanded SQL pushdown dialects:** `sqlEngine` / `toSql` (`src/sql.ts`) support Microsoft SQL Server (T-SQL), Google BigQuery, MySQL/MariaDB, Snowflake, DuckDB, Postgres, and SQLite, plus a secure Parameterized SQL Mode (`opts.parameterized: true`, `SqlPlan.params`).
+- [x] **PowerPoint (`.pptx`) exporter:** Dependency-free `.pptx` presentation generator (`src/report/pptx.ts`, `report.exportPptx()`) exporting full multi-page reports or single visuals as presentation decks.
+- [x] **Streaming CSV URL connector:** Zero-copy streaming ingestion from HTTP/HTTPS URLs (`loadCsvColumns`, `streamCsvUrl` in `@prismbi/prismbi/connectors`) chunking directly into typed array buffers.
+- [x] **Studio UX upgrades:** Magnetic smart alignment guides, lasso marquee selection, visual layers/selection pane with z-index reordering and locks, quick measures wizard, and hierarchical DAG model diagram layout.
+- [x] **Matrix enhancements & small multiples:** Matrix in-cell sparklines and stepped layout toggle; small multiples expanded to cartesian, scatter, bubble, and bullet visuals; sweep-line data label collision avoidance.
+- [x] **Official MCP Server:** `@prismbi/mcp` / `createMcpServer` (`src/ai/mcp.ts`) providing standard MCP tools for LLM agents.
+
+**Acceptance:**
+- 520 passing tests across 46 test suites.
+- 90 visual regression screenshots pass with 0 failures across light, dark, and high-contrast themes.
+- Strict bundle budget compliance across all 11 bundle targets.
 
 ## Suggested order after Phase 6
 

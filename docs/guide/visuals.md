@@ -45,6 +45,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | ![stackedArea](../images/visuals/stackedArea.png) `stackedArea` | ![stackedBar](../images/visuals/stackedBar.png) `stackedBar` | ![stackedColumn](../images/visuals/stackedColumn.png) `stackedColumn` |
 | ![table](../images/visuals/table.png) `table` | ![text](../images/visuals/text.png) `text` | ![treemap](../images/visuals/treemap.png) `treemap` |
 | ![waterfall](../images/visuals/waterfall.png) `waterfall` | ![sunburst](../images/visuals/sunburst.png) `sunburst` | ![scorecard](../images/visuals/scorecard.png) `scorecard` |
+| ![filledMap](../images/visuals/filled-map-world.png) `filledMap` | ![column-error-bars](../images/visuals/column-error-bars.png) `column-error-bars` | ![line-forecast](../images/visuals/line-forecast.png) `line-forecast` |
 
 ## Catalogue
 

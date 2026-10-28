@@ -11,7 +11,7 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 │ report/           Report · VisualHost · FilterPane · Tooltip  │  runtime & chrome
 │                   cross-filter state, bookmarks, JSON, events │
 ├──────────────────────────────────────────────────────────────┤
-│ visuals/          defineVisual registry · 34 built-ins        │  presentation
+│ visuals/          defineVisual registry · 36 built-ins        │  presentation
 │ render/           svg/html helpers · scales · colour          │
 ├──────────────────────────────────────────────────────────────┤
 │ data/query.ts     QuerySpec → QueryResult (group, sort, top)  │  query engine
@@ -30,22 +30,25 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | `src/data/filters.ts` | Public `FilterSpec` → compiled `Filter`, cache keys, CALCULATE override rules |
 | `src/data/model.ts` | `DataModel`: relationships, expanded tables, `rowsOf(table, ctx)` filter propagation, related lookups, row-set cache |
 | `src/data/query.ts` | Field resolution (measures, implicit aggregations, expressions), auto-exist grouping, sorting, Top N, highlights, totals |
-| `src/data/fastQuery.ts` | Single-pass grouped evaluation: compiles simple measures into aggregation trees and accumulates every group in one scan of the fact rows |
+| `src/data/fastQuery.ts` | Single-pass grouped evaluation: compiles simple measures into aggregation trees and accumulates every group in one scan of the fact rows; 64-bit integer BigInt group keys |
 | `src/data/dates.ts` | Calendar table generator |
 | `src/dax/parser.ts` | Tokenizer and recursive-descent parser for the DAX-like syntax, memoised |
-| `src/dax/evaluator.ts` | Evaluator: filter and row context, context transition, CALCULATE modifiers, iterators, time intelligence, about 110 functions |
+| `src/dax/evaluator.ts` | Evaluator: filter and row context, context transition, CALCULATE modifiers, iterators, financial DAX, bitwise operations, time intelligence, over 170 functions |
 | `src/format/format.ts` | Power BI format strings, display units, date tokens |
 | `src/theme/theme.ts` | Theme tokens, light and dark themes, Power BI theme import |
 | `src/render/*` | SVG/HTML element helpers, bar and arc paths, text measurement, linear, band and point scales, colour math |
-| `src/visuals/*` | Visual contract (`types.ts`), base format pane (`format.ts`), shared chart plumbing (`common.ts`), built-ins |
-| `src/report/visualHost.ts` | One visual: chrome, query building from data roles, query cache, render context, drill, CSV |
-| `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling |
+| `src/visuals/*` | Visual contract (`types.ts`), base format pane (`format.ts`), shared chart plumbing (`common.ts`), 36 built-ins |
+| `src/report/visualHost.ts` | One visual: chrome, query building from data roles, query cache, render context, drill, CSV/Excel/PPTX/clipboard export |
+| `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling, PDF/PPTX export |
+| `src/report/pptx.ts` | Standalone zero-dependency PowerPoint `.pptx` generator |
 | `src/report/filterPane.ts` | Filter pane UI (Basic, Advanced, Top N) |
 | `src/report/styles.ts` | The single injected stylesheet, driven by CSS variables |
-| `src/report/editing.ts` | Edit mode: selection overlays, drag and resize with grid snapping, free-spot finder |
+| `src/report/editing.ts` | Edit mode: selection overlays, smart magnetic alignment guides, lasso marquee selection, drag and resize with grid snapping, free-spot finder |
 | `src/report/migrate.ts` | Report schema version and migrations |
-| `src/connectors/*` | `@prismbi/prismbi/connectors`: CSV, HTTP (JSON, REST pagination, GraphQL), Arrow, SQL adapters, streaming and scheduled refresh. Imports only types from the core |
-| `src/worker.ts` | `@prismbi/prismbi/worker`: message protocol between `serveModel` (in a worker) and `createWorkerEngine`, plus `createLocalEngine` |
+| `src/connectors/*` | `@prismbi/prismbi/connectors`: columnar CSV ingestion, streaming CSV URLs, HTTP (JSON, REST pagination, GraphQL), Arrow, SQL adapters, streaming and scheduled refresh |
+| `src/sql.ts` | SQL pushdown: DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server (T-SQL), Google BigQuery; parameterized statements |
+| `src/ai/*` | AI Q&A, explain, insights, narrative visual, copilot, agent runner, and standalone MCP server |
+| `src/worker.ts` | `@prismbi/prismbi/worker`: message protocol between `serveModel` and `createWorkerEngine`, plus `createWorkerPool` multi-worker sharded queries |
 | `src/render/lttb.ts` | Largest-Triangle-Three-Buckets downsampling for dense series |
 | `src/studio/*` | Studio: shell and history (`studio.ts`), field assignment (`assign.ts`), panes (`panes.ts`, `formatPane.ts`), format schema, dialogs and expression editor, data and model views (`views.ts`), auto report |
 
