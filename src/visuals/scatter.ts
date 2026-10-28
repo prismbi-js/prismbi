@@ -6,6 +6,7 @@ import type { DataPointIdentity, RenderContext } from './types';
 import type { CellValue } from '../data/types';
 import { drawReferenceLines, linearFit } from './analytics';
 import { context2d, rasterOverlay, sizedCanvas } from './raster';
+import { renderSmallMultiples } from './multiples';
 
 /** Above this many points marks are painted on a canvas instead of one SVG element each... */
 const CANVAS_MIN = 3000;
@@ -197,9 +198,11 @@ export const scatter = /* @__PURE__ */ defineVisual({
     { name: 'x', displayName: 'X-axis', kind: 'measure', required: true },
     { name: 'y', displayName: 'Y-axis', kind: 'measure', required: true },
     { name: 'size', displayName: 'Size', kind: 'measure' },
+    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' },
   ],
   supportsHighlight: true,
   render(ctx) {
+    if (renderSmallMultiples(ctx, (p) => scatter.render(p))) return;
     const d = ctx.role('details');
     const l = ctx.role('legend');
     const xi = ctx.role('x').indices[0];

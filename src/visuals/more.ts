@@ -4,6 +4,7 @@ import { mix } from '../render/color';
 import type { CellValue } from '../data/types';
 import { valueKey } from '../data/types';
 import { defineVisual } from './registry';
+import { renderSmallMultiples } from './multiples';
 import { drawCategoryLabels, categoryLabelLayout, drawValueAxisY, emptyState, identityOf, interactive, markOpacity, mergeIdentity, pivot, renderLegend, tooltipItems, valueAxisFormatter, withLegend } from './common';
 
 // ------------------------------------------------------------------- bullet
@@ -25,9 +26,11 @@ export const bullet = /* @__PURE__ */ defineVisual({
     { name: 'value', displayName: 'Value', kind: 'measure', required: true },
     { name: 'target', displayName: 'Target', kind: 'measure' },
     { name: 'maximum', displayName: 'Maximum', kind: 'measure' },
+    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' },
   ],
   defaultSort: 'key',
   render(ctx) {
+    if (renderSmallMultiples(ctx, (p) => bullet.render(p))) return;
     const ci = ctx.role('category').indices[0];
     const vi = ctx.role('value').indices[0];
     const ti = ctx.role('target').indices[0];

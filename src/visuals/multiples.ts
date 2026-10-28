@@ -39,8 +39,12 @@ export function renderSmallMultiples(ctx: RenderContext, render: (panel: RenderC
   const list = [...panels.values()].sort((a, b) => (order.get(valueKey(a.key)) ?? 0) - (order.get(valueKey(b.key)) ?? 0));
 
   // shared value range across panels (stack totals for stacked charts)
-  const vals = ctx.role('values').indices;
-  const cat = ctx.role('category').indices;
+  const vals = ctx.role('values').indices.length
+    ? ctx.role('values').indices
+    : [...ctx.role('value').indices, ...ctx.role('y').indices, ...ctx.role('x').indices];
+  const cat = ctx.role('category').indices.length
+    ? ctx.role('category').indices
+    : ctx.role('details').indices;
   let lo = 0;
   let hi = 0;
   if (stacked) {

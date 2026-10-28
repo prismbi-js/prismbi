@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Custom GeoJSON boundaries & small multiples:**
+  - **Custom GeoJSON boundary loader:** `registerGeoJson(name, geojson, keys?)`, `hasBoundaries(name)`, `listBoundaries()`, and `removeBoundaries(name)` in `@prismbi/prismbi/geo` allow registering arbitrary GeoJSON shapes (custom sales territories, school districts, postal zip codes) for choropleth filled maps.
+  - **Small multiples on scatter & bullet charts:** `scatter` and `bullet` visuals now support small multiples grid splitting with shared axis scaling and legend aggregation.
 - **Bitwise DAX functions:**
   - Added `BITAND(<n1>, <n2>)`, `BITOR(<n1>, <n2>)`, `BITXOR(<n1>, <n2>)`, `BITLSHIFT(<n>, <shift>)`, and `BITRSHIFT(<n>, <shift>)` supporting full 64-bit integer precision and row-compilation.
 - **Visual copy image to clipboard:**

@@ -19,4 +19,26 @@ const registry = (store[Symbol.for('prismbi.boundaries')] ??= new Map());
 registry.set('world', { fc: worldCountries, keys: ['name', 'name_long', 'iso_a2', 'iso_a3'] });
 registry.set('usStates', { fc: usStates, keys: ['name', 'postal', 'iso_3166_2'] });
 
+/** Register a custom GeoJSON FeatureCollection or JSON string into the map boundaries registry. */
+export function registerGeoJson(name: string, geojson: GeoFeatureCollection | string, keys?: string | string[]): void {
+  const fc: GeoFeatureCollection = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+  const keyList = typeof keys === 'string' ? [keys] : keys ?? ['name', 'id'];
+  registry.set(name, { fc, keys: keyList });
+}
+
+/** Check if a boundary set is registered. */
+export function hasBoundaries(name: string): boolean {
+  return registry.has(name);
+}
+
+/** List all registered boundary names. */
+export function listBoundaries(): string[] {
+  return [...registry.keys()];
+}
+
+/** Remove a registered boundary set. */
+export function removeBoundaries(name: string): boolean {
+  return registry.delete(name);
+}
+
 export { worldCountries, usStates };

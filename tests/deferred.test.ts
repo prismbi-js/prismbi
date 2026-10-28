@@ -289,6 +289,79 @@ describe('geo upgrades', () => {
     const groups = clusterPoints([{ i: 0, x: 0, y: 0, size: 5 }, { i: 1, x: 10, y: 0, size: 1 }, { i: 2, x: 100, y: 0, size: 2 }], 20);
     expect(groups.map((g) => g.map((p) => p.i))).toEqual([[0, 1], [2]]);
   });
+
+  it('registers and uses custom GeoJSON boundaries via registerGeoJson', async () => {
+    const { registerGeoJson, hasBoundaries, listBoundaries, removeBoundaries } = await import('@prismbi/prismbi/geo');
+    const customGeoJson = {
+      type: 'FeatureCollection' as const,
+      features: [
+        {
+          type: 'Feature' as const,
+          properties: { territoryId: 'T1', name: 'Territory North' },
+          geometry: {
+            type: 'Polygon' as const,
+            coordinates: [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+          },
+        },
+        {
+          type: 'Feature' as const,
+          properties: { territoryId: 'T2', name: 'Territory South' },
+          geometry: {
+            type: 'Polygon' as const,
+            coordinates: [[[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]]],
+          },
+        },
+      ],
+    };
+
+    registerGeoJson('territories', customGeoJson, ['territoryId', 'name']);
+    expect(hasBoundaries('territories')).toBe(true);
+    expect(listBoundaries()).toContain('territories');
+
+    const { DataModel } = await import('../src/index');
+    const m = new DataModel()
+      .addTable('TerritorySales', [
+        { Territory: 'T1', Amount: 100 },
+        { Territory: 'T2', Amount: 200 },
+      ])
+      .addMeasure('Sales', 'SUM(TerritorySales[Amount])');
+
+    const el = host();
+    const v = createVisual(el, {
+      model: m,
+      type: 'filledMap',
+      fields: { location: 'TerritorySales[Territory]', values: 'Sales' },
+      format: { map: { boundaries: 'territories' } },
+    } as never);
+    v.flush();
+
+    expect(el.querySelectorAll('path.pbi-mark')).toHaveLength(2);
+    v.destroy();
+    el.remove();
+    removeBoundaries('territories');
+    expect(hasBoundaries('territories')).toBe(false);
+  });
+
+  it('supports small multiples on scatter charts', () => {
+    const el = host();
+    const v = createVisual(el, {
+      model: makeModel(),
+      type: 'scatter',
+      fields: {
+        details: 'Products[Name]',
+        x: 'Total Sales',
+        y: 'Total Cost',
+        smallMultiples: 'Products[Category]',
+      },
+    } as never);
+    v.flush();
+
+    const titles = [...el.querySelectorAll('.pbi-sm-title')].map((t) => t.textContent);
+    expect(titles.length).toBeGreaterThan(1);
+    expect(titles).toContain('Bikes');
+    v.destroy();
+    el.remove();
+  });
 });
 
 describe('NATURALINNERJOIN, NATURALLEFTOUTERJOIN and SAMPLE', () => {
