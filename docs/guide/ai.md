@@ -297,9 +297,23 @@ const agent = agentPanel(studio, {
 
 Try it with `npm run dev`, then open `/studio.html`. Add `?llm=/api/llm` to use your own Anthropic-compatible endpoint.
 
-### An MCP server
+### Standalone MCP server
 
-Expose a model to MCP clients with the official SDK:
+Expose a model to Model Context Protocol (MCP) clients (Cursor, Claude Desktop, Gemini, agents) with PrismBI's built-in zero-dependency server:
+
+```ts
+import { createMcpServer } from '@prismbi/prismbi/ai';
+
+const mcp = createMcpServer({ model, allowWrites: false, name: 'sales-mcp' });
+
+// Over stdio (standard input/output):
+mcp.handleStdio();
+
+// Or over any JSON-RPC 2.0 transport:
+const response = await mcp.handleMessage(jsonRpcMessage);
+```
+
+You can also use the official `@modelcontextprotocol/sdk`:
 
 ```ts
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -308,7 +322,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { createAgentTools, runTool, toMcpTools } from '@prismbi/prismbi/ai';
 
 const tools = createAgentTools({ model, allowWrites: false });
-const server = new Server({ name: '@prismbi/prismbi', version: '1.0.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: '@prismbi/prismbi', version: '0.11.0' }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toMcpTools(tools) }));
 server.setRequestHandler(CallToolRequestSchema, async (req) => ({
   content: [{ type: 'text', text: JSON.stringify(await runTool(tools, req.params.name, req.params.arguments)) }],

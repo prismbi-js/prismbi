@@ -48,16 +48,16 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 
 | | |
 |---|---|
-| **Real BI semantics** | Filter context, row context, context transition, `CALCULATE` with `ALL`, `ALLEXCEPT`, `ALLSELECTED`, `KEEPFILTERS`, `USERELATIONSHIP` and `CROSSFILTER`, time intelligence, table functions, auto-exist grouping, and true (non-additive) totals. About 160 DAX functions |
+| **Real BI semantics** | Filter context, row context, context transition, `CALCULATE` with `ALL`, `ALLEXCEPT`, `ALLSELECTED`, `KEEPFILTERS`, `USERELATIONSHIP` and `CROSSFILTER`, time intelligence, financial functions (`XNPV`, `XIRR`), bitwise DAX, table constructors, tuple `IN`, auto-exist grouping, and true (non-additive) totals. Over 170 DAX functions |
 | **Advanced modeling** | Bidirectional, many-to-many and inactive relationships, calculated tables, calculation groups, field and what-if parameters, hierarchies, perspectives, row-level security |
-| **Report editor** | `@prismbi/prismbi/studio`: drag-and-drop canvas, fields, build, format and filters panes, measure and column editors, data and model views, theme designer, undo/redo, autosave, versioned JSON |
+| **Report editor** | `@prismbi/prismbi/studio`: drag-and-drop canvas with magnetic alignment guides, selection & layers pane, quick measures wizard, fields, build, format and filters panes, measure/column editors, DAG hierarchical model layout, virtualized data view, theme designer, undo/redo, autosave, versioned JSON |
 | **Developer tooling** | DAX language service (completion, hover, diagnostics, signature help), formatter, dependency explanation, `evaluateTable()` queries |
 | **Slice and narrow down** | Slicers (list, dropdown, tiles, range, relative date, hierarchy tree, synced across pages), cross-filter and cross-highlight, Ctrl+click multi-select, right-click Include / Exclude, drill down / up / expand all, drill-through pages with Back, a decomposition tree, report, page and visual filters, a filter pane with Basic, Advanced and Top N, bookmarks |
-| **36 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, sunburst, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps, decomposition tree, card, multi-row card, KPI, gauge, goals scorecard, table, matrix, slicer, text, and small multiples for cartesian charts |
-| **Light and fast** | Zero dependencies. A columnar engine with typed-array views, vectorised aggregations, a single-pass grouped query path, hash indexes and caches. Queries over 1M rows, including YTD per day, take 12–191 ms cold. LTTB-thinned lines, canvas scatter, virtualized tables, and an optional Web Worker engine |
-| **Live data** | `@prismbi/prismbi/connectors`: CSV, Google Sheets, JSON, paginated REST, GraphQL, Apache Arrow (Parquet via DuckDB-Wasm), SQL adapters, WebSocket and EventSource streaming into sliding windows, scheduled refresh |
+| **36 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, sunburst, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, heatmap, bubble and filled maps (with custom GeoJSON territories), decomposition tree, card, multi-row card, KPI, gauge, goals scorecard, table, matrix (stepped layout and in-cell sparklines), slicer, text, sweep-line collision avoidance for data labels, and small multiples across cartesian, scatter, and bullet charts |
+| **Light and fast** | Zero dependencies. A columnar engine with typed-array views, 64-bit group key encoding, multi-worker parallel execution pool, vectorised aggregations, a single-pass grouped query path, hash indexes and caches. Queries over 1M rows, including YTD per day, take 12–191 ms cold. LTTB-thinned lines, canvas scatter, virtualized tables, and an optional Web Worker engine |
+| **Live data** | `@prismbi/prismbi/connectors`: zero-copy streaming CSV to packed columnar buffers, URL streaming, Google Sheets, JSON, paginated REST, GraphQL, Apache Arrow (Parquet via DuckDB-Wasm), SQL adapters, WebSocket and EventSource streaming into sliding windows, scheduled refresh |
 | **Analytics** | Continuous time and number axes, log scales, reference lines (constant, average, median, min, max, percentile), trend lines, rule- and gradient-based colours, report-page tooltips, real totals |
-| **Customizable** | Theme tokens and CSS variables, Power BI theme JSON import, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, PNG/SVG/CSV/PDF export, edit-interactions mode |
+| **Customizable** | Theme tokens and CSS variables, Power BI theme JSON import, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, PNG/SVG/CSV/PDF/PowerPoint (.pptx) export, copy visual image to clipboard, edit-interactions mode |
 | **Accessible** | Keyboard-reachable marks, ARIA roles, legends whenever there are two or more series, show-as-table on every chart, reduced motion, light and dark palettes validated for colour-vision deficiency |
 
 ## Entry points
@@ -71,9 +71,9 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | `@prismbi/prismbi/elements` | `<prism-report>`, `<prism-visual>` web components (Vue, Svelte, Angular, plain HTML) |
 | `@prismbi/prismbi/connectors` | CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh |
 | `@prismbi/prismbi/worker` | Run the model in a Web Worker |
-| `@prismbi/prismbi/geo` | World countries and US states for maps (optional data) |
-| `@prismbi/prismbi/sql` | Push visual queries down to DuckDB, Postgres or SQLite |
-| `@prismbi/prismbi/ai` | Ask, explain, insights, and agent context and tools (Claude, OpenAI, MCP) |
+| `@prismbi/prismbi/geo` | World countries, US states, and custom GeoJSON territories for maps |
+| `@prismbi/prismbi/sql` | Push visual queries down to DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server (T-SQL), BigQuery (with parameterized mode) |
+| `@prismbi/prismbi/ai` | Ask, explain, insights, agent tools, and standalone MCP server (Claude, OpenAI, Cursor, Gemini) |
 | `@prismbi/prismbi/plugins` | Signed plugins, catalogs and an install gallery |
 | `@prismbi/prismbi/collab` | Live co-editing, presence and comments |
 | `@prismbi/prismbi/server` | Headless SVG/HTML rendering, measure alerts, scheduled report jobs |
@@ -125,9 +125,9 @@ import { PrismReport, PrismVisual } from '@prismbi/prismbi/react';
 - [Server: headless rendering, alerts, schedules](https://prismbi-js.github.io/docs/server.html)
 - [Collaboration: co-editing, presence, comments](https://prismbi-js.github.io/docs/collab.html)
 - [Plugins: signed visuals, themes, connectors](https://prismbi-js.github.io/docs/plugins.html)
-- [Connectors and live data](https://prismbi-js.github.io/docs/connectors.html): CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh
-- [SQL pushdown: DuckDB, Postgres, SQLite](https://prismbi-js.github.io/docs/sql.html)
-- [Performance and scale](https://prismbi-js.github.io/docs/performance.html): the fast query path, rendering at scale, the worker engine, benchmarks
+- [Connectors and live data](https://prismbi-js.github.io/docs/connectors.html): zero-copy streaming CSV, REST, GraphQL, Arrow, SQL, streaming, scheduled refresh
+- [SQL pushdown: DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server, BigQuery](https://prismbi-js.github.io/docs/sql.html)
+- [Performance and scale](https://prismbi-js.github.io/docs/performance.html): the fast query path, multi-worker pool, 64-bit group keys, rendering at scale, benchmarks
 - [Architecture](https://github.com/prismbi-js/prismbi/blob/master/docs/ARCHITECTURE.md) · [Roadmap](https://github.com/prismbi-js/prismbi/blob/master/docs/ROADMAP.md) · [Contributing](https://github.com/prismbi-js/prismbi/blob/master/CONTRIBUTING.md)
 
 ## Develop

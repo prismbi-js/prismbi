@@ -22,7 +22,7 @@ Try it with `npm run dev`, then open `/perf.html`. That page generates 100k to 1
 - **Bitmap indexes.** Low-cardinality columns of large tables (at most 512 values, at least 4,096 rows) also get one bitset per value. Filters on them combine with word-wide OR (within a filter) and AND (across filters and relationships) before row lists are built. At 1M rows, that is 2–4× faster for stacked filters such as channel × priority × country (`npm run bench`). `setBitmapIndexes(false)` turns them off.
 - **Hash indexes and caches.** `eq`/`in` filters use column indexes. Visible row sets are cached per filter context and measure results per (measure, context). Visuals re-query only when their own filters change.
 - **Streaming without rebuilds.** `appendRows` extends the numeric views, dictionaries, indexes and bitmaps for the new rows, and a `maxRows` window shifts them, instead of rebuilding them from scratch. The change notification names the tables whose rows changed (`model.onChange((change) => change?.tables)`), and reports re-query only the visuals that can see those tables. A visual can see a table when its fields, filters, format or measures reference it (directly, or through other measures or calculation items), or when it is connected to one of those through a relationship. Definition changes, and any change while row-level security is active, still refresh every visual.
-- **Numeric group keys.** Multi-column groupings key their groups by a mixed-radix number over the column dictionaries, with a dense lookup table for up to 4M combinations, instead of building a string per row.
+- **64-bit BigInt numeric group keys.** Multi-column groupings key their groups by a mixed-radix number over column dictionaries. For high-cardinality queries exceeding 4M combinations (up to $2^{63}-1$), the engine switches to a 64-bit integer (`BigInt64Array`) key table, retaining single-pass grouped execution without falling back to per-row evaluations.
 
 ## Numbers
 
@@ -123,6 +123,26 @@ await engine.addColumns('Sales', {
 ```
 
 Typed arrays you pass are moved, and are empty afterwards; pass `{ transfer: false }` to send a copy instead. Arrays backed by a `SharedArrayBuffer` (available when the page is `crossOriginIsolated`) are shared rather than moved. `packColumn` and `addPackedTable` are exported for building the same tables yourself.
+
+### Multi-worker parallel execution pool
+
+For multi-million row datasets where concurrent visuals or animated sliders send parallel queries, `@prismbi/prismbi/worker` provides `createWorkerPool`:
+
+```ts
+import { createWorkerPool } from '@prismbi/prismbi/worker';
+
+const pool = createWorkerPool({
+  workerFactory: () => new Worker(new URL('./model.worker.ts', import.meta.url), { type: 'module' }),
+  size: navigator.hardwareConcurrency || 4,
+});
+
+// Pass `pool` as `engine` to your report:
+const report = new Report(el, { model, engine: pool, pages });
+```
+
+- **Load balancing:** read queries (`query`, `evaluate`, `evaluateTable`) are distributed across the pool in a round-robin schedule, saturating multi-core CPUs.
+- **Mutation synchronization:** data updates (`addTable`, `appendRows`, `addColumns`, `addMeasure`, `setRoles`) are automatically broadcast to every worker instance in the pool to ensure query parity.
+- **Tear down:** calling `pool.dispose()` cleanly terminates all worker threads.
 
 ### Reports on the worker
 

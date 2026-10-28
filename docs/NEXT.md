@@ -1,11 +1,11 @@
 # Where work stopped (handoff)
 
-Last updated 2026-10-23. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
+Last updated 2026-10-28. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
 
 ## State
 
-- **Phases 1–9 are done**, including the items deferred along the way.
-- **Tests:** 440+ pass (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 88 screenshot baselines. `npm run bench` has per-query time budgets. `npm run typecheck` and `npm run build` are clean.
+- **v0.11.0 enhancements delivered:** Financial DAX (`XNPV`, `XIRR`), bitwise DAX, `CONTAINSROW`/tuple `IN`, T-SQL & BigQuery SQL pushdown (parameterized mode), streaming CSV URL connectors, PowerPoint PPTX exporter, standalone MCP server, Matrix stepped layout & sparklines, GeoJSON boundaries, Small Multiples expansion, Studio UX & quick measures.
+- **Tests:** 520 pass across 46 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 90 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
 - **Entries:**
   - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (22).
   - UI and frameworks: `/studio`, `/react`, `/elements`.

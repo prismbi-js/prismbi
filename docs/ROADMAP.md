@@ -13,8 +13,9 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 5 | Scale, performance and data connectors | `0.5` | ✅ Implemented |
 | 6 | Beyond Power BI: AI, collaboration, embedding | `1.0` | ✅ Implemented |
 | 7 | Analyst essentials: visual calculations, transforms, mobile layouts, visual tests | `1.1` | ✅ Implemented |
-| 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | In progress |
-| 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | In progress |
+| 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | ✅ Implemented |
+| 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | ✅ Implemented |
+| 10 | Enterprise & Scale: Financial/bitwise DAX, multi-dialect SQL pushdown, PPTX, MCP, streaming CSV | `0.11.0` | ✅ Implemented |
 
 ## Guiding principles
 

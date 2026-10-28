@@ -84,7 +84,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 
 `*` marks a required role.
 
-**Small multiples:** put a field in `smallMultiples` (column, bar, line and area charts) to get one panel per member, with a shared value axis and a single legend. Configure it with `format.smallMultiples: { columns?, sharedAxis: true, minWidth: 160, minHeight: 110 }`.
+**Small multiples:** put a field in `smallMultiples` (column, bar, line, area, scatter and bullet charts) to get one panel per member, with a shared value axis and a single legend. Configure it with `format.smallMultiples: { columns?, sharedAxis: true, minWidth: 160, minHeight: 110 }`.
 
 ## Common format options
 
@@ -111,7 +111,7 @@ format: {
   analytics:  { referenceLines: [{ type: 'average' | 'median' | 'min' | 'max' | 'percentile' | 'constant', value?, percentile?, label?: 'Goal {value}' | false, color?, dash? }],
                 trendLine: false | true | { color } },
   bars:       { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },
-  lines:      { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true },
+  lines:      { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true, collisionAvoidance: true },
   animation:  { enabled: true, duration: 280 },
 }
 ```
@@ -145,7 +145,13 @@ format: { table: {
 } }
 
 // matrix
-format: { matrix: { expandAll: false, columnTotals: true, virtualize: undefined /* auto above 500 visible rows */, conditional: { /* as table */ } } }
+format: { matrix: {
+  expandAll: false, columnTotals: true,
+  stepped: false,                      // false = dedicated column per row hierarchy level (Power BI tabular style)
+  sparklines: { 'Total Sales': { type: 'line', trend: 'Date[MonthYear]' } }, // embedded SVG trend sparklines / mini-bars
+  virtualize: undefined,               // auto above 500 visible rows
+  conditional: { /* as table */ },
+} }
 
 // slicer
 format: { slicer: {
@@ -196,7 +202,7 @@ format: { slicer: { syncGroup: 'year' } }
 Hovering or focusing a visual shows its header icons:
 - **⤢ Focus mode** fills the page. Esc exits.
 - **▦ Show as table** displays the query result as a table.
-- **⇩ Export** opens a menu: data (CSV or Excel), image (PNG at 2×), image (SVG). The same is available in code as `report.visual(id).exportCsv()`, `.exportXlsx()`, `.exportImage('png' | 'svg')` and `.toSvg()`.
+- **⇩ Export** opens a menu: data (CSV or Excel), image (PNG at 2×), image (SVG), and **Copy image** (writes PNG directly to system clipboard). The same is available in code as `report.visual(id).exportCsv()`, `.exportXlsx()`, `.exportImage('png' | 'svg')`, `.copyImage()` and `.toSvg()`.
 - **↑ Drill up**, **⇊ Go to next level** and **⤓ Expand all down one level** appear when a drillable role has several fields.
 - **⌫ Clear selections** appears on slicers.
 
@@ -257,7 +263,7 @@ import '@prismbi/prismbi/geo';
   - States match on name, postal code or ISO 3166-2 code (`Texas`, `TX`, `US-TX`).
   - Locations that don't match are left out.
 - **Framing:** filled maps with built-in boundaries zoom to the regions that have data.
-- **Your own regions:** `registerBoundaries(name, featureCollection, { keys })` adds your own collection under a name. `worldCountries`, `usStates`, `featureCentroid`, `clusterPoints` and `quantileBreaks` are exported for your own geo work.
+- **Your own regions:** `registerGeoJson(name, geojson, keys?)` (or `registerBoundaries`) registers arbitrary GeoJSON feature collections (e.g. custom sales territories, school districts, postal zip codes) under a named identifier. Helper functions `hasBoundaries`, `listBoundaries`, `removeBoundaries`, `worldCountries`, `usStates`, `featureCentroid`, `clusterPoints` and `quantileBreaks` are exported from `@prismbi/prismbi/geo`.
 - **Clustering:** clusters are recomputed as you zoom. Each cluster shows its count, and its tooltip lists the total and some of its locations. Click a cluster, or press Enter on it, to zoom in.
 
 ## Calendar heatmap

@@ -183,10 +183,11 @@ Filters on a dimension column flow to related fact tables. Filters on a fact col
 
 ## Export
 
-- Per visual: header **⇩** → CSV, Excel, PNG or SVG. In code: `report.visual(id).exportCsv() / exportXlsx() / exportImage('png') / toSvg()`.
+- Per visual: header **⇩** → CSV, Excel, PNG or SVG, plus **Copy image: Clipboard**. In code: `report.visual(id).exportCsv() / exportXlsx() / exportImage('png') / toSvg() / copyImage()`. `copyImage()` renders a 2× raster PNG and writes directly to the system clipboard via `navigator.clipboard.write()`.
 - Per page: toolbar **Export PDF**, or `await report.exportPdf({ pages: 'current' | 'all' })`. Each report page becomes one PDF page. The PDF writer has no dependencies and only loads when used.
+- PowerPoint presentation: toolbar **Export PowerPoint**, or `await report.exportPptx({ pages: 'current' | 'all' })`. Packages each report page as an uncompressed OpenXML `.pptx` slide with vector SVG / high-res raster embeds. Zero external dependencies.
 - Data to Excel: toolbar **Export Excel**, or `await report.exportXlsx({ pages: 'current' | 'all' })`. Every visual with data becomes one sheet, in reading order (top to bottom, then left to right), named after its title, with `Page - Title` names when exporting all pages. Cells keep their types: numbers, dates and booleans, not text. Measure and column format strings become Excel number formats, and the header row is bold, frozen and filterable. `toXlsx()` returns the bytes instead of downloading, on the report and on each visual.
-- Your own workbooks: `buildXlsx(sheets)` writes any `{ name, columns: [{ header, format, width }], rows }` sheets, and `resultToSheet(model.query(spec), name)` turns a query result into one. Like the PDF writer it has no dependencies; files are stored uncompressed.
+- Your own workbooks & presentations: `buildXlsx(sheets)` writes any `{ name, columns: [{ header, format, width }], rows }` sheets, and `buildPptx(slides)` packages OpenXML presentation decks. Like the PDF writer they have zero dependencies.
 
 ```js playground
 import { buildXlsx, resultToSheet } from '@prismbi/prismbi';

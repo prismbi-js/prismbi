@@ -31,16 +31,18 @@ To show the finished report to viewers, pass `doc.report` to `<PrismReport defin
 
 | Area | Features |
 |---|---|
-| **Canvas** | Select visuals, drag to move, resize from 8 handles. Everything snaps to the page grid, which is visible while editing. Click empty space to deselect |
+| **Canvas** | Select visuals, drag to move, resize from 8 handles. Magnetic smart alignment snap lines guide placement against neighboring visual edges. Multi-visual lasso marquee drag selection. Everything snaps to the page grid, which is visible while editing. Click empty space to deselect |
 | **Keyboard** | Arrows nudge (Shift+arrows resize) · Delete removes · Ctrl+D duplicates · Ctrl+C / Ctrl+V copy and paste · Ctrl+] / Ctrl+[ front and back · Ctrl+Z / Ctrl+Y undo and redo · Ctrl+S saves · Esc deselects |
+| **Selection & Layers** | Side pane listing visuals front-to-back with visibility toggles (hide/show), lock protection, and z-order reordering |
+| **Quick measures** | Wizard dialog generating parameterized DAX measures for Year-over-Year Growth, Running Total, Rolling 3-Month Average, and Share of Category |
 | **Fields pane** | Tables with measures (grouped by display folder), columns and hierarchies, plus search and "show hidden". Drag a field onto the canvas, a visual or a well. Click it to add it to the selected visual, or to create a fitting visual. The ⋯ menu edits or deletes measures and studio-created columns, and offers "New measure: Sum" for numeric columns |
 | **Build pane** | Visual type picker: changing type keeps your fields. Field wells per data role: drop, reorder by drag, remove, and change aggregation for columns used as values |
 | **Format pane** | Generated from a format schema: general (title, Top N, interaction), size and position, title, legend, data labels, axes (including continuous and log), colors (fixed, per series, gradient, rules), bars, lines, analytics (trend and reference lines), small multiples, tooltip (including report-page tooltips), plus visual-specific sections (card, table, matrix, slicer, map, waterfall …), background, border and header icons. With nothing selected, it shows **page settings** (grid, background, hidden, drill-through fields, tooltip page), the **report name** and the **theme designer** (mode, accent, backgrounds, text, font, radius, 8 data colors) |
 | **Filters pane** | Visual, page and report filters (Basic, Advanced, Top N) |
 | **Pages** | Add, rename (double-click), duplicate, hide, reorder and delete, from the tab bar and its right-click menu. Tooltip and drill-through pages are labelled |
 | **Measures and columns** | Editors with DAX completion, live diagnostics, signature help, a value preview, format presets and display folders. Renaming a measure updates the visuals that use it |
-| **Data view** | Browse every table (types, formats, calculated columns) and add columns or measures |
-| **Model view** | A relationship diagram. Drag tables to arrange them. Drag a column onto another table's column to create a relationship: the side with unique values becomes the one side, otherwise it's many-to-many, and it's inactive when another active path exists. Click a line to switch it active or inactive, change its direction, or delete it |
+| **Data view** | Browse every table (types, formats, calculated columns) with high-performance virtualized scrolling |
+| **Model view** | A relationship diagram with organic hierarchical DAG layout placing fact tables centrally and dimensions by relationship cardinality. Drag tables to arrange them. Drag a column onto another table's column to create a relationship: the side with unique values becomes the one side, otherwise it's many-to-many, and it's inactive when another active path exists. Click a line to switch it active or inactive, change its direction, or delete it |
 | **Auto page** | Generates a starter page from the model: slicers, KPI cards, trend, breakdowns and a detail table (`autoReport(model)`) |
 | **Preview** | Hides the editing chrome so you can try the report as a viewer would (cross-filtering, drill, tooltips) |
 | **Export / Import** | Download or open the document as JSON |
