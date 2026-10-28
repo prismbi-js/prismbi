@@ -273,3 +273,63 @@ function build(call: (method: Method, args: unknown[], signal?: AbortSignal, tra
     dispose,
   };
 }
+
+/** A pool of worker engines that executes read queries in parallel across worker threads and broadcasts model updates. */
+export function createWorkerPool(workers: (PortLike | Engine)[]): Engine & { readonly poolSize: number } {
+  if (!workers.length) throw new Error('Worker pool requires at least one worker or port');
+  const engines: Engine[] = workers.map((w) => ('query' in w ? w : createWorkerEngine(w)));
+  const busy = new Int32Array(engines.length);
+
+  const pickLeastBusy = (): number => {
+    let minIdx = 0;
+    let minVal = busy[0];
+    for (let i = 1; i < busy.length; i++) {
+      if (busy[i] < minVal) {
+        minVal = busy[i];
+        minIdx = i;
+      }
+    }
+    return minIdx;
+  };
+
+  const runRead = async <T>(fn: (engine: Engine) => Promise<T>): Promise<T> => {
+    const idx = pickLeastBusy();
+    busy[idx]++;
+    try {
+      return await fn(engines[idx]);
+    } finally {
+      busy[idx]--;
+    }
+  };
+
+  return {
+    get poolSize() {
+      return engines.length;
+    },
+    query: (spec, signal) => runRead((e) => e.query(spec, signal)),
+    evaluate: (expression, filters, signal) => runRead((e) => e.evaluate(expression, filters, signal)),
+    evaluateTable: (expression, filters, signal) => runRead((e) => e.evaluateTable(expression, filters, signal)),
+    metadata: () => engines[0].metadata(),
+    addTable: async (name, rows, schema) => {
+      await Promise.all(engines.map((e) => e.addTable(name, rows, schema)));
+    },
+    refreshTable: async (name, rows, schema) => {
+      await Promise.all(engines.map((e) => e.refreshTable(name, rows, schema)));
+    },
+    appendRows: async (name, rows, opts) => {
+      await Promise.all(engines.map((e) => e.appendRows(name, rows, opts)));
+    },
+    addColumns: async (name, columns, schema) => {
+      await Promise.all(engines.map((e) => e.addColumns(name, columns, schema, { transfer: false })));
+    },
+    addMeasure: async (def) => {
+      await Promise.all(engines.map((e) => e.addMeasure(def)));
+    },
+    setRoles: async (roles, opts) => {
+      await Promise.all(engines.map((e) => e.setRoles(roles, opts)));
+    },
+    dispose: () => {
+      for (const e of engines) e.dispose();
+    },
+  };
+}

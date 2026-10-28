@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createLocalEngine, createWorkerEngine, serveModel, type PortLike } from '@prismbi/prismbi/worker';
+import { createLocalEngine, createWorkerEngine, createWorkerPool, serveModel, type PortLike } from '@prismbi/prismbi/worker';
 import { buildModel } from '../examples/model';
 
 /** A DOM-style message port (node's global MessagePort supports addEventListener; messages are structured-cloned). */
@@ -131,5 +131,36 @@ describe('packed columns', () => {
     expect(t.codes('s')).toMatchObject({ codes: new Int32Array([0, -1, 1, 0]), dict: ['a', 'b'] });
     // mixed columns travel as plain values
     expect(packColumn([1, 'x']).kind).toBe('values');
+  });
+});
+
+describe('worker pool', () => {
+  it('distributes read queries across pool workers and synchronizes mutations', async () => {
+    const p1 = pair();
+    const p2 = pair();
+    const pool = createWorkerPool([p1.engine, p2.engine]);
+    try {
+      expect(pool.poolSize).toBe(2);
+      // mutations broadcast to both workers
+      await pool.addTable('PoolData', [{ val: 10 }, { val: 20 }]);
+      await pool.addMeasure({ name: 'TotalVal', expression: 'SUM(PoolData[val])' });
+
+      // concurrent reads hit workers in parallel
+      const [r1, r2, v] = await Promise.all([
+        pool.query({ values: ['TotalVal'] }),
+        pool.query({ values: ['TotalVal'] }),
+        pool.evaluate('[TotalVal]'),
+      ]);
+      expect(r1.rows[0].values[0]).toBe(30);
+      expect(r2.rows[0].values[0]).toBe(30);
+      expect(v).toBe(30);
+
+      const meta = await pool.metadata();
+      expect(meta.tables.some((t) => t.name === 'PoolData')).toBe(true);
+    } finally {
+      pool.dispose();
+      p1.close();
+      p2.close();
+    }
   });
 });

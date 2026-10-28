@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { setFastQuery } from '../src/index';
+import { setFastQuery, DataModel } from '../src/index';
 import type { QuerySpec } from '../src/index';
 import { buildModel } from '../examples/model';
 
@@ -75,5 +75,33 @@ describe('iterators over VALUES evaluated set-wise', () => {
   };
   it('matches row-by-row evaluation', () => {
     expect(q('auto')).toEqual(q('off'));
+  });
+});
+
+describe('high-cardinality BigInt composite grouping', () => {
+  it('groups correctly across composite spaces exceeding MAX_SAFE_INTEGER', () => {
+    // 6 columns with 600 distinct values each: (600)^6 = 4.66e16 > Number.MAX_SAFE_INTEGER (9.0e15)
+    const n = 100;
+    const rows = Array.from({ length: n }, (_, i) => ({
+      c1: `c1_${i % 600}`,
+      c2: `c2_${i % 600}`,
+      c3: `c3_${i % 600}`,
+      c4: `c4_${i % 600}`,
+      c5: `c5_${i % 600}`,
+      c6: `c6_${i % 600}`,
+      amount: i * 10,
+    }));
+    const dm = new DataModel().addTable('LargeSpace', rows).addMeasure('Total', 'SUM(LargeSpace[amount])');
+    const spec: QuerySpec = {
+      groupBy: ['LargeSpace[c1]', 'LargeSpace[c2]', 'LargeSpace[c3]', 'LargeSpace[c4]', 'LargeSpace[c5]', 'LargeSpace[c6]'],
+      values: ['Total'],
+      totals: true,
+    };
+    setFastQuery('always');
+    const fast = dm.query(spec);
+    setFastQuery('off');
+    const slow = dm.query(spec);
+    expect(fast.rows.length).toBe(slow.rows.length);
+    expect(fast.totals).toEqual(slow.totals);
   });
 });

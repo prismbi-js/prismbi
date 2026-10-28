@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Scale, streaming ingestion & multi-worker execution:**
+  - **Zero-copy columnar CSV ingestion:** `parseCsvColumns(text, opts)` parses directly into columnar arrays without intermediate `{ [col]: value }` row objects, saving GC overhead on large files.
+  - **Streaming CSV parser:** `streamCsv(stream, opts)` parses chunks incrementally with multiline quote preservation and `onBatch` progressive emission for streaming loads.
+  - **High-cardinality BigInt composite grouping:** Group key space in the single-pass path (`fastQuery.ts`) expanded from `Number.MAX_SAFE_INTEGER` (4M–9e15) up to 64-bit BigInt ($1.84 \times 10^{19}$) without string concatenation or GC pauses.
+  - **Worker pool:** `createWorkerPool(workers)` distributes read queries in parallel across a pool of Web Workers/ports using least-busy selection, while broadcasting mutations to keep models synchronized.
+  - **Studio data view virtualization:** Smooth DOM-virtualized scrolling in `renderDataView` replaces page increments, keeping DOM node count under 40 elements for arbitrarily large tables.
+
 - **Studio UX & visual authoring enhancements:**
   - **Quick measures:** Guided modal for generating standard DAX time-intelligence and statistical patterns without manual authoring (Year-over-Year %, YTD, Running Total, Rolling 3M Average, Month-over-Month Change, % of Total).
   - **Selection / Layers pane:** Manage visual stack order, rename elements, select visuals, and toggle visual visibility directly from the Studio side pane.

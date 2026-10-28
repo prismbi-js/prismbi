@@ -10,6 +10,8 @@ import {
   loadRest,
   loadSqlTables,
   parseCsv,
+  parseCsvColumns,
+  streamCsv,
   scheduleRefresh,
   streamInto,
   type MessageSourceLike,
@@ -63,6 +65,41 @@ describe('CSV', () => {
     await expect(loadCsv('/missing.csv', { fetch: f })).rejects.toThrow(/404/);
     expect(googleSheetCsvUrl('https://docs.google.com/spreadsheets/d/abc-123_X/edit#gid=42')).toBe('https://docs.google.com/spreadsheets/d/abc-123_X/export?format=csv&gid=42');
     expect(googleSheetCsvUrl('abc', 7)).toBe('https://docs.google.com/spreadsheets/d/abc/export?format=csv&gid=7');
+  });
+
+  it('parses directly into columnar arrays without row object overhead', () => {
+    const csv = 'product,price,active\nWidget,19.99,true\nGadget,49.50,false\nGizmo,,true\n';
+    const res = parseCsvColumns(csv);
+    expect(res.rowCount).toBe(3);
+    expect(res.columns.product).toEqual(['Widget', 'Gadget', 'Gizmo']);
+    expect(res.columns.price).toEqual([19.99, 49.5, null]);
+    expect(res.columns.active).toEqual([true, false, true]);
+    expect(res.schema.price.type).toBe('number');
+    expect(res.schema.active.type).toBe('boolean');
+    expect(res.schema.product.type).toBe('string');
+
+    // add directly to DataModel via addColumns
+    const m = new DataModel().addColumns('Products', res.columns, res.schema);
+    expect(m.table('Products').rowCount).toBe(3);
+    expect(m.table('Products').column('price').type).toBe('number');
+  });
+
+  it('streams CSV in chunks with multiline quote preservation and batch callbacks', async () => {
+    async function* chunkGenerator() {
+      yield 'id,name,value\n1,"Alpha';
+      yield '\nBeta",100\n2,"Gamma",200\n';
+      yield '3,"Delta",300\n';
+    }
+    const batches: number[] = [];
+    const res = await streamCsv(chunkGenerator(), {
+      batchSize: 2,
+      onBatch: (b) => batches.push(b.rowCount),
+    });
+    expect(res.rowCount).toBe(3);
+    expect(res.columns.id).toEqual([1, 2, 3]);
+    expect(res.columns.name).toEqual(['Alpha\nBeta', 'Gamma', 'Delta']);
+    expect(res.columns.value).toEqual([100, 200, 300]);
+    expect(batches).toEqual([2, 1]);
   });
 });
 

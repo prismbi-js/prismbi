@@ -41,18 +41,38 @@ export function renderDataView(ctx: StudioContext, container: HTMLElement, state
       ),
     );
     const tbody = h('tbody');
-    const n = Math.min(t.rowCount, state.limit);
-    for (let r = 0; r < n; r++) tbody.append(h('tr', {}, ...cols.map((c) => h('td', { class: c.type === 'number' ? 'num' : '' }, formatValue(c.values[r], c.format, { blank: '' })))));
     table.append(tbody);
     const grid = h('div', { class: 'pbs-grid' }, table);
     main.append(grid);
-    if (t.rowCount > n) {
-      const more = h('button', { type: 'button', class: 'pbs-btn', style: 'margin:8px 12px;align-self:flex-start' }, `Show ${Math.min(500, t.rowCount - n)} more`);
-      more.addEventListener('click', () => {
-        state.limit += 500;
-        onState();
-      });
-      main.append(more);
+
+    const rowEl = (r: number) => h('tr', {}, ...cols.map((c) => h('td', { class: c.type === 'number' ? 'num' : '' }, formatValue(c.values[r], c.format, { blank: '' }))));
+    const count = t.rowCount;
+    const colspan = cols.length;
+    const spacer = (height: number) => {
+      const tr = h('tr', { class: 'pbi-spacer', 'aria-hidden': 'true' });
+      const td = h('td', { colspan });
+      td.style.height = `${height}px`;
+      tr.append(td);
+      return tr;
+    };
+
+    let rowH = 28;
+    const updateVirtualRows = () => {
+      const view = grid.clientHeight || 600;
+      const first = Math.max(0, Math.floor(grid.scrollTop / rowH) - 10);
+      const last = Math.min(count, first + Math.ceil(view / rowH) + 20);
+      const els: HTMLElement[] = [];
+      if (first > 0) els.push(spacer(first * rowH));
+      for (let r = first; r < last; r++) els.push(rowEl(r));
+      if (last < count) els.push(spacer((count - last) * rowH));
+      tbody.replaceChildren(...els);
+    };
+
+    if (count <= 200) {
+      for (let r = 0; r < count; r++) tbody.append(rowEl(r));
+    } else {
+      updateVirtualRows();
+      grid.addEventListener('scroll', updateVirtualRows, { passive: true });
     }
   }
   container.replaceChildren(h('div', { class: 'pbs-data' }, list, main));

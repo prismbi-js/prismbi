@@ -761,34 +761,59 @@ function timeIntelligence(model: DataModel, fact: string, nodes: TiNode[], mainA
   let S = S1;
   const cellPos: number[] = [];
   if (other.length) {
-    if ((space + 1) * S1 > Number.MAX_SAFE_INTEGER) return null;
+    const totalComb = (space + 1) * S1;
+    const numeric = totalComb <= Number.MAX_SAFE_INTEGER;
+    const big = !numeric && totalComb <= 1.84e19;
+    if (!numeric && !big) return null;
     const oc = other.map((j) => keyCodes[j]);
-    const dense = (space + 1) * S1 <= DENSE_GROUPS ? new Int32Array((space + 1) * S1).fill(-1) : null;
-    const sparse = dense ? null : new Map<number, number>();
+    const dense = numeric && totalComb <= DENSE_GROUPS ? new Int32Array(totalComb).fill(-1) : null;
+    const sparse = dense ? null : new Map<number | bigint, number>();
     slot = new Int32Array(count);
+    const radixBig = big ? radix.map((r) => BigInt(r)) : null;
+    const S1Big = big ? BigInt(S1) : 0n;
+    const spaceBig = big ? BigInt(space) : 0n;
     for (let j = 0; j < count; j++) {
       const r = list ? list[j] : j;
-      let k = 0;
-      for (let x = 0; x < oc.length; x++) {
-        const c = oc[x][r];
-        if (c === UNMATCHED) {
-          k = space;
-          break;
+      let key: number | bigint;
+      if (big) {
+        let k = 0n;
+        for (let x = 0; x < oc.length; x++) {
+          const c = oc[x][r];
+          if (c === UNMATCHED) {
+            k = spaceBig;
+            break;
+          }
+          k = k * radixBig![x] + BigInt(c + 1);
         }
-        k = k * radix[x] + c + 1;
+        key = k * S1Big + BigInt(at[j]);
+      } else {
+        let k = 0;
+        for (let x = 0; x < oc.length; x++) {
+          const c = oc[x][r];
+          if (c === UNMATCHED) {
+            k = space;
+            break;
+          }
+          k = k * radix[x] + c + 1;
+        }
+        key = k * S1 + at[j];
       }
-      const key = k * S1 + at[j];
-      let cell = dense ? dense[key] : (sparse!.get(key) ?? -1);
+      let cell = dense ? dense[key as number] : (sparse!.get(key) ?? -1);
       if (cell < 0) {
         cell = cellPos.length;
         cellPos.push(at[j]);
-        if (dense) dense[key] = cell;
+        if (dense) dense[key as number] = cell;
         else sparse!.set(key, cell);
       }
       slot[j] = cell;
     }
     S = cellPos.length;
-    cellOf = (k, p) => (k !== k ? -1 : dense ? dense[k * S1 + p] : (sparse!.get(k * S1 + p) ?? -1));
+    cellOf = (k, p) => {
+      if (k !== k) return -1;
+      if (dense) return dense[k * S1 + p];
+      const lookupKey = big ? BigInt(k) * S1Big + BigInt(p) : k * S1 + p;
+      return sparse!.get(lookupKey) ?? -1;
+    };
   }
   const parts = preps.map((prep) => accumulate(prep!, slot, S, list));
   // the totals' partials per date: the cells folded together
@@ -1049,22 +1074,33 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
   if (ti === null) return null;
 
   // Group keys are mixed-radix numbers over the codes (BLANK = digit 0), so no strings are built per row. Small key
-  // spaces index a dense table directly; keys beyond 2^53 fall back to strings.
+  // spaces index a dense table directly; spaces up to 2^64 use BigInt keys; beyond that they fall back to strings.
   const radix = dicts.map((d) => d.length + 1);
   const space = radix.reduce((a, b) => a * b, 1);
   const numeric = space <= Number.MAX_SAFE_INTEGER;
-  const dense = space <= DENSE_GROUPS ? new Int32Array(space).fill(-1) : null;
-  const groupOf = new Map<number | string, number>();
+  const big = !numeric && space <= 1.84e19;
+  const dense = numeric && space <= DENSE_GROUPS ? new Int32Array(space).fill(-1) : null;
+  const radixBig = big ? radix.map((r) => BigInt(r)) : null;
+  const groupOf = new Map<number | bigint | string, number>();
   const groupKeys: number[][] = [];
   const accs: Acc[] = [];
   const total = new Acc(plan.aggs);
-  const keyOf = (r: number): number | string => {
+  const keyOf = (r: number): number | bigint | string => {
     if (numeric) {
       let k = 0;
       for (let j = 0; j < kc.length; j++) {
         const c = kc[j][r];
         if (c === UNMATCHED) return UNMATCHED;
         k = k * radix[j] + c + 1;
+      }
+      return k;
+    }
+    if (big) {
+      let k = 0n;
+      for (let j = 0; j < kc.length; j++) {
+        const c = kc[j][r];
+        if (c === UNMATCHED) return UNMATCHED;
+        k = k * radixBig![j] + BigInt(c + 1);
       }
       return k;
     }
@@ -1076,7 +1112,7 @@ export function fastGroupQuery(model: DataModel, groupCols: ColumnRef[], values:
     }
     return k;
   };
-  const lookup = (k: number | string): number | undefined => {
+  const lookup = (k: number | bigint | string): number | undefined => {
     if (dense) {
       const gi = dense[k as number];
       return gi < 0 ? undefined : gi;

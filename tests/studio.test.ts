@@ -288,4 +288,17 @@ describe('studio', () => {
     expect(st.report.visual(id).spec.hidden).toBe(true);
     st.destroy();
   });
+
+  it('data view virtualizes large tables', () => {
+    const st = open({ starter: 'blank' });
+    st.model.addTable('BigTable', Array.from({ length: 500 }, (_, i) => ({ id: i, name: `Item ${i}` })));
+    st.dataState.table = 'BigTable';
+    st.setView('data');
+    const grid = q('.pbs-grid');
+    expect(grid).toBeTruthy();
+    const rows = qa('tbody tr', grid!);
+    expect(rows.length).toBeLessThan(100);
+    expect(q('.pbi-spacer', grid!)).toBeTruthy();
+    st.destroy();
+  });
 });

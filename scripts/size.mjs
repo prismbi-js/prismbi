@@ -33,7 +33,7 @@ const SCENARIOS = [
   ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 128],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 98],
   ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 111],
-  ['connectors', `export * from '${dist}/connectors.js';`, 5],
+  ['connectors', `export * from '${dist}/connectors.js';`, 6],
   ['worker', `export * from '${dist}/worker.js';`, 3],
   ['ai (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/ai.js';`, 28, 'full (api)'],
   ['sql (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/sql.js';`, 14, 'full (api)'],
