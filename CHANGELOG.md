@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Financial DAX functions:**
+  - Added `XNPV(<table>, <values>, <dates>, <rate>)` and `XIRR(<table>, <values>, <dates>, [<guess>])` supporting irregular cash flow schedules, Newton-Raphson numerical solving, and table iterators or column vectors.
+- **Extended SQL pushdown dialects & parameterized mode:**
+  - Added **Microsoft SQL Server (T-SQL)** dialect (`'mssql'`): bracket identifier quoting (`[Table].[Column]`), `OFFSET 0 ROWS FETCH NEXT n ROWS ONLY` paging, `DATEPART` temporal extraction, and null-safe ordering.
+  - Added **Google BigQuery** dialect (`'bigquery'`): backtick identifiers, `IEEE_DIVIDE` safe division, `CONCAT`, and grouping sets.
+  - Added **Parameterized SQL Mode** (`opts.parameterized: true`): extracts literal values into `SqlPlan.params` and emits standard parameter placeholders (`?`).
+- **Data label collision avoidance:**
+  - Multi-series line, area, and stacked area charts now employ a greedy sweep-line collision solver across series. Colliding labels are dynamically shifted below the point or suppressed to prevent unreadable visual overlapping.
+- **Streaming CSV URL connectors:**
+  - Added `loadCsvColumns(url, opts)` and `streamCsvUrl(url, opts)` in `@prismbi/prismbi/connectors` for direct URL streaming into columnar typed arrays without intermediate row object overhead.
+
+
 - **Custom GeoJSON boundaries & small multiples:**
   - **Custom GeoJSON boundary loader:** `registerGeoJson(name, geojson, keys?)`, `hasBoundaries(name)`, `listBoundaries()`, and `removeBoundaries(name)` in `@prismbi/prismbi/geo` allow registering arbitrary GeoJSON shapes (custom sales territories, school districts, postal zip codes) for choropleth filled maps.
   - **Small multiples on scatter & bullet charts:** `scatter` and `bullet` visuals now support small multiples grid splitting with shared axis scaling and legend aggregation.

@@ -363,4 +363,37 @@ describe('dialects: mysql and snowflake', () => {
     expect(plan.sql).toContain('GROUP BY GROUPING SETS');
     expect(plan.totalsInline).toBe(true);
   });
+
+  it('generates MSSQL-compliant SQL with bracket identifiers and OFFSET FETCH', () => {
+    const plan = toSql(model, {
+      groupBy: ['Region[Country]'],
+      values: ['Total Sales'],
+      limit: 10,
+      filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }],
+    }, { dialect: 'mssql' });
+    expect(plan.sql).toContain('LEFT JOIN [Region]');
+    expect(plan.sql).toContain('[Country]');
+    expect(plan.sql).toContain('OFFSET 0 ROWS FETCH NEXT 11 ROWS ONLY');
+  });
+
+  it('generates BigQuery-compliant SQL with backtick identifiers and IEEE_DIVIDE', () => {
+    const plan = toSql(model, {
+      groupBy: ['Region[Country]'],
+      values: ['Margin %'],
+      filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }],
+    }, { dialect: 'bigquery' });
+    expect(plan.sql).toContain('LEFT JOIN `Region`');
+    expect(plan.sql).toContain('`Country`');
+    expect(plan.sql).toContain('IEEE_DIVIDE');
+  });
+
+  it('generates parameterized SQL with extracted parameters array', () => {
+    const plan = toSql(model, {
+      groupBy: ['Region[Country]'],
+      values: ['Total Sales'],
+      filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }],
+    }, { parameterized: true });
+    expect(plan.sql).toContain('?');
+    expect(plan.params).toEqual(['Bikes']);
+  });
 });

@@ -344,21 +344,28 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       marks.append(s('text', { x: xAt(li) + 8, y, class: 'pbi-label pbi-end-label', fill: t.foreground, 'font-weight': 600 }, fmtOf(se)(se.values[li])));
     });
   }
-  if (f.dataLabels.show && !endLabels)
+  if (f.dataLabels.show && !endLabels) {
+    const placed: [number, number, number, number][] = [];
+    const hit = (x0: number, x1: number, y0: number, y1: number) => placed.some(([a, b, c, d]) => x0 < b && x1 > a && y0 < d && y1 > c);
     lineSeries.forEach((se) => {
       const fmt = fmtOf(se);
-      const placed: [number, number, number][] = [];
       se.values.forEach((v, i) => {
         if (v === null) return;
         const text = fmt(v);
         const w = measureText(text, fs, t.fontFamily);
         const x = xAt(i);
-        const y = lscale(v) - 8;
-        if (placed.some(([a, b, py]) => x - w / 2 < b && x + w / 2 > a && Math.abs(py - y) < fs)) return;
-        placed.push([x - w / 2 - 2, x + w / 2 + 2, y]);
-        marks.append(s('text', { x, y, 'text-anchor': 'middle', class: 'pbi-label', fill: t.foregroundSecondary }, text));
+        const rawY = lscale(stacked ? cumulative(lineSeries, se, i) : v);
+        const x0 = x - w / 2 - 2, x1 = x + w / 2 + 2;
+        let y = rawY - 8;
+        if (hit(x0, x1, y - fs, y + 2)) {
+          y = rawY + fs + 6;
+          if (hit(x0, x1, y - fs, y + 2)) return;
+        }
+        placed.push([x0, x1, y - fs, y + 2]);
+        marks.append(s('text', { x, y, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary }, text));
       });
     });
+  }
 
   if (zoomOn) {
     const max = fullCount - 1;

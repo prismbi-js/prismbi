@@ -20,6 +20,13 @@ export interface CsvColumnsResult {
   rowCount: number;
 }
 
+export interface StreamCsvResult {
+  columns: Record<string, unknown[]>;
+  schema: Record<string, ColumnSchema>;
+  rows: Row[];
+  rowCount: number;
+}
+
 export interface StreamCsvOptions extends CsvOptions, FetchOptions {
   batchSize?: number;
   onBatch?: (batch: { columns: Record<string, unknown[]>; rows: Row[]; rowCount: number }) => void;
@@ -335,6 +342,16 @@ export async function streamCsv(
 /** Fetch and parse a CSV file. */
 export async function loadCsv(url: string, opts: CsvOptions & FetchOptions = {}): Promise<Row[]> {
   return parseCsv(await fetchText(url, opts), opts);
+}
+
+/** Fetch and parse a CSV file into columnar arrays without intermediate Row[] overhead. */
+export async function loadCsvColumns(url: string, opts: CsvOptions & FetchOptions = {}): Promise<CsvColumnsResult> {
+  return parseCsvColumns(await fetchText(url, opts), opts);
+}
+
+/** Fetch and stream a CSV file URL directly into batches/columns. */
+export async function streamCsvUrl(url: string, opts: StreamCsvOptions = {}): Promise<StreamCsvResult> {
+  return streamCsv(url, opts);
 }
 
 /**

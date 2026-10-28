@@ -2,8 +2,8 @@
  * PrismBI connectors: CSV, JSON/REST (with pagination), GraphQL, Apache Arrow, SQL adapters, live streams and
  * scheduled refresh. Independent of the visuals; import from `@prismbi/prismbi/connectors`.
  */
-export { parseCsv, parseCsvRecords, parseCsvColumns, streamCsv, detectDelimiter, loadCsv, googleSheetCsvUrl } from './connectors/csv';
-export type { CsvOptions, CsvColumnsResult, StreamCsvOptions } from './connectors/csv';
+export { parseCsv, parseCsvRecords, parseCsvColumns, streamCsv, detectDelimiter, loadCsv, loadCsvColumns, streamCsvUrl, googleSheetCsvUrl } from './connectors/csv';
+export type { CsvOptions, CsvColumnsResult, StreamCsvOptions, StreamCsvResult } from './connectors/csv';
 export { fetchText, loadJson, loadRest, loadGraphQL, pick, toRows } from './connectors/http';
 export type { FetchOptions, JsonOptions, RestOptions, Pagination, GraphQLOptions } from './connectors/http';
 export { arrowColumns, addArrowTable } from './connectors/arrow';

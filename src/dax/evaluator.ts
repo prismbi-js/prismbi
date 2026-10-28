@@ -66,6 +66,7 @@ const CONTEXT_FUNCS = new Set([
   'HASONEVALUE', 'ISFILTERED', 'TOPN', 'RELATEDTABLE', 'FIRSTDATE', 'LASTDATE', 'TOTALYTD', 'TOTALMTD', 'TOTALQTD',
   'SUMMARIZE', 'SUMMARIZECOLUMNS', 'ADDCOLUMNS', 'SELECTCOLUMNS', 'LOOKUPVALUE', 'EARLIER', 'EARLIEST', 'ISINSCOPE', 'ISCROSSFILTERED', 'TREATAS', 'CONTAINS',
   'STDEV.S', 'STDEV.P', 'VAR.S', 'VAR.P', 'STDEVX.S', 'STDEVX.P', 'VARX.S', 'VARX.P', 'PERCENTILE.INC', 'PERCENTILE.EXC', 'PERCENTILEX.INC', 'PERCENTILEX.EXC', 'GEOMEAN', 'GEOMEANX', 'FIRSTNONBLANK', 'LASTNONBLANK', 'AVERAGEA', 'MAXA', 'MINA',
+  'XNPV', 'XIRR',
 ]);
 
 
@@ -1923,6 +1924,40 @@ export class Evaluator {
         return name === 'AVERAGEA' ? v.reduce((a, b) => a + b, 0) / v.length : name === 'MAXA' ? Math.max(...v) : Math.min(...v);
       }
 
+      // ---- financial
+      case 'XNPV': {
+        const hasTbl = args.length >= 4;
+        const rate = num(this.evalScalar(hasTbl ? args[3] : args[0].type !== 'column' ? args[0] : args[2], ctx));
+        const cfs = this.cashFlows(name, args, ctx, hasTbl).sort((a, b) => a.d.getTime() - b.d.getTime());
+        if (!cfs.length || rate <= -1) return null;
+        const d0 = cfs[0].d.getTime();
+        return cfs.reduce((sum, { p, d }) => sum + p / Math.pow(1 + rate, (d.getTime() - d0) / (365 * MS_DAY)), 0);
+      }
+      case 'XIRR': {
+        const hasTbl = args.length >= 3 && args[0].type !== 'column';
+        const guess = args[hasTbl ? 3 : 2] ? num(this.evalScalar(args[hasTbl ? 3 : 2], ctx)) : 0.1;
+        const cfs = this.cashFlows(name, args, ctx, hasTbl).sort((a, b) => a.d.getTime() - b.d.getTime());
+        if (cfs.length < 2 || !cfs.some((c) => c.p > 0) || !cfs.some((c) => c.p < 0)) return null;
+        const d0 = cfs[0].d.getTime();
+        const ts = cfs.map((c) => (c.d.getTime() - d0) / (365 * MS_DAY));
+        let r = guess;
+        for (let iter = 0; iter < 100; iter++) {
+          if (r <= -0.999) r = -0.999;
+          let f = 0, df = 0;
+          for (let i = 0; i < cfs.length; i++) {
+            const term = cfs[i].p * Math.pow(1 + r, -ts[i]);
+            f += term;
+            df -= (ts[i] * term) / (1 + r);
+          }
+          if (Math.abs(f) < 1e-7) return r;
+          if (Math.abs(df) < 1e-12) break;
+          const step = f / df;
+          r -= step;
+          if (Math.abs(step) < 1e-7) return r;
+        }
+        return r;
+      }
+
       // ---- scope & security
       case 'ISINSCOPE': {
         const col = this.colArg(args[0], name);
@@ -2020,6 +2055,22 @@ export class Evaluator {
       seen.set(JSON.stringify(tu.map(valueKey)), tu);
     }
     return { kind: 'tuples', columns: cols, tuples: [...seen.values()] };
+  }
+
+  private cashFlows(name: string, args: Expr[], ctx: EvalContext, hasTable: boolean): { p: number; d: Date }[] {
+    const asD = (v: CellValue) => (v instanceof Date ? v : v ? new Date(v as string) : null);
+    if (hasTable) {
+      const t = this.evalTable(args[0], ctx);
+      return this.bindings(t).map((b) => ({
+        p: num(this.evalScalar(args[1], { ...ctx, rows: [...(ctx.rows ?? []), b] })),
+        d: asD(this.evalScalar(args[2], { ...ctx, rows: [...(ctx.rows ?? []), b] }))!,
+      })).filter((x) => x.d && !Number.isNaN(x.d.getTime()));
+    }
+    const rateFirst = args.length === 3 && args[0].type !== 'column';
+    const vArg = rateFirst ? args[1] : args[0], dArg = rateFirst ? args[2] : args[1];
+    const vals = this.columnValues(this.colArg(vArg, name), ctx).map(num);
+    const dates = this.columnValues(this.colArg(dArg, name), ctx).map(asD);
+    return vals.map((p, i) => ({ p, d: dates[i]! })).filter((x) => x.d && !Number.isNaN(x.d.getTime()));
   }
 }
 

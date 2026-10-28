@@ -5,6 +5,8 @@ import {
   detectDelimiter,
   googleSheetCsvUrl,
   loadCsv,
+  loadCsvColumns,
+  streamCsvUrl,
   loadGraphQL,
   loadJson,
   loadRest,
@@ -100,6 +102,19 @@ describe('CSV', () => {
     expect(res.columns.name).toEqual(['Alpha\nBeta', 'Gamma', 'Delta']);
     expect(res.columns.value).toEqual([100, 200, 300]);
     expect(batches).toEqual([2, 1]);
+  });
+
+  it('loads CSV columns and streams URL directly', async () => {
+    const csvData = 'id,city,pop\n101,Seattle,750000\n102,Portland,650000\n';
+    const f = fakeFetch((_u) => ({ body: csvData }));
+    const colsRes = await loadCsvColumns('https://example.com/cities.csv', { fetch: f });
+    expect(colsRes.rowCount).toBe(2);
+    expect(colsRes.columns.city).toEqual(['Seattle', 'Portland']);
+    expect(colsRes.columns.pop).toEqual([750000, 650000]);
+
+    const streamRes = await streamCsvUrl('https://example.com/cities.csv', { fetch: f });
+    expect(streamRes.rowCount).toBe(2);
+    expect(streamRes.columns.city).toEqual(['Seattle', 'Portland']);
   });
 });
 

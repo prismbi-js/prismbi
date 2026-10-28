@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Report, createVisual, defineVisual, registerVisual } from '../src/index';
+import { DataModel, Report, createVisual, defineVisual, registerVisual } from '../src/index';
 import type { ReportDefinition } from '../src/index';
 import { makeModel } from './fixtures';
 
@@ -252,5 +252,36 @@ describe('Report', () => {
       HTMLCanvasElement.prototype.getContext = origGetContext;
       r.destroy();
     }
+  });
+
+  it('renders line chart with data labels and avoids overlapping collision', () => {
+    const m = new DataModel();
+    m.addTable('T', [
+      { Day: 'Mon', Val1: 100, Val2: 100 },
+      { Day: 'Tue', Val1: 200, Val2: 200 },
+    ]);
+    m.addMeasure('V1', 'SUM(T[Val1])');
+    m.addMeasure('V2', 'SUM(T[Val2])');
+    const r = new Report(el, {
+      model: m,
+      pages: [{
+        id: 'p1',
+        name: 'P1',
+        visuals: [{
+          id: 'line1',
+          type: 'line',
+          layout: { x: 0, y: 0, w: 10, h: 6 },
+          fields: { category: 'T[Day]', values: ['V1', 'V2'] },
+          format: { dataLabels: { show: true } },
+        }],
+      }],
+    });
+    r.flush();
+    const labels = el.querySelectorAll('[data-visual-id="line1"] text.pbi-label');
+    expect(labels.length).toBeGreaterThan(0);
+    const ys = [...labels].map((l) => Number(l.getAttribute('y')));
+    const uniqueYs = new Set(ys);
+    expect(uniqueYs.size).toBe(ys.length);
+    r.destroy();
   });
 });

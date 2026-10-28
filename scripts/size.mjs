@@ -26,13 +26,13 @@ const PACKAGE_ALIASES = Object.fromEntries(
 
 /** [name, source, budget in KB min+gzip, optional base scenario: report only the increment over it] */
 const SCENARIOS = [
-  ['core (api)', `export * from '${dist}/core.js';`, 104],
-  ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 92],
-  ['full (api)', `export * from '${dist}/index.js';`, 146],
-  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 139],
+  ['core (api)', `export * from '${dist}/core.js';`, 105],
+  ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 93],
+  ['full (api)', `export * from '${dist}/index.js';`, 147],
+  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 140],
   ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 129],
-  ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 99],
-  ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 111],
+  ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 100],
+  ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 112],
   ['connectors', `export * from '${dist}/connectors.js';`, 6],
   ['worker', `export * from '${dist}/worker.js';`, 3],
   ['ai (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/ai.js';`, 28, 'full (api)'],

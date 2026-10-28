@@ -12,7 +12,7 @@
 import { parseDax, resolveGroupField, resolveValueField, visualCalcPlan } from '@prismbi/prismbi';
 import type { CellValue, DataModel, Expr, Filter, FilterSpec, QueryField, QueryResult, QueryRow, QuerySpec } from '@prismbi/prismbi';
 
-export type SqlDialect = 'duckdb' | 'postgres' | 'sqlite' | 'mysql' | 'snowflake';
+export type SqlDialect = 'duckdb' | 'postgres' | 'sqlite' | 'mysql' | 'snowflake' | 'mssql' | 'bigquery';
 
 export interface SqlOptions {
   /** Model table → SQL table or view (default: the same name). May be schema-qualified: `'analytics.sales'`. */
@@ -20,6 +20,8 @@ export interface SqlOptions {
   /** Model column → SQL column, per model table: `{ Sales: { SalesAmount: 'sales_amount' } }`. */
   columns?: Record<string, Record<string, string>>;
   dialect?: SqlDialect;
+  /** When true, queries emit parameters into `SqlPlan.params` instead of inlining literals into SQL. */
+  parameterized?: boolean;
 }
 
 /** The query (or a measure in it) can't be expressed in SQL. */
@@ -45,6 +47,8 @@ export interface SqlPlan {
   limit?: number;
   /** `'aggregate'`: one GROUP BY query. `'context'`: correlated subqueries with full filter-context semantics. */
   mode?: 'aggregate' | 'context';
+  /** Parameter values when `parameterized: true` was requested. */
+  params?: unknown[];
 }
 
 const unsupported = (msg: string): never => {
@@ -67,7 +71,11 @@ function toLocalDate(v: unknown): Date | null {
   return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0 ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : d;
 }
 
-const quoteIdent = (name: string) => name.split('.').map((p) => `"${p.replace(/"/g, '""')}"`).join('.');
+const quoteIdent = (name: string, dialect?: SqlDialect) => {
+  if (dialect === 'mssql') return name.split('.').map((p) => `[${p.replace(/\]/g, ']]')}]`).join('.');
+  if (dialect === 'mysql' || dialect === 'bigquery') return name.split('.').map((p) => `\`${p.replace(/`/g, '``')}\``).join('.');
+  return name.split('.').map((p) => `"${p.replace(/"/g, '""')}"`).join('.');
+};
 const asRef = (ref: string) => {
   const m = /^'?(.*?)'?\[([^\]]+)\]$/.exec(ref.trim());
   return m ? { table: m[1], column: m[2] } : unsupported(`Not a column reference: ${ref}`);
@@ -103,7 +111,7 @@ class Scope {
   }
 
   table(name: string): string {
-    return quoteIdent(this.opts.tables?.[name] ?? name);
+    return quoteIdent(this.opts.tables?.[name] ?? name, this.opts.dialect);
   }
 
   private alias(table: string): string {
@@ -130,7 +138,7 @@ class Scope {
   }
 
   columnName(table: string, column: string): string {
-    return quoteIdent(this.opts.columns?.[table]?.[column] ?? column);
+    return quoteIdent(this.opts.columns?.[table]?.[column] ?? column, this.opts.dialect);
   }
 
   col(ref: { table: string; column: string }): string {
@@ -150,19 +158,26 @@ class Scope {
 }
 
 class Translator {
+  readonly params: unknown[] = [];
   constructor(
     private model: DataModel,
     private dialect: SqlDialect,
+    private opts?: SqlOptions,
   ) {}
 
   literal(v: CellValue): string {
+    if (this.opts?.parameterized) {
+      if (v === null || v === undefined) return 'NULL';
+      this.params.push(v instanceof Date ? ymd(v) : v);
+      return '?';
+    }
     if (v === null || v === undefined) return 'NULL';
     if (v instanceof Date) {
       const d = ymd(v);
-      return this.dialect === 'sqlite' || this.dialect === 'mysql' ? `'${d}'` : `DATE '${d}'`;
+      return this.dialect === 'sqlite' || this.dialect === 'mysql' || this.dialect === 'mssql' ? `'${d}'` : `DATE '${d}'`;
     }
     if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
-    if (typeof v === 'boolean') return this.dialect === 'sqlite' ? (v ? '1' : '0') : v ? 'TRUE' : 'FALSE';
+    if (typeof v === 'boolean') return this.dialect === 'sqlite' || this.dialect === 'mssql' ? (v ? '1' : '0') : v ? 'TRUE' : 'FALSE';
     return `'${String(v).replace(/'/g, "''")}'`;
   }
 
@@ -230,7 +245,13 @@ class Translator {
     const g = sub.col(target);
     const v = this.value(sub, by.ast, [], ctxFilters);
     const dir = f.direction === 'bottom' ? 'ASC' : 'DESC';
-    return `${s.col(target)} IN (SELECT g FROM (SELECT ${g} AS g, ${v} AS s\n${sub.from()}${where.length ? `\nWHERE ${where.join(' AND ')}` : ''}\nGROUP BY 1 ORDER BY 2 ${dir} NULLS LAST LIMIT ${Math.max(0, Math.floor(f.n))}) AS topn)`;
+    const n = Math.max(0, Math.floor(f.n));
+    const orderClause = this.dialect === 'mssql'
+      ? `ORDER BY CASE WHEN 2 IS NULL THEN 1 ELSE 0 END, 2 ${dir} OFFSET 0 ROWS FETCH NEXT ${n} ROWS ONLY`
+      : this.dialect === 'sqlite' || this.dialect === 'mysql'
+      ? `ORDER BY CASE WHEN 2 IS NULL THEN 1 ELSE 0 END, 2 ${dir} LIMIT ${n}`
+      : `ORDER BY 2 ${dir} NULLS LAST LIMIT ${n}`;
+    return `${s.col(target)} IN (SELECT g FROM (SELECT ${g} AS g, ${v} AS s\n${sub.from()}${where.length ? `\nWHERE ${where.join(' AND ')}` : ''}\nGROUP BY 1 ${orderClause}) AS topn)`;
   }
 
   // ------------------------------------------------------------ DAX → SQL
@@ -305,6 +326,7 @@ class Translator {
       case 'DIVIDE': {
         const x = rec(a[0]);
         const y = rec(a[1]);
+        if (this.dialect === 'bigquery') return `(CASE WHEN COALESCE(${y}, 0) = 0 THEN ${a[2] ? rec(a[2]) : 'NULL'} ELSE IEEE_DIVIDE(${x}, ${y}) END)`;
         return `(CASE WHEN COALESCE(${y}, 0) = 0 THEN ${a[2] ? rec(a[2]) : 'NULL'} ELSE ${x} * 1.0 / ${y} END)`;
       }
       case 'IF':
@@ -330,13 +352,16 @@ class Translator {
 
   /** DAX `&`: text concatenation where BLANK is an empty string (SQL's `||` would give NULL). */
   concat(a: string, b: string): string {
-    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
+    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'bigquery' ? 'STRING' : this.dialect === 'mssql' ? 'NVARCHAR(MAX)' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
     const text = (x: string) => `COALESCE(CAST(${x} AS ${type}), '')`;
-    return this.dialect === 'mysql' ? `CONCAT(${text(a)}, ${text(b)})` : `(${text(a)} || ${text(b)})`;
+    if (this.dialect === 'mysql' || this.dialect === 'bigquery') return `CONCAT(${text(a)}, ${text(b)})`;
+    if (this.dialect === 'mssql') return `(${text(a)} + ${text(b)})`;
+    return `(${text(a)} || ${text(b)})`;
   }
 
   datePart(n: 'YEAR' | 'MONTH' | 'DAY', x: string): string {
     if (this.dialect === 'sqlite') return `CAST(strftime('${n === 'YEAR' ? '%Y' : n === 'MONTH' ? '%m' : '%d'}', ${x}) AS INTEGER)`;
+    if (this.dialect === 'mssql') return `CAST(DATEPART(${n.toLowerCase()}, ${x}) AS INTEGER)`;
     return `CAST(EXTRACT(${n} FROM ${x}) AS INTEGER)`;
   }
 
@@ -345,8 +370,8 @@ class Translator {
     const p = f?.type === 'string' ? f.value : '';
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const name = (len?: number) => `(CASE ${this.datePart('MONTH', x)} ${months.map((m, i) => `WHEN ${i + 1} THEN '${len ? m.slice(0, len) : m}'`).join(' ')} END)`;
-    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
-    const pad = (n: string) => (this.dialect === 'sqlite' ? `substr('0' || CAST(${n} AS TEXT), -2)` : `lpad(CAST(${n} AS ${type}), 2, '0')`);
+    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'bigquery' ? 'STRING' : this.dialect === 'mssql' ? 'NVARCHAR(MAX)' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
+    const pad = (n: string) => (this.dialect === 'sqlite' ? `substr('0' || CAST(${n} AS TEXT), -2)` : this.dialect === 'mssql' ? `RIGHT('0' + CAST(${n} AS VARCHAR(2)), 2)` : `lpad(CAST(${n} AS ${type}), 2, '0')`);
     switch (p.toLowerCase()) {
       case 'mmmm':
         return name();
@@ -1128,6 +1153,7 @@ WHERE ${inner.join(' AND ')})`);
       case 'DIVIDE': {
         const x = rec(a[0]);
         const y = rec(a[1]);
+        if (this.dialect === 'bigquery') return `(CASE WHEN COALESCE(${y}, 0) = 0 THEN ${a[2] ? rec(a[2]) : 'NULL'} ELSE IEEE_DIVIDE(${x}, ${y}) END)`;
         return `(CASE WHEN COALESCE(${y}, 0) = 0 THEN ${a[2] ? rec(a[2]) : 'NULL'} ELSE ${x} * 1.0 / ${y} END)`;
       }
       case 'IF':
@@ -1175,7 +1201,7 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
   const values = (spec.values ?? []).map((v) => resolveValueField(model, v));
   const filters = (spec.filters ?? []).map(toSpec);
   const highlight = (spec.highlight ?? []).map(toSpec);
-  const tr = new Translator(model, dialect);
+  const tr = new Translator(model, dialect, opts);
   const entryOf = (f: FilterSpec, all: FilterSpec[], cx: () => ContextTranslator): CtxEntry => {
     const targets = (f.op === 'tuples' ? f.targets : [f.target]).map((t) => asRef(String(t)));
     if (f.op !== 'topN') return { kind: 'base', cols: targets.map(colKey), tables: [...new Set(targets.map((t) => t.table))], build: (s) => tr.filter(s, f, all) };
@@ -1191,7 +1217,9 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
         const others = c.base.filter((e) => !e.cols.includes(colKey(target)));
         const members = c.subquery(target.table, (y) => `DISTINCT ${y.col(target)} AS m`, others);
         const score = c.value(by.ast, [...others, { kind: 'group', cols: [colKey(target)], tables: [target.table], build: (z) => c.isNotDistinct(z.col(target), 'tn.m') }]);
-        return `${s.col(target)} IN (SELECT tn.m FROM ${members} AS tn ORDER BY ${score} ${f.direction === 'bottom' ? 'ASC' : 'DESC'} NULLS LAST LIMIT ${Math.max(0, Math.floor(f.n))})`;
+        const topLimit = dialect === 'mssql' ? `OFFSET 0 ROWS FETCH NEXT ${Math.max(0, Math.floor(f.n))} ROWS ONLY` : `LIMIT ${Math.max(0, Math.floor(f.n))}`;
+        const topOrder = dialect === 'mssql' ? `ORDER BY CASE WHEN ${score} IS NULL THEN 1 ELSE 0 END, ${score} ${f.direction === 'bottom' ? 'ASC' : 'DESC'}` : `ORDER BY ${score} ${f.direction === 'bottom' ? 'ASC' : 'DESC'} NULLS LAST`;
+        return `${s.col(target)} IN (SELECT tn.m FROM ${members} AS tn ${topOrder} ${topLimit})`;
       },
     };
   };
@@ -1226,7 +1254,7 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
     // group-only scalars are computed once per group, in a layer around the combinations
     // (a materialized CTE, so SQLite's query flattener doesn't inline them back into every fact row)
     // FILTER sets with measures are materialized per group as well
-    const mat = dialect === 'duckdb' || dialect === 'mysql' || dialect === 'snowflake' ? '' : 'MATERIALIZED ';
+    const mat = dialect === 'duckdb' || dialect === 'mysql' || dialect === 'snowflake' || dialect === 'mssql' || dialect === 'bigquery' ? '' : 'MATERIALIZED ';
     const ctes = hoisted.length || sets.length ? [`hz AS ${mat}(SELECT c.*${hoisted.length ? `, ${hoisted.join(',\n  ')}` : ''}\nFROM ${combos} AS c)`, ...sets.map(([sql, name]) => `${name} AS ${mat}(${sql})`)] : [];
     const withClause = ctes.length ? `WITH ${ctes.join(',\n')}\n` : '';
     const parts = [`${withClause}SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${ctes.length ? 'hz' : combos} AS c) AS r`];
@@ -1244,13 +1272,13 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
         gi = groups.findIndex((g) => g.ref === o.field || g.name === o.field);
         if (gi < 0) vi = values.findIndex((v) => v.name === o.field || v.ref === o.field);
       }
-      if (vi >= 0 && vi < values.length) order.push(`r.v${vi} ${dir} NULLS LAST`);
+      if (vi >= 0 && vi < values.length) order.push(dialect === 'mssql' ? `CASE WHEN r.v${vi} IS NULL THEN 1 ELSE 0 END, r.v${vi} ${dir}` : `r.v${vi} ${dir} NULLS LAST`);
       else if (gi >= 0) order.push(groupOrder(gi, dir));
     }
     groups.forEach((_, i) => order.push(groupOrder(i, 'ASC')));
     parts.push(`ORDER BY ${order.join(', ')}`);
     const cap = Math.min(spec.top ?? Infinity, (spec.limit ?? 30_000) + 1);
-    if (Number.isFinite(cap)) parts.push(`LIMIT ${cap}`);
+    if (Number.isFinite(cap)) parts.push(dialect === 'mssql' ? `OFFSET 0 ROWS FETCH NEXT ${cap} ROWS ONLY` : `LIMIT ${cap}`);
     return parts.join('\n');
   };
   return {
@@ -1261,6 +1289,7 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
     values: values.map(({ ast: _a, ...v }) => v),
     limit: groups.length ? (spec.limit ?? 30_000) : undefined,
     mode: 'context',
+    params: opts.parameterized ? (tr.params.length ? tr.params : []) : undefined,
   };
 }
 
@@ -1287,10 +1316,10 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
   const base = factTable(model, values.map((v) => v.ast)) ?? groups[0]?.column?.table ?? unsupported('Nothing to query');
   if (!values.length && new Set(groups.map((g) => g.column!.table)).size > 1) unsupported('Grouping columns of several tables without a measure');
 
-  const tr = new Translator(model, dialect);
+  const tr = new Translator(model, dialect, opts);
   for (const g of groups) tr.touched.add(`${g.column!.table}[${g.column!.column}]`);
   // DuckDB, Postgres and Snowflake return the grand totals with the grouped rows; SQLite and MySQL run a second statement
-  const inline = !!spec.totals && values.length > 0 && groups.length > 0 && dialect !== 'sqlite' && dialect !== 'mysql';
+  const inline = !!spec.totals && values.length > 0 && groups.length > 0 && dialect !== 'sqlite' && dialect !== 'mysql' && dialect !== 'mssql';
   const build = (extra: FilterSpec[], grouped: boolean, withTotals = false): string => {
     const s = new Scope(model, opts, base, (sc, e) => tr.rowExpr(sc, e));
     const all = [...filters, ...extra];
@@ -1319,13 +1348,13 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
           gi = groups.findIndex((g) => g.ref === o.field || g.name === o.field);
           if (gi < 0) vi = values.findIndex((v) => v.name === o.field || v.ref === o.field);
         }
-        if (vi >= 0 && vi < values.length) order.push(`v${vi} ${dir} NULLS LAST`);
+        if (vi >= 0 && vi < values.length) order.push(dialect === 'mssql' ? `CASE WHEN v${vi} IS NULL THEN 1 ELSE 0 END, v${vi} ${dir}` : `v${vi} ${dir} NULLS LAST`);
         else if (gi >= 0) order.push(groupOrder(s, gi, dir));
       }
       groups.forEach((_, i) => order.push(groupOrder(s, i, 'ASC')));
       parts.push(`ORDER BY ${order.join(', ')}`);
       const cap = Math.min(spec.top ?? Infinity, (spec.limit ?? 30_000) + 1) + (withTotals ? 1 : 0);
-      if (Number.isFinite(cap)) parts.push(`LIMIT ${cap}`);
+      if (Number.isFinite(cap)) parts.push(dialect === 'mssql' ? `OFFSET 0 ROWS FETCH NEXT ${cap} ROWS ONLY` : `LIMIT ${cap}`);
     }
     return parts.join('\n');
   };
@@ -1346,6 +1375,7 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
     values: values.map(({ ast: _a, ...v }) => v),
     limit: groups.length ? (spec.limit ?? 30_000) : undefined,
     mode: 'aggregate',
+    params: opts.parameterized ? (tr.params.length ? tr.params : []) : undefined,
   };
 }
 

@@ -3,7 +3,7 @@ export interface DaxFunctionInfo {
   name: string;
   signature: string;
   description: string;
-  category: 'Aggregation' | 'Iterator' | 'Filter' | 'Table' | 'Time intelligence' | 'Logical' | 'Math' | 'Text' | 'Date' | 'Statistical' | 'Relationship' | 'Information' | 'Parent-child' | 'Calculation group' | 'Security';
+  category: 'Aggregation' | 'Iterator' | 'Filter' | 'Table' | 'Time intelligence' | 'Logical' | 'Math' | 'Text' | 'Date' | 'Statistical' | 'Relationship' | 'Information' | 'Parent-child' | 'Calculation group' | 'Security' | 'Financial';
 }
 
 const F = (category: DaxFunctionInfo['category'], rows: [string, string, string][]): DaxFunctionInfo[] =>
@@ -235,6 +235,10 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
     ['USERNAME', 'USERNAME()', 'Current user (model.setRoles(..., { user })).'],
     ['USERPRINCIPALNAME', 'USERPRINCIPALNAME()', 'Current user principal name.'],
     ['CUSTOMDATA', 'CUSTOMDATA()', 'Custom data passed to setRoles.'],
+  ]),
+  ...F('Financial', [
+    ['XNPV', 'XNPV(<table>, <values>, <dates>, <rate>)', 'Net present value for a schedule of cash flows that is not necessarily periodic.'],
+    ['XIRR', 'XIRR(<table>, <values>, <dates>, [<guess>])', 'Internal rate of return for a schedule of cash flows that is not necessarily periodic.'],
   ]),
 ])();
 

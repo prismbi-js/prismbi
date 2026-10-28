@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DaxSyntaxError, parseDax } from '../src/index';
+import { DataModel, DaxSyntaxError, parseDax } from '../src/index';
 import { makeModel } from './fixtures';
 
 const m = makeModel();
@@ -291,5 +291,25 @@ describe('found by importing a real Power BI project', () => {
     expect(ev('BITRSHIFT(16, 2)')).toBe(4);
     expect(ev('BITRSHIFT(4, -2)')).toBe(16);
     expect(ev('BITAND(4294967295, 255)')).toBe(255);
+  });
+
+  it('evaluates financial functions XNPV and XIRR', () => {
+    const m = new DataModel();
+    m.addTable('CashFlows', [
+      { Amount: -10000, Date: new Date(2020, 0, 1) },
+      { Amount: 11000, Date: new Date(2021, 0, 1) },
+    ]);
+
+    const npv = m.evaluate('XNPV(CashFlows, CashFlows[Amount], CashFlows[Date], 0.1)') as number;
+    expect(Math.abs(npv)).toBeLessThan(50);
+
+    const irr = m.evaluate('XIRR(CashFlows, CashFlows[Amount], CashFlows[Date])') as number;
+    expect(irr).toBeCloseTo(0.0997, 2);
+
+    const npvCol = m.evaluate('XNPV(CashFlows[Amount], CashFlows[Date], 0.1)') as number;
+    expect(npvCol).toBeCloseTo(npv, 4);
+
+    const irrCol = m.evaluate('XIRR(CashFlows[Amount], CashFlows[Date])') as number;
+    expect(irrCol).toBeCloseTo(irr, 4);
   });
 });
