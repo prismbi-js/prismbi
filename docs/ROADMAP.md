@@ -380,6 +380,37 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - 90 visual regression screenshots pass with 0 failures across light, dark, and high-contrast themes.
 - Strict bundle budget compliance across all 11 bundle targets.
 
+## Phase 11: Executive Intelligence & Advanced Visuals ✅
+
+**Goal:** periodic financial analytics, executive document briefings, ClickHouse pushdown, and specialized timeline and financial visuals.
+
+**Done:**
+- [x] **Periodic Financial DAX suite:** Full periodic accounting and loan/investment math implemented in `src/dax/evaluator.ts` (`PMT`, `PV`, `FV`, `NPER`, `IPMT`, `PPMT`, `RATE`, `IRR`).
+- [x] **Executive Word (`.docx`) exporter:** Zero-dependency OpenXML document builder (`src/report/docx.ts`, `report.exportDocx()`) generating structured briefings with executive headings, styled OpenXML tables, and high-resolution chart snapshots.
+- [x] **Standalone HTML dashboard exporter:** Self-contained, portable single-file HTML dashboard compiler (`src/report/html.ts`, `report.exportHtml()`) embedding data model, layouts, theme styles, and runtime for offline viewing.
+- [x] **New built-in visuals:**
+  - `gantt`: project schedule timelines with time scales, task bars, progress completion fills, and milestone diamonds.
+  - `candlestick`: financial OHLC stock charts with session color states (green/red) and liquidity volume bars.
+  - Modular tree-shakeable entry points in `@prismbi/prismbi/visuals/gantt` and `@prismbi/prismbi/visuals/candlestick`.
+- [x] **ClickHouse SQL pushdown dialect & query cache:** ClickHouse SQL generation in `src/sql.ts` with backtick identifiers, `toDate`, `dateDiff`, `addMonths/Days`, and pushed-down `MEDIAN`, verified with LRU query cache eviction and TTL expiration.
+- [x] **Visual containers & grouping:** Group metadata and selection indicators (`data-group`) across visual hosts, canvas overlays, and Studio layers.
+
+**Acceptance:**
+- 534 passing tests across 49 test suites (100% pass rate).
+- 94 visual regression screenshots with 0 failures across light and dark themes.
+- Strict bundle budget compliance across all 11 bundle targets in `scripts/size.mjs`.
+
+## Phase 12: Advanced Analytics & AI Fabric (Next)
+
+**Goal:** modern DAX relative navigation, live streaming ingestion, predictive anomaly detection, and advanced flow/network visuals.
+
+**Planned:**
+- [ ] **Modern DAX analytical navigation:** Implement `OFFSET`, `INDEX`, and `WINDOW` functions with `ORDERBY` and `PARTITIONBY` clauses for visual-relative ranking and rolling periods.
+- [ ] **Live streaming data pushdown:** `DataModel.appendRows()` and `Report.pushData()` with bounded rolling window eviction for real-time telemetry and IoT dashboards.
+- [ ] **Automated anomaly detection:** Time-series outlier detection (IQR / z-score) with visual anomaly markers and automated natural-language explanation badges.
+- [ ] **Network & Chord diagrams:** Built-in `chord` visual for inter-entity flows and `network` visual for force-directed relationship graphs.
+- [ ] **Vector PDF rendering:** Direct vector path drawing into OpenXML/PDF exports for crisp infinite scaling.
+
 ## Suggested order after Phase 6
 
 1. Finish Phase 6: collaboration, then signed plugins.
