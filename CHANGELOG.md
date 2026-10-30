@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.12.0 (2026-10-30): Periodic financial DAX, Word & standalone HTML exporters, Gantt, Candlestick & Chord visuals, ClickHouse SQL pushdown, and visual containers
+
+- **Periodic financial DAX suite:**
+  - Added full periodic accounting, loan, and investment functions:
+    - `PMT(rate, nper, pv, [fv], [type])`: Periodic payment for annuities and amortized loans.
+    - `PV(rate, nper, pmt, [fv], [type])`: Present value of a loan or investment.
+    - `FV(rate, nper, pmt, [pv], [type])`: Future value of an investment based on periodic constant payments.
+    - `NPER(rate, pmt, pv, [fv], [type])`: Number of periods for an investment or loan.
+    - `IPMT(rate, per, nper, pv, [fv], [type])`: Interest payment portion for a given amortization period.
+    - `PPMT(rate, per, nper, pv, [fv], [type])`: Principal payment portion for a given amortization period.
+    - `RATE(nper, pmt, pv, [fv], [type], [guess])`: Interest rate per period using numerical Newton-Raphson approximation.
+    - `IRR(table, values, [guess])`: Internal rate of return for periodic cash flows.
+  - All functions are registered under `'Financial'` in `src/dax/functions.ts` and support row compilation, scalar expressions, and iterators.
+
+- **Executive document & dashboard exporters:**
+  - **OpenXML Word (.docx) generator:** Zero-dependency OpenXML document builder (`src/report/docx.ts`, `report.exportDocx()`, `buildDocx()`) creating structured briefings with executive headings, styled Word tables, and embedded high-resolution visual snapshots. Compatible with Microsoft Word, Google Docs, Apple Pages, and LibreOffice.
+  - **Autonomous single-file HTML dashboard exporter:** Self-contained `.html` report compiler (`src/report/html.ts`, `report.exportHtml()`, `buildStandaloneHtml()`) inlining data models, layouts, theme styles, and runtime for completely offline viewing in any modern browser without external CDNs or scripts.
+
+- **Three new built-in visuals:**
+  - **Gantt Chart (`gantt`):** Project schedule timeline with continuous time scales, task bars, progress completion fills, and zero-duration milestone diamonds (`@prismbi/prismbi/visuals/gantt`).
+  - **Candlestick Chart (`candlestick`):** Financial OHLC stock chart with green/red theme session states and optional bottom volume bars (`@prismbi/prismbi/visuals/candlestick`).
+  - **Chord Diagram (`chord`):** Radial entity relationship flows and directional transfers with perimeter arcs and quadratic Bézier ribbons (`@prismbi/prismbi/visuals/chord`).
+  - Each visual provides tree-shakeable individual entry points under `@prismbi/prismbi/visuals/*`.
+
+- **ClickHouse SQL pushdown dialect & LRU query cache:**
+  - Added `'clickhouse'` to `SqlDialect` in `src/sql.ts`: backtick identifier quoting, `toDate`, `toYear`, `toMonth`, `toDayOfMonth`, `toStartOfYear/Quarter/Month`, `dateDiff`, `addMonths/Days`, and pushed-down `MEDIAN`.
+  - Added LRU query cache in `sqlEngine` supporting capacity eviction (`max: number`) and time-to-live expiration (`ttlMs: number`).
+
+- **Visual grouping & container indicators:**
+  - Added multi-visual grouping and ungrouping (`report.groupVisuals()`, `report.ungroupVisuals()`, shortcuts `Ctrl+G` and `Ctrl+Shift+G`).
+  - Container metadata (`data-group`) and overlays across visual hosts, canvas snapping guides, and Studio layers.
+
 ## 0.11.0 (2026-10-28): Financial & bitwise DAX, T-SQL & BigQuery pushdown, streaming ingestion, PPTX & MCP server, Studio UX enhancements
 
 - **Financial DAX functions:**
