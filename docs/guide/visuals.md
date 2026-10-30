@@ -83,6 +83,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `slicer` | `field`* (several fields give a hierarchy tree) | list · dropdown · tiles · between · relative date · tree. Sync groups across pages |
 | `gantt` | `task`* · `start`* · `end` · `progress` · `resource` | Project schedule timeline with progress fills and milestone diamonds |
 | `candlestick` | `category`* · `open`* · `high`* · `low`* · `close`* · `volume` | Financial OHLC stock chart with wicks, bodies and bottom volume bars |
+| `chord` | `source`* · `target`* · `values`* | Circular relationship flows and inter-entity transfers with quadratic ribbons |
 | `text` (`textbox`) | `values` (optional) | Mini-markdown with `{{Measure name}}` placeholders |
 
 `*` marks a required role.
@@ -356,6 +357,25 @@ createVisual(el, {
     low: 'Stocks[LowPrice]',
     close: 'Stocks[ClosePrice]',
     volume: 'Stocks[VolumeTraded]',
+  },
+});
+```
+
+## Chord diagram
+
+Chord diagrams visualize multi-entity flows, cross-departmental transfers, and bidirectional migrations arranged radially along a circular perimeter:
+- Peripheral arcs represent each entity with length proportional to total volume (inflow + outflow).
+- Interior quadratic Bézier ribbons connect source and destination entities, with ribbon width proportional to flow volume.
+- Interactive cross-filtering on node click; hover reveals exact directional volumes.
+
+```js
+createVisual(el, {
+  model,
+  type: 'chord',
+  fields: {
+    source: 'Transfers[FromRegion]',
+    target: 'Transfers[ToRegion]',
+    values: 'Transfers[Volume]',
   },
 });
 ```

@@ -83,4 +83,45 @@ describe('new visuals (Gantt & Candlestick)', () => {
     v.destroy();
     el.remove();
   });
+
+  it('renders chord diagram with perimeter node arcs and flow ribbons', () => {
+    const model = new DataModel().addTable('Migrations', [
+      { Origin: 'Europe', Dest: 'North America', Flow: 1500 },
+      { Origin: 'North America', Dest: 'Asia', Flow: 2200 },
+      { Origin: 'Asia', Dest: 'Europe', Flow: 1800 },
+      { Origin: 'Europe', Dest: 'Asia', Flow: 900 },
+    ]);
+
+    const el = document.createElement('div');
+    el.style.width = '600px';
+    el.style.height = '600px';
+    document.body.append(el);
+
+    const v = createVisual(el, {
+      type: 'chord',
+      model,
+      fields: {
+        source: 'Migrations[Origin]',
+        target: 'Migrations[Dest]',
+        values: 'Migrations[Flow]',
+      },
+    });
+    v.flush();
+    const err = el.querySelector('.pbi-error');
+    if (err) console.error('Visual error text:', err.textContent, (v as any).lastError?.stack ?? (v as any).lastError);
+    expect(el.querySelector('.pbi-error')).toBeNull();
+    const svg = el.querySelector('svg.pbi-svg');
+    expect(svg).toBeTruthy();
+
+    // Node arcs
+    const marks = el.querySelectorAll('.pbi-mark');
+    expect(marks.length).toBe(3); // 3 unique regions (Europe, North America, Asia)
+
+    // Ribbons
+    const ribbons = el.querySelectorAll('.pbi-chord-ribbon');
+    expect(ribbons.length).toBe(4);
+
+    v.destroy();
+    el.remove();
+  });
 });

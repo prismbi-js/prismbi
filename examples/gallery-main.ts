@@ -53,6 +53,7 @@ export const GALLERY: Spec[] = [
   { type: 'text', fields: { values: ['Orders', 'Units'] }, format: { text: { content: '**{{Orders}}** orders · {{Units}} units' } } },
   { type: 'gantt', fields: { task: 'Project[Phase]', start: 'Project[Start]', end: 'Project[End]', progress: 'Project[Progress]' } },
   { type: 'candlestick', fields: { category: 'Stock[Day]', open: 'Stock[Open]', high: 'Stock[High]', low: 'Stock[Low]', close: 'Stock[Close]', volume: 'Stock[Vol]' } },
+  { type: 'chord', fields: { source: 'Sales[Channel]', target: 'Product[Category]', values: 'Total Sales' } },
 ];
 
 const dark = new URLSearchParams(location.search).get('theme') === 'dark';

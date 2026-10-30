@@ -30,3 +30,5 @@ export { gantt } from './visuals/gantt';
 export type { GanttFormat } from './visuals/gantt';
 export { candlestick } from './visuals/candlestick';
 export type { CandlestickFormat } from './visuals/candlestick';
+export { chord } from './visuals/chord';
+export type { ChordFormat } from './visuals/chord';

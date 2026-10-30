@@ -405,10 +405,10 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 **Goal:** modern DAX relative navigation, live streaming ingestion, predictive anomaly detection, and advanced flow/network visuals.
 
 **Planned:**
-- [ ] **Modern DAX analytical navigation:** Implement `OFFSET`, `INDEX`, and `WINDOW` functions with `ORDERBY` and `PARTITIONBY` clauses for visual-relative ranking and rolling periods.
+- [x] **Chord diagram visual:** Built-in `chord` visual (`src/visuals/chord.ts`) for radial relationship flows and inter-entity transfers with quadratic Bézier ribbons.
 - [ ] **Live streaming data pushdown:** `DataModel.appendRows()` and `Report.pushData()` with bounded rolling window eviction for real-time telemetry and IoT dashboards.
 - [ ] **Automated anomaly detection:** Time-series outlier detection (IQR / z-score) with visual anomaly markers and automated natural-language explanation badges.
-- [ ] **Network & Chord diagrams:** Built-in `chord` visual for inter-entity flows and `network` visual for force-directed relationship graphs.
+- [ ] **Force-directed Network graphs:** Built-in `network` visual for entity relationship networks with draggable nodes and community clusters.
 - [ ] **Vector PDF rendering:** Direct vector path drawing into OpenXML/PDF exports for crisp infinite scaling.
 
 ## Suggested order after Phase 6

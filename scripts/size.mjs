@@ -28,8 +28,8 @@ const PACKAGE_ALIASES = Object.fromEntries(
 const SCENARIOS = [
   ['core (api)', `export * from '${dist}/core.js';`, 110],
   ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 100],
-  ['full (api)', `export * from '${dist}/index.js';`, 155],
-  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 148],
+  ['full (api)', `export * from '${dist}/index.js';`, 156],
+  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 149],
   ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 133],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 106],
   ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 118],

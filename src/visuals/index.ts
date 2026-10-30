@@ -18,6 +18,7 @@ import { sunburst } from './sunburst';
 import { scorecard } from './scorecard';
 import { gantt } from './gantt';
 import { candlestick } from './candlestick';
+import { chord } from './chord';
 
 export const builtinVisuals = {
   clusteredColumn,
@@ -59,6 +60,7 @@ export const builtinVisuals = {
   filledMap,
   gantt,
   candlestick,
+  chord,
 };
 
 
@@ -104,4 +106,5 @@ export function registerBuiltinVisuals(): void {
   registerVisual(filledMap, ['choropleth']);
   registerVisual(gantt);
   registerVisual(candlestick);
+  registerVisual(chord);
 }
