@@ -16,10 +16,12 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 8 | Teams: subscriptions, accessibility, lineage, localization | `1.2` | ✅ Implemented |
 | 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | ✅ Implemented |
 | 10 | Enterprise & Scale: Financial/bitwise DAX, multi-dialect SQL pushdown, PPTX, MCP, streaming CSV | `0.11.0` | ✅ Implemented |
+| 11 | Executive Intelligence: Periodic DAX, Word/HTML exports, Gantt/Candlestick, ClickHouse | `0.12.0` | ✅ Implemented |
+| 12 | Advanced Analytics: Chord, Live Streaming, Anomaly Detection, Network Graphs | `0.13.0` | 🟡 In Progress |
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with over 170 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈82 KB min+gzip**. A typical dashboard with five visuals is **≈101 KB**, everything (36 visuals) is **≈125 KB**, and the full studio app (`@prismbi/prismbi/studio`) is **≈122 KB** (measured by `npm run size`). Connectors (≈4.4 KB) and the worker engine (≈2 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with over 175 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈82 KB min+gzip**. A typical dashboard with five visuals is **≈101 KB**, everything (39 visuals) is **≈125 KB**, and the full studio app (`@prismbi/prismbi/studio`) is **≈122 KB** (measured by `npm run size`). Connectors (≈4.4 KB) and the worker engine (≈2 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -396,8 +398,8 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **Visual containers & grouping:** Group metadata and selection indicators (`data-group`) across visual hosts, canvas overlays, and Studio layers.
 
 **Acceptance:**
-- 534 passing tests across 49 test suites (100% pass rate).
-- 94 visual regression screenshots with 0 failures across light and dark themes.
+- 535 passing tests across 49 test suites (100% pass rate).
+- 96 visual regression screenshots with 0 failures across light and dark themes.
 - Strict bundle budget compliance across all 11 bundle targets in `scripts/size.mjs`.
 
 ## Phase 12: Advanced Analytics & AI Fabric (Next)

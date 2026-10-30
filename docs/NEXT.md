@@ -1,13 +1,18 @@
 # Where work stopped (handoff)
 
-Last updated 2026-10-28. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
+Last updated 2026-10-30. Work happens on branch `phase-5`; `master` is fast-forwarded to the same commit and both are pushed to `origin` (https://github.com/prismbi-js/prismbi). Pushing is approved, publishing to npm is not (see below). There is deliberately no CI workflow.
 
 ## State
 
-- **v0.11.0 enhancements delivered:** Financial DAX (`XNPV`, `XIRR`), bitwise DAX, `CONTAINSROW`/tuple `IN`, T-SQL & BigQuery SQL pushdown (parameterized mode), streaming CSV URL connectors, PowerPoint PPTX exporter, standalone MCP server, Matrix stepped layout & sparklines, GeoJSON boundaries, Small Multiples expansion, Studio UX & quick measures.
-- **Tests:** 520 pass across 46 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 90 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
+- **v0.12.0 enhancements delivered:**
+  - Periodic financial DAX functions: `PMT`, `PV`, `FV`, `NPER`, `IPMT`, `PPMT`, `RATE`, `IRR`.
+  - Executive Word (`.docx`) and autonomous single-file HTML dashboard exporters.
+  - Three new built-in visuals: `gantt` (project timeline), `candlestick` (financial OHLC & volume), `chord` (circular flows & transfers).
+  - ClickHouse SQL pushdown dialect & LRU query cache in `sqlEngine` (`max`, `ttlMs`).
+  - Visual grouping & container indicators (`data-group`, `Ctrl+G` / `Ctrl+Shift+G`).
+- **Tests:** 535 pass across 49 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 96 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
 - **Entries:**
-  - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (22).
+  - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (25 visual entries, 39 built-in visuals).
   - UI and frameworks: `/studio`, `/react`, `/elements`.
   - Data: `/connectors`, `/worker`, `/sql`.
   - Other: `/files`, `/ai`, `/server`, `/collab`, `/plugins`, `/powerbi`.

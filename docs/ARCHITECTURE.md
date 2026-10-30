@@ -11,7 +11,7 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 │ report/           Report · VisualHost · FilterPane · Tooltip  │  runtime & chrome
 │                   cross-filter state, bookmarks, JSON, events │
 ├──────────────────────────────────────────────────────────────┤
-│ visuals/          defineVisual registry · 36 built-ins        │  presentation
+│ visuals/          defineVisual registry · 39 built-ins        │  presentation
 │ render/           svg/html helpers · scales · colour          │
 ├──────────────────────────────────────────────────────────────┤
 │ data/query.ts     QuerySpec → QueryResult (group, sort, top)  │  query engine
@@ -33,14 +33,16 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | `src/data/fastQuery.ts` | Single-pass grouped evaluation: compiles simple measures into aggregation trees and accumulates every group in one scan of the fact rows; 64-bit integer BigInt group keys |
 | `src/data/dates.ts` | Calendar table generator |
 | `src/dax/parser.ts` | Tokenizer and recursive-descent parser for the DAX-like syntax, memoised |
-| `src/dax/evaluator.ts` | Evaluator: filter and row context, context transition, CALCULATE modifiers, iterators, financial DAX, bitwise operations, time intelligence, over 170 functions |
+| `src/dax/evaluator.ts` | Evaluator: filter and row context, context transition, CALCULATE modifiers, iterators, periodic & irregular financial DAX, bitwise operations, time intelligence, over 175 functions |
 | `src/format/format.ts` | Power BI format strings, display units, date tokens |
 | `src/theme/theme.ts` | Theme tokens, light and dark themes, Power BI theme import |
 | `src/render/*` | SVG/HTML element helpers, bar and arc paths, text measurement, linear, band and point scales, colour math |
-| `src/visuals/*` | Visual contract (`types.ts`), base format pane (`format.ts`), shared chart plumbing (`common.ts`), 36 built-ins |
-| `src/report/visualHost.ts` | One visual: chrome, query building from data roles, query cache, render context, drill, CSV/Excel/PPTX/clipboard export |
-| `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling, PDF/PPTX export |
+| `src/visuals/*` | Visual contract (`types.ts`), base format pane (`format.ts`), shared chart plumbing (`common.ts`), 39 built-ins |
+| `src/report/visualHost.ts` | One visual: chrome, query building from data roles, query cache, render context, drill, CSV/Excel/PPTX/DOCX/HTML/clipboard export |
+| `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling, PDF/PPTX/DOCX/HTML export |
 | `src/report/pptx.ts` | Standalone zero-dependency PowerPoint `.pptx` generator |
+| `src/report/docx.ts` | Standalone zero-dependency Word OpenXML `.docx` generator |
+| `src/report/html.ts` | Standalone autonomous single-file HTML dashboard exporter |
 | `src/report/filterPane.ts` | Filter pane UI (Basic, Advanced, Top N) |
 | `src/report/styles.ts` | The single injected stylesheet, driven by CSS variables |
 | `src/report/editing.ts` | Edit mode: selection overlays, smart magnetic alignment guides, lasso marquee selection, drag and resize with grid snapping, free-spot finder |
