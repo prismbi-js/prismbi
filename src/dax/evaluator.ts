@@ -66,7 +66,7 @@ const CONTEXT_FUNCS = new Set([
   'HASONEVALUE', 'ISFILTERED', 'TOPN', 'RELATEDTABLE', 'FIRSTDATE', 'LASTDATE', 'TOTALYTD', 'TOTALMTD', 'TOTALQTD',
   'SUMMARIZE', 'SUMMARIZECOLUMNS', 'ADDCOLUMNS', 'SELECTCOLUMNS', 'LOOKUPVALUE', 'EARLIER', 'EARLIEST', 'ISINSCOPE', 'ISCROSSFILTERED', 'TREATAS', 'CONTAINS',
   'STDEV.S', 'STDEV.P', 'VAR.S', 'VAR.P', 'STDEVX.S', 'STDEVX.P', 'VARX.S', 'VARX.P', 'PERCENTILE.INC', 'PERCENTILE.EXC', 'PERCENTILEX.INC', 'PERCENTILEX.EXC', 'GEOMEAN', 'GEOMEANX', 'FIRSTNONBLANK', 'LASTNONBLANK', 'AVERAGEA', 'MAXA', 'MINA',
-  'XNPV', 'XIRR',
+  'XNPV', 'XIRR', 'IRR',
 ]);
 
 
@@ -75,6 +75,7 @@ const PURE_FUNCS = new Set([
   'BLANK', 'TRUE', 'FALSE', 'DATE', 'TIME', 'TIMEVALUE', 'NOT', 'AND', 'OR', 'IF', 'SWITCH', 'COALESCE', 'ISBLANK', 'ISNUMBER', 'ISTEXT', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'LEN', 'TRIM',
   'SUBSTITUTE', 'CONCATENATE', 'EXACT', 'CONTAINSSTRING', 'CONTAINSSTRINGEXACT', 'SEARCH', 'FIND', 'YEAR', 'MONTH', 'DAY', 'QUARTER', 'WEEKDAY', 'WEEKNUM', 'ABS', 'ROUND', 'ROUNDUP',
   'ROUNDDOWN', 'INT', 'TRUNC', 'MOD', 'VALUE', 'FORMAT', 'DIVIDE', 'BITAND', 'BITOR', 'BITXOR', 'BITLSHIFT', 'BITRSHIFT',
+  'PMT', 'PV', 'FV', 'NPER', 'IPMT', 'PPMT', 'RATE',
 ]);
 
 const UNHANDLED = Symbol('unhandled');
@@ -1965,6 +1966,126 @@ export class Evaluator {
           const step = f / df;
           r -= step;
           if (Math.abs(step) < 1e-7) return r;
+        }
+        return r;
+      }
+      case 'PMT': {
+        const rate = num(s(0)), nper = num(s(1)), pv = num(s(2));
+        const fv = args[3] ? num(s(3)) : 0;
+        const type = args[4] ? num(s(4)) : 0;
+        if (nper === 0) return 0;
+        if (rate === 0) return -(pv + fv) / nper;
+        const pvif = Math.pow(1 + rate, nper);
+        return -(rate * (fv + pv * pvif)) / ((1 + rate * type) * (pvif - 1));
+      }
+      case 'PV': {
+        const rate = num(s(0)), nper = num(s(1)), pmt = num(s(2));
+        const fv = args[3] ? num(s(3)) : 0;
+        const type = args[4] ? num(s(4)) : 0;
+        if (rate === 0) return -(fv + pmt * nper);
+        const pvif = Math.pow(1 + rate, nper);
+        return -((pmt * (1 + rate * type) * (pvif - 1)) / rate + fv) / pvif;
+      }
+      case 'FV': {
+        const rate = num(s(0)), nper = num(s(1)), pmt = num(s(2));
+        const pv = args[3] ? num(s(3)) : 0;
+        const type = args[4] ? num(s(4)) : 0;
+        if (rate === 0) return -(pv + pmt * nper);
+        const pvif = Math.pow(1 + rate, nper);
+        return -(pv * pvif + (pmt * (1 + rate * type) * (pvif - 1)) / rate);
+      }
+      case 'NPER': {
+        const rate = num(s(0)), pmt = num(s(1)), pv = num(s(2));
+        const fv = args[3] ? num(s(3)) : 0;
+        const type = args[4] ? num(s(4)) : 0;
+        if (pmt === 0 && rate === 0) return null;
+        if (rate === 0) return -(pv + fv) / pmt;
+        const top = -fv * rate + pmt * (1 + rate * type);
+        const bot = pv * rate + pmt * (1 + rate * type);
+        if (top / bot <= 0) return null;
+        return Math.log(top / bot) / Math.log(1 + rate);
+      }
+      case 'IPMT': {
+        const rate = num(s(0)), per = num(s(1)), nper = num(s(2)), pv = num(s(3));
+        const fv = args[4] ? num(s(4)) : 0;
+        const type = args[5] ? num(s(5)) : 0;
+        if (per < 1 || per > nper || rate === 0) return 0;
+        if (type === 1 && per === 1) return 0;
+        const pvifN = Math.pow(1 + rate, nper);
+        const pmt = -(rate * (fv + pv * pvifN)) / ((1 + rate * type) * (pvifN - 1));
+        const pvifK = Math.pow(1 + rate, per - 1);
+        const b = -(pv * pvifK + (pmt * (1 + rate * type) * (pvifK - 1)) / rate);
+        return type === 1 ? (b + pmt) * rate : b * rate;
+      }
+      case 'PPMT': {
+        const rate = num(s(0)), per = num(s(1)), nper = num(s(2)), pv = num(s(3));
+        const fv = args[4] ? num(s(4)) : 0;
+        const type = args[5] ? num(s(5)) : 0;
+        if (per < 1 || per > nper) return 0;
+        if (rate === 0) return -(pv + fv) / nper;
+        const pvifN = Math.pow(1 + rate, nper);
+        const pmt = -(rate * (fv + pv * pvifN)) / ((1 + rate * type) * (pvifN - 1));
+        if (type === 1 && per === 1) return pmt;
+        const pvifK = Math.pow(1 + rate, per - 1);
+        const b = -(pv * pvifK + (pmt * (1 + rate * type) * (pvifK - 1)) / rate);
+        const ipmt = type === 1 ? (b + pmt) * rate : b * rate;
+        return pmt - ipmt;
+      }
+      case 'RATE': {
+        const nper = num(s(0)), pmt = num(s(1)), pv = num(s(2));
+        const fv = args[3] ? num(s(3)) : 0;
+        const type = args[4] ? num(s(4)) : 0;
+        const guess = args[5] ? num(s(5)) : 0.1;
+        if (nper <= 0) return null;
+        let r = guess;
+        for (let iter = 0; iter < 100; iter++) {
+          if (r <= -0.999) r = -0.999;
+          let f = 0, df = 0;
+          if (Math.abs(r) < 1e-8) {
+            f = pv * (1 + nper * r) + pmt * (1 + r * type) * nper + fv;
+            df = pv * nper + pmt * (type * nper + (nper * (nper - 1)) / 2);
+          } else {
+            const pvif = Math.pow(1 + r, nper);
+            f = pv * pvif + pmt * (1 + r * type) * ((pvif - 1) / r) + fv;
+            const dpvif = nper * Math.pow(1 + r, nper - 1);
+            df = pv * dpvif + pmt * (type * ((pvif - 1) / r) + (1 + r * type) * ((dpvif * r - (pvif - 1)) / (r * r)));
+          }
+          if (Math.abs(f) < 1e-9) return r;
+          if (Math.abs(df) < 1e-12) break;
+          const step = f / df;
+          r -= step;
+          if (Math.abs(step) < 1e-9) return r;
+        }
+        return r;
+      }
+      case 'IRR': {
+        const hasTbl = args.length >= 2 && args[0].type !== 'column';
+        const guess = args[hasTbl ? 2 : 1] ? num(this.evalScalar(args[hasTbl ? 2 : 1], ctx)) : 0.1;
+        let cfs: number[] = [];
+        if (args[0].type === 'column') {
+          cfs = this.columnValues(this.colArg(args[0], name), ctx).map(num);
+        } else if (hasTbl) {
+          const t = this.evalTable(args[0], ctx);
+          cfs = this.bindings(t).map((b) => num(this.evalScalar(args[1], { ...ctx, rows: [...(ctx.rows ?? []), b] })));
+        } else {
+          const t = this.evalTable(args[0], ctx);
+          cfs = this.tableTuples(t).map((row) => num(row[0]));
+        }
+        if (cfs.length < 2 || !cfs.some((c) => c > 0) || !cfs.some((c) => c < 0)) return null;
+        let r = guess;
+        for (let iter = 0; iter < 100; iter++) {
+          if (r <= -0.999) r = -0.999;
+          let f = 0, df = 0;
+          for (let i = 0; i < cfs.length; i++) {
+            const term = cfs[i] * Math.pow(1 + r, -i);
+            f += term;
+            df -= (i * term) / (1 + r);
+          }
+          if (Math.abs(f) < 1e-9) return r;
+          if (Math.abs(df) < 1e-12) break;
+          const step = f / df;
+          r -= step;
+          if (Math.abs(step) < 1e-9) return r;
         }
         return r;
       }

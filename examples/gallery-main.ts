@@ -51,11 +51,29 @@ export const GALLERY: Spec[] = [
   { key: 'slicer-list', type: 'slicer', fields: { field: 'Product[Category]' } },
   { key: 'slicer-range', type: 'slicer', fields: { field: 'Date[Date]' } },
   { type: 'text', fields: { values: ['Orders', 'Units'] }, format: { text: { content: '**{{Orders}}** orders · {{Units}} units' } } },
+  { type: 'gantt', fields: { task: 'Project[Phase]', start: 'Project[Start]', end: 'Project[End]', progress: 'Project[Progress]' } },
+  { type: 'candlestick', fields: { category: 'Stock[Day]', open: 'Stock[Open]', high: 'Stock[High]', low: 'Stock[Low]', close: 'Stock[Close]', volume: 'Stock[Vol]' } },
 ];
 
 const dark = new URLSearchParams(location.search).get('theme') === 'dark';
 document.body.classList.toggle('dark', dark);
-const model = buildModel().addMeasure('Sales Low', '[Total Sales] * 0.85').addMeasure('Sales High', '[Total Sales] * 1.2');
+const model = buildModel()
+  .addMeasure('Sales Low', '[Total Sales] * 0.85')
+  .addMeasure('Sales High', '[Total Sales] * 1.2')
+  .addTable('Project', [
+    { Phase: 'Discovery', Start: '2025-01-01', End: '2025-01-20', Progress: 1.0 },
+    { Phase: 'Design & Prototype', Start: '2025-01-21', End: '2025-02-15', Progress: 0.9 },
+    { Phase: 'Frontend Build', Start: '2025-02-16', End: '2025-03-31', Progress: 0.6 },
+    { Phase: 'Backend Engine', Start: '2025-02-01', End: '2025-03-20', Progress: 0.75 },
+    { Phase: 'Quality & Launch', Start: '2025-04-01', End: '2025-04-01', Progress: 0.0 },
+  ])
+  .addTable('Stock', [
+    { Day: 'Mon', Open: 148, High: 154, Low: 147, Close: 153, Vol: 1200 },
+    { Day: 'Tue', Open: 153, High: 158, Low: 151, Close: 156, Vol: 1400 },
+    { Day: 'Wed', Open: 156, High: 157, Low: 150, Close: 151, Vol: 1900 },
+    { Day: 'Thu', Open: 151, High: 159, Low: 149, Close: 158, Vol: 1650 },
+    { Day: 'Fri', Open: 158, High: 163, Low: 157, Close: 162, Vol: 2100 },
+  ]);
 const grid = document.getElementById('grid')!;
 const known = new Set(listVisuals());
 for (const spec of GALLERY) {

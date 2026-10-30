@@ -247,6 +247,8 @@ export const CSS = /* css */ `
 .pbi-edit{position:absolute;inset:-1px;z-index:30;cursor:move;border:1px dashed transparent;border-radius:inherit;touch-action:none;outline:none}
 .pbi-visual:hover>.pbi-edit{border-color:color-mix(in srgb,var(--pbi-accent) 50%,transparent)}
 .pbi-visual[data-selected]>.pbi-edit{border:2px solid var(--pbi-accent)}
+.pbi-visual[data-group]>.pbi-edit::after{content:'⧉';position:absolute;top:2px;right:4px;font-size:11px;line-height:1;opacity:.6}
+.pbi-visual[data-selected][data-group]>.pbi-edit::after{opacity:1;color:var(--pbi-accent)}
 .pbi-visual.is-dragging{opacity:.85;z-index:40;box-shadow:0 12px 30px rgb(0 0 0/.25)}
 .pbi-handle{position:absolute;width:10px;height:10px;background:var(--pbi-surface);border:2px solid var(--pbi-accent);border-radius:3px;display:none}
 .pbi-visual[data-selected]>.pbi-edit .pbi-handle{display:block}

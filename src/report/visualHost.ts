@@ -155,6 +155,8 @@ export class VisualHost {
     // after className is rebuilt: hidden in the current phone layout
     this.el.classList.toggle('is-phone-hidden', phone === null);
     this.el.classList.toggle('is-conditional-hidden', !(this.rt.isVisualVisible?.(this.id) ?? true));
+    if (this.spec.group) this.el.setAttribute('data-group', this.spec.group);
+    else this.el.removeAttribute('data-group');
     if (this.spec.style) this.el.setAttribute('style', `${st.cssText};${this.spec.style}`);
   }
 

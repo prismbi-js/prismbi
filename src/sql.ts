@@ -12,7 +12,7 @@
 import { parseDax, resolveGroupField, resolveValueField, visualCalcPlan } from '@prismbi/prismbi';
 import type { CellValue, DataModel, Expr, Filter, FilterSpec, QueryField, QueryResult, QueryRow, QuerySpec } from '@prismbi/prismbi';
 
-export type SqlDialect = 'duckdb' | 'postgres' | 'sqlite' | 'mysql' | 'snowflake' | 'mssql' | 'bigquery';
+export type SqlDialect = 'duckdb' | 'postgres' | 'sqlite' | 'mysql' | 'snowflake' | 'mssql' | 'bigquery' | 'clickhouse';
 
 export interface SqlOptions {
   /** Model table → SQL table or view (default: the same name). May be schema-qualified: `'analytics.sales'`. */
@@ -73,7 +73,7 @@ function toLocalDate(v: unknown): Date | null {
 
 const quoteIdent = (name: string, dialect?: SqlDialect) => {
   if (dialect === 'mssql') return name.split('.').map((p) => `[${p.replace(/\]/g, ']]')}]`).join('.');
-  if (dialect === 'mysql' || dialect === 'bigquery') return name.split('.').map((p) => `\`${p.replace(/`/g, '``')}\``).join('.');
+  if (dialect === 'mysql' || dialect === 'bigquery' || dialect === 'clickhouse') return name.split('.').map((p) => `\`${p.replace(/`/g, '``')}\``).join('.');
   return name.split('.').map((p) => `"${p.replace(/"/g, '""')}"`).join('.');
 };
 const asRef = (ref: string) => {
@@ -174,6 +174,7 @@ class Translator {
     if (v === null || v === undefined) return 'NULL';
     if (v instanceof Date) {
       const d = ymd(v);
+      if (this.dialect === 'clickhouse') return `toDate('${d}')`;
       return this.dialect === 'sqlite' || this.dialect === 'mysql' || this.dialect === 'mssql' ? `'${d}'` : `DATE '${d}'`;
     }
     if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
@@ -310,7 +311,7 @@ class Translator {
       case 'DISTINCTCOUNT':
         return `NULLIF(COUNT(DISTINCT ${colArg(a[0])})${filt(cond)}, 0)`;
       case 'MEDIAN':
-        if (this.dialect !== 'duckdb') unsupported('MEDIAN is only pushed down to DuckDB');
+        if (this.dialect !== 'duckdb' && this.dialect !== 'clickhouse') unsupported('MEDIAN is only pushed down to DuckDB and ClickHouse');
         return `MEDIAN(${colArg(a[0])})${filt(cond)}`;
       case 'COUNTROWS':
         if (a[0]?.type !== 'table' || a[0].name !== s.base) unsupported(`COUNTROWS of anything but the fact table (${s.base})`);
@@ -352,14 +353,15 @@ class Translator {
 
   /** DAX `&`: text concatenation where BLANK is an empty string (SQL's `||` would give NULL). */
   concat(a: string, b: string): string {
-    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'bigquery' ? 'STRING' : this.dialect === 'mssql' ? 'NVARCHAR(MAX)' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
+    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'bigquery' ? 'STRING' : this.dialect === 'clickhouse' ? 'String' : this.dialect === 'mssql' ? 'NVARCHAR(MAX)' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
     const text = (x: string) => `COALESCE(CAST(${x} AS ${type}), '')`;
-    if (this.dialect === 'mysql' || this.dialect === 'bigquery') return `CONCAT(${text(a)}, ${text(b)})`;
+    if (this.dialect === 'mysql' || this.dialect === 'bigquery' || this.dialect === 'clickhouse') return `CONCAT(${text(a)}, ${text(b)})`;
     if (this.dialect === 'mssql') return `(${text(a)} + ${text(b)})`;
     return `(${text(a)} || ${text(b)})`;
   }
 
   datePart(n: 'YEAR' | 'MONTH' | 'DAY', x: string): string {
+    if (this.dialect === 'clickhouse') return n === 'YEAR' ? `toYear(${x})` : n === 'MONTH' ? `toMonth(${x})` : `toDayOfMonth(${x})`;
     if (this.dialect === 'sqlite') return `CAST(strftime('${n === 'YEAR' ? '%Y' : n === 'MONTH' ? '%m' : '%d'}', ${x}) AS INTEGER)`;
     if (this.dialect === 'mssql') return `CAST(DATEPART(${n.toLowerCase()}, ${x}) AS INTEGER)`;
     return `CAST(EXTRACT(${n} FROM ${x}) AS INTEGER)`;
@@ -370,8 +372,8 @@ class Translator {
     const p = f?.type === 'string' ? f.value : '';
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const name = (len?: number) => `(CASE ${this.datePart('MONTH', x)} ${months.map((m, i) => `WHEN ${i + 1} THEN '${len ? m.slice(0, len) : m}'`).join(' ')} END)`;
-    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'bigquery' ? 'STRING' : this.dialect === 'mssql' ? 'NVARCHAR(MAX)' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
-    const pad = (n: string) => (this.dialect === 'sqlite' ? `substr('0' || CAST(${n} AS TEXT), -2)` : this.dialect === 'mssql' ? `RIGHT('0' + CAST(${n} AS VARCHAR(2)), 2)` : `lpad(CAST(${n} AS ${type}), 2, '0')`);
+    const type = this.dialect === 'duckdb' || this.dialect === 'snowflake' ? 'VARCHAR' : this.dialect === 'bigquery' ? 'STRING' : this.dialect === 'clickhouse' ? 'String' : this.dialect === 'mssql' ? 'NVARCHAR(MAX)' : this.dialect === 'mysql' ? 'CHAR' : 'TEXT';
+    const pad = (n: string) => (this.dialect === 'sqlite' ? `substr('0' || CAST(${n} AS TEXT), -2)` : this.dialect === 'mssql' ? `RIGHT('0' + CAST(${n} AS VARCHAR(2)), 2)` : this.dialect === 'clickhouse' ? `leftPad(toString(${n}), 2, '0')` : `lpad(CAST(${n} AS ${type}), 2, '0')`);
     switch (p.toLowerCase()) {
       case 'mmmm':
         return name();
@@ -627,6 +629,7 @@ class ContextTranslator {
   isNotDistinct(a: string, b: string): string {
     if (this.dialect === 'sqlite') return `${a} IS ${b}`;
     if (this.dialect === 'mysql') return `${a} <=> ${b}`;
+    if (this.dialect === 'clickhouse') return `((${a} = ${b}) OR (${a} IS NULL AND ${b} IS NULL))`;
     return `${a} IS NOT DISTINCT FROM ${b}`;
   }
 
@@ -706,6 +709,7 @@ WHERE ${inner.join(' AND ')})`);
     if (this.dialect === 'postgres') return `CAST(${col} + make_interval(months => ${months}, days => ${days}) AS DATE)`;
     if (this.dialect === 'snowflake') return months ? `DATEADD(month, ${months}, ${col})` : `DATEADD(day, ${days}, ${col})`;
     if (this.dialect === 'mysql') return months ? `DATE_ADD(${col}, INTERVAL ${months} MONTH)` : `DATE_ADD(${col}, INTERVAL ${days} DAY)`;
+    if (this.dialect === 'clickhouse') return months ? (months >= 0 ? `addMonths(${col}, ${months})` : `subtractMonths(${col}, ${-months})`) : (days >= 0 ? `addDays(${col}, ${days})` : `subtractDays(${col}, ${-days})`);
     return months ? `CAST(${col} + to_months(${months}) AS DATE)` : `CAST(${col} + to_days(${days}) AS DATE)`;
   }
 
@@ -714,6 +718,7 @@ WHERE ${inner.join(' AND ')})`);
     if (this.dialect === 'postgres') return `(${b} - ${a})`;
     if (this.dialect === 'mysql') return `DATEDIFF(${b}, ${a})`;
     if (this.dialect === 'snowflake') return `DATEDIFF(day, ${a}, ${b})`;
+    if (this.dialect === 'clickhouse') return `dateDiff('day', ${a}, ${b})`;
     return `date_diff('day', ${a}, ${b})`;
   }
 
@@ -721,6 +726,7 @@ WHERE ${inner.join(' AND ')})`);
     if (this.dialect === 'sqlite') return `date(${x}, 'start of month', '+1 month', '-1 day')`;
     if (this.dialect === 'postgres') return `CAST(date_trunc('month', ${x}) + INTERVAL '1 month - 1 day' AS DATE)`;
     if (this.dialect === 'snowflake') return `LAST_DAY(${x}, 'month')`;
+    if (this.dialect === 'clickhouse') return `toLastDayOfMonth(${x})`;
     return `last_day(${x})`;
   }
 
@@ -777,6 +783,11 @@ WHERE ${inner.join(' AND ')})`);
       return `DATE_ADD(MAKEDATE(YEAR(${x}), 1), INTERVAL (QUARTER(${x}) - 1) * 3 MONTH)`;
     }
     if (this.dialect === 'snowflake') return `CAST(DATE_TRUNC('${unit}', ${x}) AS DATE)`;
+    if (this.dialect === 'clickhouse') {
+      if (unit === 'year') return `toStartOfYear(${x})`;
+      if (unit === 'quarter') return `toStartOfQuarter(${x})`;
+      return `toStartOfMonth(${x})`;
+    }
     return `CAST(date_trunc('${unit}', ${x}) AS DATE)`;
   }
 
@@ -1121,7 +1132,7 @@ WHERE ${inner.join(' AND ')})`);
       case 'DISTINCTCOUNT':
         return `NULLIF(${agg('COUNT', col(a[0]), true)}, 0)`;
       case 'MEDIAN':
-        if (this.dialect !== 'duckdb') unsupported('MEDIAN is only pushed down to DuckDB');
+        if (this.dialect !== 'duckdb' && this.dialect !== 'clickhouse') unsupported('MEDIAN is only pushed down to DuckDB and ClickHouse');
         return agg('MEDIAN', col(a[0]));
       case 'COUNTROWS': {
         const t = a[0];
@@ -1254,7 +1265,7 @@ function contextPlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): SqlPl
     // group-only scalars are computed once per group, in a layer around the combinations
     // (a materialized CTE, so SQLite's query flattener doesn't inline them back into every fact row)
     // FILTER sets with measures are materialized per group as well
-    const mat = dialect === 'duckdb' || dialect === 'mysql' || dialect === 'snowflake' || dialect === 'mssql' || dialect === 'bigquery' ? '' : 'MATERIALIZED ';
+    const mat = dialect === 'duckdb' || dialect === 'mysql' || dialect === 'snowflake' || dialect === 'mssql' || dialect === 'bigquery' || dialect === 'clickhouse' ? '' : 'MATERIALIZED ';
     const ctes = hoisted.length || sets.length ? [`hz AS ${mat}(SELECT c.*${hoisted.length ? `, ${hoisted.join(',\n  ')}` : ''}\nFROM ${combos} AS c)`, ...sets.map(([sql, name]) => `${name} AS ${mat}(${sql})`)] : [];
     const withClause = ctes.length ? `WITH ${ctes.join(',\n')}\n` : '';
     const parts = [`${withClause}SELECT * FROM (SELECT ${cols.join(', ')}\nFROM ${ctes.length ? 'hz' : combos} AS c) AS r`];
@@ -1319,7 +1330,7 @@ function aggregatePlan(model: DataModel, spec: QuerySpec, opts: SqlOptions): Sql
   const tr = new Translator(model, dialect, opts);
   for (const g of groups) tr.touched.add(`${g.column!.table}[${g.column!.column}]`);
   // DuckDB, Postgres and Snowflake return the grand totals with the grouped rows; SQLite and MySQL run a second statement
-  const inline = !!spec.totals && values.length > 0 && groups.length > 0 && dialect !== 'sqlite' && dialect !== 'mysql' && dialect !== 'mssql';
+  const inline = !!spec.totals && values.length > 0 && groups.length > 0 && dialect !== 'sqlite' && dialect !== 'mysql' && dialect !== 'mssql' && dialect !== 'clickhouse';
   const build = (extra: FilterSpec[], grouped: boolean, withTotals = false): string => {
     const s = new Scope(model, opts, base, (sc, e) => tr.rowExpr(sc, e));
     const all = [...filters, ...extra];

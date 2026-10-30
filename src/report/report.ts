@@ -1140,6 +1140,96 @@ export class Report implements ReportRuntime {
     download(new Blob([bytes], { type: XLSX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.xlsx`);
   }
 
+  /** Export the current page (or every visible page) as a PowerPoint presentation (.pptx). */
+  async exportPptx(opts: { pages?: 'current' | 'all'; filename?: string } = {}): Promise<void> {
+    const { elementToSvg, svgToCanvas, download } = await import('./snapshot');
+    const { buildPptx, PPTX_MIME } = await import('./pptx');
+    const { dataUrlToBytes } = await import('./pdf');
+    const start = this.current;
+    const targets = opts.pages === 'all' ? this.pages.map((_, i) => i).filter((i) => !this.pages[i].def.hidden && !this.pages[i].def.tooltip) : [start];
+    const slides = [];
+    for (const i of targets) {
+      if (i !== this.current) this.showPage(i, false);
+      this.flush();
+      const el = this.page.el!;
+      const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1280);
+      const hh = Math.max(1, el.scrollHeight || el.offsetHeight || 720);
+      const svg = elementToSvg(el, this._theme, w, hh);
+      const canvas = await svgToCanvas(svg, this._theme.background, 2);
+      slides.push({
+        image: dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.92)),
+        format: 'jpeg' as const,
+        width: w,
+        height: hh,
+        title: this.pages[i].def.name,
+      });
+    }
+    if (this.current !== start) this.showPage(start, false);
+    const pptx = buildPptx(slides, this.name);
+    download(new Blob([pptx], { type: PPTX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pptx`);
+  }
+
+  /** Export executive briefing document as a Microsoft Word (.docx) file. */
+  async exportDocx(opts: { pages?: 'current' | 'all'; filename?: string; title?: string } = {}): Promise<void> {
+    const { elementToSvg, svgToCanvas, download } = await import('./snapshot');
+    const { buildDocx, DOCX_MIME } = await import('./docx');
+    const { dataUrlToBytes } = await import('./pdf');
+    const start = this.current;
+    const targets = opts.pages === 'all' ? this.pages.map((_, i) => i).filter((i) => !this.pages[i].def.hidden && !this.pages[i].def.tooltip) : [start];
+    const sections = [];
+    for (const i of targets) {
+      if (i !== this.current) this.showPage(i, false);
+      this.flush();
+      const page = this.pages[i];
+      const el = page.el!;
+      const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1200);
+      const hh = Math.max(1, el.scrollHeight || el.offsetHeight || 800);
+      const svg = elementToSvg(el, this._theme, w, hh);
+      const canvas = await svgToCanvas(svg, this._theme.background, 2);
+      const imgBytes = dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.92));
+
+      const ordered = [...page.def.visuals].sort((a, b) => (a.layout?.y ?? 0) - (b.layout?.y ?? 0));
+      const tables = [];
+      for (const v of ordered) {
+        const host = page.hosts.get(v.id!);
+        if (!host || !this.isVisualVisible(v.id!)) continue;
+        const sheet = await host.xlsxSheet();
+        if (sheet && sheet.rows.length) {
+          tables.push({
+            title: v.title ?? sheet.name,
+            headers: sheet.columns.map((c) => c.header),
+            rows: sheet.rows.slice(0, 50),
+          });
+        }
+      }
+
+      sections.push({
+        heading: this.translate('page', page.def.id!, page.def.name),
+        text: `Executive summary and key analytical metrics for ${page.def.name}.`,
+        image: { data: imgBytes, format: 'jpeg' as const, width: 600, height: Math.round(600 * (hh / w)) },
+        table: tables[0],
+      });
+    }
+    if (this.current !== start) this.showPage(start, false);
+    const docx = buildDocx({
+      title: opts.title ?? this.name,
+      subtitle: 'Executive Analytical Summary',
+      date: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
+      sections,
+    });
+    download(new Blob([docx], { type: DOCX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.docx`);
+  }
+
+  /** Export a self-contained, autonomous single-file HTML report dashboard. */
+  async exportHtml(opts: { filename?: string; theme?: 'light' | 'dark' | 'high-contrast' } = {}): Promise<void> {
+    const [{ buildStandaloneHtml }, { download }] = await Promise.all([import('./html'), import('./snapshot')]);
+    const html = buildStandaloneHtml(this.model, this.toJSON(), {
+      title: this.name,
+      theme: opts.theme ?? (this._theme.name === 'dark' ? 'dark' : 'light'),
+    });
+    download(new Blob([html], { type: 'text/html' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.html`);
+  }
+
   domainIndex(table: string, column: string, value: CellValue): number {
     const k = `${table}[${column}]`;
     let m = this.domainCache.get(k);

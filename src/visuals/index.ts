@@ -16,6 +16,8 @@ import { bullet, radar, ribbon, sankey } from './more';
 import { bubbleMap, filledMap } from './map';
 import { sunburst } from './sunburst';
 import { scorecard } from './scorecard';
+import { gantt } from './gantt';
+import { candlestick } from './candlestick';
 
 export const builtinVisuals = {
   clusteredColumn,
@@ -55,6 +57,8 @@ export const builtinVisuals = {
   ribbon,
   bubbleMap,
   filledMap,
+  gantt,
+  candlestick,
 };
 
 
@@ -98,4 +102,6 @@ export function registerBuiltinVisuals(): void {
   registerVisual(ribbon);
   registerVisual(bubbleMap, ['bubbleMap']);
   registerVisual(filledMap, ['choropleth']);
+  registerVisual(gantt);
+  registerVisual(candlestick);
 }

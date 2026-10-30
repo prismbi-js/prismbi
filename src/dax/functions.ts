@@ -240,6 +240,14 @@ export const DAX_FUNCTIONS: DaxFunctionInfo[] = /* @__PURE__ */ (() => [
   ...F('Financial', [
     ['XNPV', 'XNPV(<table>, <values>, <dates>, <rate>)', 'Net present value for a schedule of cash flows that is not necessarily periodic.'],
     ['XIRR', 'XIRR(<table>, <values>, <dates>, [<guess>])', 'Internal rate of return for a schedule of cash flows that is not necessarily periodic.'],
+    ['PMT', 'PMT(<rate>, <nper>, <pv>, [<fv>], [<type>])', 'Calculates the payment for a loan based on constant payments and a constant interest rate.'],
+    ['PV', 'PV(<rate>, <nper>, <pmt>, [<fv>], [<type>])', 'Calculates the present value of a loan or an investment, based on a constant interest rate.'],
+    ['FV', 'FV(<rate>, <nper>, <pmt>, [<pv>], [<type>])', 'Calculates the future value of an investment based on a constant interest rate.'],
+    ['NPER', 'NPER(<rate>, <pmt>, <pv>, [<fv>], [<type>])', 'Returns the number of periods for an investment based on periodic, constant payments and a constant interest rate.'],
+    ['IPMT', 'IPMT(<rate>, <per>, <nper>, <pv>, [<fv>], [<type>])', 'Calculates the interest payment for an investment of a given period.'],
+    ['PPMT', 'PPMT(<rate>, <per>, <nper>, <pv>, [<fv>], [<type>])', 'Calculates the principal payment for an investment of a given period.'],
+    ['RATE', 'RATE(<nper>, <pmt>, <pv>, [<fv>], [<type>], [<guess>])', 'Returns the interest rate per period of an annuity.'],
+    ['IRR', 'IRR(<values>, [<guess>])', 'Returns the internal rate of return for a series of periodic cash flows.'],
   ]),
 ])();
 

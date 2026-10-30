@@ -81,6 +81,8 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `table` | `columns`* (columns and measures mixed) | Click a header to sort. Totals, conditional formatting, incremental rendering |
 | `matrix` | `rows` (hierarchy) · `columns` · `values`* | Expand/collapse, column pivot, real subtotals and totals |
 | `slicer` | `field`* (several fields give a hierarchy tree) | list · dropdown · tiles · between · relative date · tree. Sync groups across pages |
+| `gantt` | `task`* · `start`* · `end` · `progress` · `resource` | Project schedule timeline with progress fills and milestone diamonds |
+| `candlestick` | `category`* · `open`* · `high`* · `low`* · `close`* · `volume` | Financial OHLC stock chart with wicks, bodies and bottom volume bars |
 | `text` (`textbox`) | `values` (optional) | Mini-markdown with `{{Measure name}}` placeholders |
 
 `*` marks a required role.
@@ -316,6 +318,45 @@ return createVisual(el, {
   fields: { values: ['Total Sales', 'Margin %'], targets: ['Sales Target'], trend: 'Date[MonthYear]' },
   filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
   format: { scorecard: { goals: { 'Margin %': { target: 0.42, owner: 'Finance', due: '2025-12-31' } } } },
+});
+```
+
+## Gantt chart
+
+Gantt charts display scheduled activities, work packages, and milestones across a calendar timeline. Tasks are laid out on a vertical band scale with start and end dates mapped across a continuous time scale. Bars show progress completion fills, and zero-duration tasks automatically render as milestone diamonds.
+
+```js
+createVisual(el, {
+  model,
+  type: 'gantt',
+  fields: {
+    task: 'Tasks[TaskName]',
+    start: 'Tasks[StartDate]',
+    end: 'Tasks[EndDate]',
+    progress: 'Tasks[ProgressPercent]',
+  },
+});
+```
+
+## Candlestick (OHLC & Volume)
+
+Candlestick charts visualize financial asset price action and securities trading. Each interval displays open, high, low, and close prices:
+- Upward sessions (close >= open) render in theme accent/green.
+- Downward sessions (close < open) render in warning/red.
+- Optional bottom volume bars provide trading liquidity context.
+
+```js
+createVisual(el, {
+  model,
+  type: 'candlestick',
+  fields: {
+    category: 'Stocks[TradingDay]',
+    open: 'Stocks[OpenPrice]',
+    high: 'Stocks[HighPrice]',
+    low: 'Stocks[LowPrice]',
+    close: 'Stocks[ClosePrice]',
+    volume: 'Stocks[VolumeTraded]',
+  },
 });
 ```
 

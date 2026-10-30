@@ -387,6 +387,22 @@ describe('dialects: mysql and snowflake', () => {
     expect(plan.sql).toContain('IEEE_DIVIDE');
   });
 
+  it('generates ClickHouse-compliant SQL with backtick identifiers, toDate, and separate totals', () => {
+    const chModel = buildModel().addMeasure('Median Sales', 'MEDIAN(Sales[SalesAmount])');
+    const plan = toSql(chModel, {
+      groupBy: ['Region[Country]'],
+      values: ['Total Sales', 'Median Sales'],
+      totals: true,
+      filters: [{ target: 'Product[Category]', op: 'eq', value: 'Bikes' }, { target: 'Date[Date]', op: 'eq', value: new Date(2025, 0, 1) }],
+    }, { dialect: 'clickhouse' });
+    expect(plan.sql).toContain('LEFT JOIN `Region`');
+    expect(plan.sql).toContain('`Country`');
+    expect(plan.sql).toContain("toDate('2025-01-01')");
+    expect(plan.sql).toContain('MEDIAN');
+    expect(plan.totalsInline).toBeUndefined();
+    expect(plan.totals).toBeDefined();
+  });
+
   it('generates parameterized SQL with extracted parameters array', () => {
     const plan = toSql(model, {
       groupBy: ['Region[Country]'],
@@ -395,5 +411,41 @@ describe('dialects: mysql and snowflake', () => {
     }, { parameterized: true });
     expect(plan.sql).toContain('?');
     expect(plan.params).toEqual(['Bikes']);
+  });
+
+  it('evicts least recently used queries when LRU cache capacity is exceeded', async () => {
+    const m = buildModel();
+    let runs = 0;
+    const e = sqlEngine(m, { cache: { max: 2 }, run: async () => (runs++, [{ g0: 'X', v0: 1 }]) });
+    const q1 = { groupBy: ['Product[Category]'], values: ['Total Sales'] };
+    const q2 = { groupBy: ['Product[Subcategory]'], values: ['Total Sales'] };
+    const q3 = { groupBy: ['Region[Country]'], values: ['Total Sales'] };
+    await e.query(q1); // run 1: cached [q1]
+    await e.query(q2); // run 2: cached [q1, q2]
+    expect(runs).toBe(2);
+    await e.query(q1); // hit q1: cache promotes q1 -> [q2, q1]
+    expect(runs).toBe(2);
+    await e.query(q3); // run 3: inserts q3, evicts q2 -> [q1, q3]
+    expect(runs).toBe(3);
+    await e.query(q1); // hit q1
+    expect(runs).toBe(3);
+    await e.query(q2); // miss q2: re-runs (evicted earlier)
+    expect(runs).toBe(4);
+    e.dispose();
+  });
+
+  it('expires cached results after ttlMs', async () => {
+    const m = buildModel();
+    let runs = 0;
+    const e = sqlEngine(m, { cache: { ttlMs: 20 }, run: async () => (runs++, [{ g0: 'X', v0: 1 }]) });
+    const q = { groupBy: ['Product[Category]'], values: ['Total Sales'] };
+    await e.query(q);
+    expect(runs).toBe(1);
+    await e.query(q);
+    expect(runs).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    await e.query(q);
+    expect(runs).toBe(2);
+    e.dispose();
   });
 });

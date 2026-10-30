@@ -57,7 +57,7 @@ Used inside `CALCULATE`, these clear the other filters on the date table (Power 
 `SUMMARIZE(table, groupBy…, "Name", expr…)` · `SUMMARIZECOLUMNS(groupBy…, [filterTable…], "Name", expr…)` · `ADDCOLUMNS` · `SELECTCOLUMNS` · `CROSSJOIN` · `UNION` · `INTERSECT` · `EXCEPT` · `GENERATE` · `NATURALINNERJOIN` · `NATURALLEFTOUTERJOIN` · `SAMPLE(n, table, orderBy, [ASC|DESC]…)` · `ROW` · `DATATABLE("Col", TYPE, …, {{…}, {…}})` · table constructors `{ 1, 2 }` (column `Value`) and `{ (1, "a"), (2, "b") }` (`Value1`, `Value2`) · `GENERATESERIES` · `CALENDAR` · `CALENDARAUTO([fiscalYearEndMonth])` · `FIRSTNONBLANK` · `LASTNONBLANK` · `ALLNOBLANKROW`
 
 ### Financial
-`XNPV(table, values, dates, rate)` · `XIRR(table, values, dates, [guess])`
+`XNPV(table, values, dates, rate)` · `XIRR(table, values, dates, [guess])` · `PMT(rate, nper, pv, [fv], [type])` · `PV(rate, nper, pmt, [fv], [type])` · `FV(rate, nper, pmt, [pv], [type])` · `NPER(rate, pmt, pv, [fv], [type])` · `IPMT(rate, per, nper, pv, [fv], [type])` · `PPMT(rate, per, nper, pv, [fv], [type])` · `RATE(nper, pmt, pv, [fv], [type], [guess])` · `IRR(table, values, [guess])`
 
 ### Statistical
 `STDEV.S` · `STDEV.P` · `VAR.S` · `VAR.P` · `STDEVX.S` · `STDEVX.P` · `VARX.S` · `VARX.P` · `PERCENTILE.INC` · `PERCENTILE.EXC` · `PERCENTILEX.INC` · `PERCENTILEX.EXC` · `GEOMEAN` · `GEOMEANX` · `AVERAGEA` · `MAXA` · `MINA`

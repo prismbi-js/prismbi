@@ -26,3 +26,7 @@ export { decompositionTree } from './visuals/decomposition';
 export { boxPlot, histogram } from './visuals/distribution';
 export { bullet, radar, ribbon, sankey } from './visuals/more';
 export { bubbleMap, filledMap } from './visuals/map';
+export { gantt } from './visuals/gantt';
+export type { GanttFormat } from './visuals/gantt';
+export { candlestick } from './visuals/candlestick';
+export type { CandlestickFormat } from './visuals/candlestick';

@@ -1,6 +1,6 @@
-# SQL pushdown: DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server and BigQuery
+# SQL pushdown: DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server, BigQuery and ClickHouse
 
-`@prismbi/prismbi/sql` translates visual queries into SQL and runs them in a database. Large fact tables stay in DuckDB (DuckDB-Wasm in the browser, or DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server or BigQuery on a server) instead of being loaded into memory. The report doesn't change: pass the engine as `ReportOptions.engine`.
+`@prismbi/prismbi/sql` translates visual queries into SQL and runs them in a database. Large fact tables stay in DuckDB (DuckDB-Wasm in the browser, or DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server, BigQuery or ClickHouse on a server) instead of being loaded into memory. The report doesn't change: pass the engine as `ReportOptions.engine`.
 
 ```ts
 import * as duckdb from '@duckdb/duckdb-wasm';
