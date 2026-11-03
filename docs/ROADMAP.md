@@ -17,7 +17,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 9 | Ecosystem: Power BI import, Studio agent, DuckDB pushdown, docs site | `1.3` | ✅ Implemented |
 | 10 | Enterprise & Scale: Financial/bitwise DAX, multi-dialect SQL pushdown, PPTX, MCP, streaming CSV | `0.11.0` | ✅ Implemented |
 | 11 | Executive Intelligence: Periodic DAX, Word/HTML exports, Gantt/Candlestick, ClickHouse | `0.12.0` | ✅ Implemented |
-| 12 | Advanced Analytics: Chord, Live Streaming, Anomaly Detection, Network Graphs | `0.13.0` | 🟡 In Progress |
+| 12 | Advanced Analytics: Chord, Live Streaming, Anomaly Detection, Network Graphs, Vector PDF | `0.13.0` | ✅ Implemented |
 
 ## Guiding principles
 
@@ -402,16 +402,16 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - 96 visual regression screenshots with 0 failures across light and dark themes.
 - Strict bundle budget compliance across all 11 bundle targets in `scripts/size.mjs`.
 
-## Phase 12: Advanced Analytics & AI Fabric (Next)
+## Phase 12: Advanced Analytics & AI Fabric ✅
 
-**Goal:** modern DAX relative navigation, live streaming ingestion, predictive anomaly detection, and advanced flow/network visuals.
+**Goal:** modern DAX relative navigation, live streaming ingestion, predictive anomaly detection, advanced flow/network visuals, and resolution-independent vector PDF generation.
 
-**Planned:**
+**Delivered:**
 - [x] **Chord diagram visual:** Built-in `chord` visual (`src/visuals/chord.ts`) for radial relationship flows and inter-entity transfers with quadratic Bézier ribbons.
 - [x] **Live streaming data pushdown:** `DataModel.appendRows()` and `Report.pushData()` with bounded rolling window eviction for real-time telemetry and IoT dashboards.
 - [x] **Automated anomaly detection:** Time-series outlier detection (IQR / z-score) with visual anomaly markers and automated natural-language explanation badges.
 - [x] **Force-directed Network graphs:** Built-in `network` visual (`src/visuals/network.ts`) for entity relationship networks with draggable nodes and community clusters.
-- [ ] **Vector PDF rendering:** Direct vector path drawing into OpenXML/PDF exports for crisp infinite scaling.
+- [x] **Vector PDF rendering:** Direct vector path drawing (`svgToPdf`, `svgPathToPdf`, `Report.toPdf({ vector: true })`) into PDF 1.4 output for crisp infinite scaling.
 
 ## Suggested order after Phase 6
 

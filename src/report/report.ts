@@ -1090,10 +1090,13 @@ export class Report implements ReportRuntime {
 
   // ---------------------------------------------------------------- PDF export
 
-  /** Export the current page (or every visible page) as a PDF, one page per report page. */
-  async exportPdf(opts: { pages?: 'current' | 'all'; filename?: string } = {}): Promise<void> {
-    const { elementToSvg, svgToCanvas, download } = await import('./snapshot');
-    const { buildPdf, dataUrlToBytes } = await import('./pdf');
+  /**
+   * The pages of the report rendered as a PDF document byte array (1.4 spec, zero dependencies).
+   * Supports rasterized pages (`vector: false`, default) and crisp resolution-independent vector paths (`vector: true`).
+   */
+  async toPdf(opts: { pages?: 'current' | 'all'; vector?: boolean } = {}): Promise<Uint8Array> {
+    const { elementToSvg, svgToCanvas } = await import('./snapshot');
+    const { buildPdf, dataUrlToBytes, svgToPdf } = await import('./pdf');
     const start = this.current;
     const targets = opts.pages === 'all' ? this.pages.map((_, i) => i).filter((i) => !this.pages[i].def.hidden && !this.pages[i].def.tooltip) : [start];
     const out = [];
@@ -1104,11 +1107,21 @@ export class Report implements ReportRuntime {
       const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1200);
       const hh = Math.max(1, el.scrollHeight || el.offsetHeight || 800);
       const svg = elementToSvg(el, this._theme, w, hh);
-      const canvas = await svgToCanvas(svg, this._theme.background, 2);
-      out.push({ jpeg: dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.92)), pixelWidth: canvas.width, pixelHeight: canvas.height, width: w, height: hh });
+      if (opts.vector) {
+        out.push({ vectorCommands: svgToPdf(svg, w, hh), width: w, height: hh });
+      } else {
+        const canvas = await svgToCanvas(svg, this._theme.background, 2);
+        out.push({ jpeg: dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.92)), pixelWidth: canvas.width, pixelHeight: canvas.height, width: w, height: hh });
+      }
     }
     if (this.current !== start) this.showPage(start, false);
-    const pdf = buildPdf(out, this.name);
+    return buildPdf(out, this.name);
+  }
+
+  /** Export the current page (or every visible page) as a PDF, one page per report page. */
+  async exportPdf(opts: { pages?: 'current' | 'all'; filename?: string; vector?: boolean } = {}): Promise<void> {
+    const { download } = await import('./snapshot');
+    const pdf = await this.toPdf(opts);
     download(new Blob([pdf], { type: 'application/pdf' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pdf`);
   }
 

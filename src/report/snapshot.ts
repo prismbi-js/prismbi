@@ -24,6 +24,16 @@ export function elementToSvg(el: HTMLElement, theme: Theme, width: number, heigh
   clone.classList.remove('is-focus', 'is-active');
   clone.style.width = `${width}px`;
   clone.style.height = `${height}px`;
+  const liveVisuals = [...el.querySelectorAll<HTMLElement>('.pbi-visual')];
+  clone.querySelectorAll<HTMLElement>('.pbi-visual').forEach((cv, idx) => {
+    const lv = liveVisuals[idx];
+    if (lv) {
+      cv.setAttribute('data-offset-left', String(lv.offsetLeft));
+      cv.setAttribute('data-offset-top', String(lv.offsetTop));
+      cv.setAttribute('data-offset-width', String(lv.offsetWidth));
+      cv.setAttribute('data-offset-height', String(lv.offsetHeight));
+    }
+  });
   const vars = Object.entries(themeVars(theme))
     .map(([k, v]) => `${k}:${v}`)
     .join(';');

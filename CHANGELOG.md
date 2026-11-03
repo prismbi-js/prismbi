@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.13.0 (2026-11-03): Live streaming pushdown, automated anomaly detection, force-directed network graphs, and vector PDF rendering
+
+- **Live streaming data ingestion & bounded pushdown:**
+  - Added `report.pushData(table, rows, options)` in `@prismbi/prismbi` (`src/report/report.ts`) and `dataModel.appendRows()` for low-latency telemetry, sensor readings, and real-time operational feeds.
+  - Supports sliding FIFO window eviction via `options.maxRows`, batch cache invalidation, and reactive `dataPushed: { table, rowCount }` events on `ReportEvents`.
+
+- **Automated time-series anomaly detection:**
+  - Added `detectAnomalies()` engine (`src/visuals/anomaly.ts`) featuring detrended Interquartile Range (IQR) and standard Z-score outlier detection models using linear regression trends.
+  - Integrated into continuous line charts via `format.analytics.anomalies`, rendering glowing pulsating beacons (`.pbi-anomaly-beacon`) on anomalies and rich explanatory hover badges (`.pbi-anomaly-badge`) reporting exact directional deviation.
+
+- **Force-directed network graph visual (`network`):**
+  - Added built-in `network` visual (`src/visuals/network.ts`, `@prismbi/prismbi/visuals/network`) for entity-relationship and graph network visualization.
+  - Features Coulomb node repulsion, Hooke spring link attraction, centering gravity physics relaxation, interactive mouse/touch node dragging, community cluster coloring, and bidirectional cross-filtering.
+  - Added to built-in visuals registry, gallery, and modular visual entrypoints (`@prismbi/prismbi/visuals/network`).
+
+- **Resolution-independent vector PDF rendering:**
+  - Implemented scalable vector graphics instruction translator for PDF 1.4 (`src/report/pdf.ts`, `svgToPdf()`, `svgPathToPdf()`, `parseColor()`, `buildPdf()`).
+  - Added `vector: boolean` option to `report.exportPdf()` and `report.toPdf()`, transforming chart SVG elements (rectangles, cubic/quadratic Bézier curves, circles, ellipses, polylines, polygons, and text) directly into native PDF path operators for crisp, infinite scaling without raster pixelation.
+  - Direct PDF byte access is exposed via `await report.toPdf({ pages?: 'current' | 'all', vector?: boolean })`.
+
 ## 0.12.0 (2026-10-30): Periodic financial DAX, Word & standalone HTML exporters, Gantt, Candlestick & Chord visuals, ClickHouse SQL pushdown, and visual containers
 
 - **Periodic financial DAX suite:**

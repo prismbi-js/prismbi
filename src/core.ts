@@ -75,7 +75,8 @@ export type { GeoFeature, GeoFeatureCollection, MapFormat } from './visuals/map'
 export { registerBoundaries, getBoundaries, featureCentroid, clusterPoints, quantileBreaks } from './visuals/map';
 export { referenceValue, linearFit } from './visuals/analytics';
 export { timeScale, logScale } from './render/scales';
-export { buildPdf } from './report/pdf';
+export { buildPdf, svgToPdf, svgPathToPdf, parseColor } from './report/pdf';
+export type { PdfPage, PdfImagePage, PdfVectorPage } from './report/pdf';
 export { buildPptx, PPTX_MIME } from './report/pptx';
 export type { PptxSlide } from './report/pptx';
 export { buildDocx, DOCX_MIME } from './report/docx';
