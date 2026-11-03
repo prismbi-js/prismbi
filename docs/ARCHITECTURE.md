@@ -39,10 +39,12 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | `src/render/*` | SVG/HTML element helpers, bar and arc paths, text measurement, linear, band and point scales, colour math |
 | `src/visuals/*` | Visual contract (`types.ts`), base format pane (`format.ts`), shared chart plumbing (`common.ts`), 40 built-ins |
 | `src/report/visualHost.ts` | One visual: chrome, query building from data roles, query cache, render context, drill, CSV/Excel/PPTX/DOCX/HTML/clipboard export |
-| `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling, PDF/PPTX/DOCX/HTML export |
+| `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling, live streaming pushdown (`pushData`), PDF/PPTX/DOCX/HTML export |
+| `src/report/pdf.ts` | Standalone zero-dependency PDF 1.4 generator supporting DCT JPEG images and resolution-independent vector graphics (`svgToPdf`, `svgPathToPdf`) |
 | `src/report/pptx.ts` | Standalone zero-dependency PowerPoint `.pptx` generator |
 | `src/report/docx.ts` | Standalone zero-dependency Word OpenXML `.docx` generator |
 | `src/report/html.ts` | Standalone autonomous single-file HTML dashboard exporter |
+| `src/visuals/anomaly.ts` | Automated time-series anomaly detection engine (detrended IQR and Z-score models) |
 | `src/report/filterPane.ts` | Filter pane UI (Basic, Advanced, Top N) |
 | `src/report/styles.ts` | The single injected stylesheet, driven by CSS variables |
 | `src/report/editing.ts` | Edit mode: selection overlays, smart magnetic alignment guides, lasso marquee selection, drag and resize with grid snapping, free-spot finder |

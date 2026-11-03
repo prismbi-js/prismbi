@@ -16,7 +16,7 @@ const svg = renderVisualSvg(model, { type: 'line', fields: { category: 'Date[Mon
 const html = renderReportHtml(model, reportDefinition, { window, page: 'Overview', width: 1280, theme: 'light' });
 ```
 
-- **`renderVisualSvg`:** charts come out as their own vector `<svg>`. HTML visuals (cards, tables, slicers) are wrapped in a `foreignObject` together with the report styles. A visual that fails to render throws an error with its message.
+- **`renderVisualSvg`:** charts come out as their own vector `<svg>`. HTML visuals (cards, tables, slicers) are wrapped in a `foreignObject` together with the report styles. A visual that fails to render throws an error with its message. You can translate rendered SVGs into crisp vector PDFs with zero dependencies using `buildPdf([{ vectorCommands: svgToPdf(svg, 640, 360), width: 640, height: 360 }])`.
 - **`renderReportHtml`:** returns a self-contained HTML document with styles inlined and no scripts. Visuals are absolutely positioned from the page's grid layout at the width you pass. Use it for archives and HTML email bodies, or open it in any headless browser to produce PDF or PNG.
 - **`withDom(window, fn)`:** installs the DOM globals for the duration of `fn`, then restores them. The renderers call it for you; use it directly to drive other PrismBI APIs headlessly.
 - **`measure` report option:** the renderers size visuals with `ReportOptions.measure`, because a DOM without layout reports widths of 0. You can pass it to your own `Report` too.
