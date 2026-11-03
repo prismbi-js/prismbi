@@ -124,4 +124,67 @@ describe('new visuals (Gantt & Candlestick)', () => {
     v.destroy();
     el.remove();
   });
+
+  it('renders force-directed network graph with nodes and interconnecting edges', () => {
+    const model = new DataModel().addTable('Topology', [
+      { Src: 'Router-A', Dst: 'Switch-1', Traffic: 450, Zone: 'Core' },
+      { Src: 'Router-A', Dst: 'Switch-2', Traffic: 300, Zone: 'Core' },
+      { Src: 'Switch-1', Dst: 'Server-1', Traffic: 120, Zone: 'Access' },
+      { Src: 'Switch-1', Dst: 'Server-2', Traffic: 180, Zone: 'Access' },
+      { Src: 'Switch-2', Dst: 'Server-3', Traffic: 250, Zone: 'Access' },
+      { Src: 'Server-2', Dst: 'Server-3', Traffic: 90, Zone: 'Peer' },
+    ]);
+
+    const el = document.createElement('div');
+    el.style.width = '600px';
+    el.style.height = '500px';
+    document.body.append(el);
+
+    const v = createVisual(el, {
+      type: 'network',
+      model,
+      fields: {
+        source: 'Topology[Src]',
+        target: 'Topology[Dst]',
+        values: 'Topology[Traffic]',
+        group: 'Topology[Zone]',
+      },
+      format: {
+        network: {
+          arrows: true,
+          nodeSize: 10,
+          labels: true,
+        },
+      },
+    });
+    v.flush();
+
+    expect(el.querySelector('.pbi-error')).toBeNull();
+    const svg = el.querySelector('svg.pbi-network');
+    expect(svg).toBeTruthy();
+
+    // Check nodes (5 distinct entities: Router-A, Switch-1, Switch-2, Server-1, Server-2, Server-3)
+    const nodes = el.querySelectorAll('.pbi-network-node');
+    expect(nodes.length).toBe(6);
+
+    // Check edges (6 links)
+    const edges = el.querySelectorAll('.pbi-network-edge');
+    expect(edges.length).toBe(6);
+
+    // Check arrow marker defs
+    const marker = el.querySelector('#pbi-net-arrow');
+    expect(marker).toBeTruthy();
+
+    // Check labels
+    const labels = el.querySelectorAll('.pbi-network-label');
+    expect(labels.length).toBe(6);
+
+    // Check interactive selection
+    const firstCircle = el.querySelector('.pbi-network-circle') as SVGElement;
+    expect(firstCircle).toBeTruthy();
+    firstCircle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    v.destroy();
+    el.remove();
+  });
 });

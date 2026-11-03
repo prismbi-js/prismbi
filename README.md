@@ -10,7 +10,7 @@
 |---|---|---|
 | ![PrismBI Studio](https://prismbi-js.github.io/docs/images/studio.png) | ![The Studio agent panel](https://prismbi-js.github.io/docs/images/studio-agent.png) | ![The live playground](https://prismbi-js.github.io/docs/images/playground.png) |
 
-PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 39 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 82 KB min+gzip for the core (model, DAX engine, report runtime), about 101 KB for a dashboard with five visuals, and about 125 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
+PrismBI gives you a semantic model with relationships, a DAX-like formula engine, 40 interactive visuals, slicers, cross-filtering, drill down and drill-through, a filter pane, bookmarks and themes. It also includes a drag-and-drop **report editor** (`@prismbi/prismbi/studio`). It has zero dependencies: about 82 KB min+gzip for the core (model, DAX engine, report runtime), about 101 KB for a dashboard with five visuals, and about 125 KB with every visual (`npm run size`). Connectors (CSV, REST, GraphQL, Arrow, SQL, streaming) and a Web Worker engine are separate small entries. It runs in any framework and has first-class React bindings.
 
 ```bash
 npm install @prismbi/prismbi
@@ -53,7 +53,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 | **Report editor** | `@prismbi/prismbi/studio`: drag-and-drop canvas with magnetic alignment guides, visual grouping & containers, selection & layers pane, quick measures wizard, fields, build, format and filters panes, measure/column editors, DAG hierarchical model layout, virtualized data view, theme designer, undo/redo, autosave, versioned JSON |
 | **Developer tooling** | DAX language service (completion, hover, diagnostics, signature help), formatter, dependency explanation, `evaluateTable()` queries |
 | **Slice and narrow down** | Slicers (list, dropdown, tiles, range, relative date, hierarchy tree, synced across pages), cross-filter and cross-highlight, Ctrl+click multi-select, right-click Include / Exclude, drill down / up / expand all, drill-through pages with Back, a decomposition tree, report, page and visual filters, a filter pane with Basic, Advanced and Top N, bookmarks |
-| **39 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, sunburst, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, chord diagram, gantt chart, candlestick (OHLC with volume), heatmap, bubble and filled maps (with custom GeoJSON territories), decomposition tree, card, multi-row card, KPI, gauge, goals scorecard, table, matrix (stepped layout and in-cell sparklines), slicer, text, sweep-line collision avoidance for data labels, and small multiples across cartesian, scatter, and bullet charts |
+| **40 visuals** | Column and bar (clustered, stacked, 100%), line, area, stacked area, combo, ribbon, waterfall, pie, donut, treemap, sunburst, funnel, scatter and bubble, histogram, box plot, bullet, radar, sankey, chord diagram, network graph (force-directed with node dragging), gantt chart, candlestick (OHLC with volume), heatmap, bubble and filled maps (with custom GeoJSON territories), decomposition tree, card, multi-row card, KPI, gauge, goals scorecard, table, matrix (stepped layout and in-cell sparklines), slicer, text, sweep-line collision avoidance for data labels, and small multiples across cartesian, scatter, and bullet charts |
 | **Light and fast** | Zero dependencies. A columnar engine with typed-array views, 64-bit group key encoding, multi-worker parallel execution pool, vectorised aggregations, a single-pass grouped query path, hash indexes and caches. Queries over 1M rows, including YTD per day, take 12–191 ms cold. LTTB-thinned lines, canvas scatter, virtualized tables, and an optional Web Worker engine |
 | **Live data** | `@prismbi/prismbi/connectors`: zero-copy streaming CSV to packed columnar buffers, URL streaming, Google Sheets, JSON, paginated REST, GraphQL, Apache Arrow (Parquet via DuckDB-Wasm), SQL adapters, WebSocket and EventSource streaming into sliding windows, scheduled refresh |
 | **Analytics** | Continuous time and number axes, log scales, reference lines (constant, average, median, min, max, percentile), trend lines, rule- and gradient-based colours, report-page tooltips, real totals |
@@ -64,7 +64,7 @@ Clicking a column filters the card. Clicking a slicer tile filters both, and dou
 
 | Import | What |
 |---|---|
-| `@prismbi/prismbi` | Everything: model, DAX, report runtime and all 39 visuals |
+| `@prismbi/prismbi` | Everything: model, DAX, report runtime and all 40 visuals |
 | `@prismbi/prismbi/core` + `@prismbi/prismbi/visuals` | Lean builds: register only the visuals you use |
 | `@prismbi/prismbi/studio` | Drag-and-drop report editor |
 | `@prismbi/prismbi/react` | `<PrismReport>`, `<PrismVisual>`, `<PrismStudio>` |

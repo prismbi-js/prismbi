@@ -10,10 +10,10 @@ Last updated 2026-10-30. Work happens on branch `phase-5`; `master` is fast-forw
   - Three new built-in visuals: `gantt` (project timeline), `candlestick` (financial OHLC & volume), `chord` (circular flows & transfers).
   - ClickHouse SQL pushdown dialect & LRU query cache in `sqlEngine` (`max`, `ttlMs`).
   - Visual grouping & container indicators (`data-group`, `Ctrl+G` / `Ctrl+Shift+G`).
-  - Phase 12 items started: `Report.pushData()` live streaming with FIFO bounded eviction, and time-series anomaly detection (`format.analytics.anomalies`, detrended IQR & Z-score, beacon markers and tooltip outlier badges).
-- **Tests:** 541 pass across 50 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 96 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
+  - Phase 12 items delivered: `Report.pushData()` live streaming with FIFO bounded eviction, time-series anomaly detection (`format.analytics.anomalies`, detrended IQR & Z-score, beacon markers and tooltip outlier badges), and built-in force-directed `network` graph visual (`src/visuals/network.ts`, `@prismbi/prismbi/visuals/network`).
+- **Tests:** 542 pass across 50 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
 - **Entries:**
-  - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (25 visual entries, 39 built-in visuals).
+  - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (26 visual entries, 40 built-in visuals).
   - UI and frameworks: `/studio`, `/react`, `/elements`.
   - Data: `/connectors`, `/worker`, `/sql`.
   - Other: `/files`, `/ai`, `/server`, `/collab`, `/plugins`, `/powerbi`.

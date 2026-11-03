@@ -19,6 +19,7 @@ import { scorecard } from './scorecard';
 import { gantt } from './gantt';
 import { candlestick } from './candlestick';
 import { chord } from './chord';
+import { network } from './network';
 
 export const builtinVisuals = {
   clusteredColumn,
@@ -61,6 +62,7 @@ export const builtinVisuals = {
   gantt,
   candlestick,
   chord,
+  network,
 };
 
 
@@ -107,4 +109,5 @@ export function registerBuiltinVisuals(): void {
   registerVisual(gantt);
   registerVisual(candlestick);
   registerVisual(chord);
+  registerVisual(network);
 }

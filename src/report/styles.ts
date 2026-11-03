@@ -262,6 +262,9 @@ export const CSS = /* css */ `
 .pbi-guide-v{top:0;bottom:0;width:0;border-left:1px dashed var(--pbi-accent)}
 .pbi-guide-h{left:0;right:0;height:0;border-top:1px dashed var(--pbi-accent)}
 .pbi-datatable-wrap{overflow:auto;height:100%}
+.pbi-network-node{cursor:pointer}
+.pbi-network-node:hover .pbi-network-circle{stroke:var(--pbi-fg);stroke-width:2.5px}
+.pbi-network-edge{transition:stroke .15s ease,stroke-opacity .15s ease}
 @media (prefers-reduced-motion:reduce){.pbi-report *{animation:none!important;transition:none!important}}
 `;
 

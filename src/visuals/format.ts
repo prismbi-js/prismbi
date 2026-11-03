@@ -1,5 +1,6 @@
 import type { DisplayUnits } from '../format/format';
 import type { AnomalyOptions } from './anomaly';
+import type { NetworkFormat } from './network';
 
 export interface ReferenceLine {
   type: 'constant' | 'average' | 'median' | 'min' | 'max' | 'percentile';
@@ -91,6 +92,7 @@ export interface VisualFormat {
   bars: { maxThickness: number; radius: number; gap: number; categoryGap: number };
   lines: { width: number; markers: boolean | 'auto'; smooth: boolean; area: boolean; areaOpacity: number; endLabels: boolean };
   animation: { enabled: boolean; duration: number };
+  network?: NetworkFormat;
   [section: string]: unknown;
 }
 

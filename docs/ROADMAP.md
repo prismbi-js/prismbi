@@ -21,7 +21,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 
 ## Guiding principles
 
-1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with over 175 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈82 KB min+gzip**. A typical dashboard with five visuals is **≈101 KB**, everything (39 visuals) is **≈125 KB**, and the full studio app (`@prismbi/prismbi/studio`) is **≈122 KB** (measured by `npm run size`). Connectors (≈4.4 KB) and the worker engine (≈2 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
+1. **Light.** Zero runtime dependencies, tree-shakeable ESM, one stylesheet injected at runtime. The core (model, DAX engine with over 175 functions, query engine with the single-pass grouped path, report runtime with edit mode) is **≈82 KB min+gzip**. A typical dashboard with five visuals is **≈101 KB**, everything (40 visuals) is **≈125 KB**, and the full studio app (`@prismbi/prismbi/studio`) is **≈122 KB** (measured by `npm run size`). Connectors (≈4.4 KB) and the worker engine (≈2 KB) are separate entries. Editor tooling is tree-shaken out unless imported.
 2. **Fast.** Columnar storage, lazy hash indexes, filter-context caching and measure memoisation. Rendering is batched with `requestAnimationFrame`, and only visuals whose query changed re-run it.
 3. **Correct semantics.** Filter context, row context, context transition, CALCULATE, auto-exist and real (non-additive) totals behave as they do in Power BI. When behaviour differs, the docs say so.
 4. **Customizable at every layer.** That includes theme tokens and CSS variables, per-visual format panes, theme `visualStyles`, custom tooltips, custom visuals, and swappable palettes. Nothing in a visual is hard-coded.
@@ -410,7 +410,7 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **Chord diagram visual:** Built-in `chord` visual (`src/visuals/chord.ts`) for radial relationship flows and inter-entity transfers with quadratic Bézier ribbons.
 - [x] **Live streaming data pushdown:** `DataModel.appendRows()` and `Report.pushData()` with bounded rolling window eviction for real-time telemetry and IoT dashboards.
 - [x] **Automated anomaly detection:** Time-series outlier detection (IQR / z-score) with visual anomaly markers and automated natural-language explanation badges.
-- [ ] **Force-directed Network graphs:** Built-in `network` visual for entity relationship networks with draggable nodes and community clusters.
+- [x] **Force-directed Network graphs:** Built-in `network` visual (`src/visuals/network.ts`) for entity relationship networks with draggable nodes and community clusters.
 - [ ] **Vector PDF rendering:** Direct vector path drawing into OpenXML/PDF exports for crisp infinite scaling.
 
 ## Suggested order after Phase 6

@@ -46,6 +46,8 @@ Every built-in visual with the demo data (light theme). The same images back the
 | ![table](../images/visuals/table.png) `table` | ![text](../images/visuals/text.png) `text` | ![treemap](../images/visuals/treemap.png) `treemap` |
 | ![waterfall](../images/visuals/waterfall.png) `waterfall` | ![sunburst](../images/visuals/sunburst.png) `sunburst` | ![scorecard](../images/visuals/scorecard.png) `scorecard` |
 | ![filledMap](../images/visuals/filled-map-world.png) `filledMap` | ![column-error-bars](../images/visuals/column-error-bars.png) `column-error-bars` | ![line-forecast](../images/visuals/line-forecast.png) `line-forecast` |
+| ![gantt](../images/visuals/gantt.png) `gantt` | ![candlestick](../images/visuals/candlestick.png) `candlestick` | ![chord](../images/visuals/chord.png) `chord` |
+| ![network](../images/visuals/network.png) `network` | | |
 
 ## Catalogue
 
@@ -84,6 +86,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `gantt` | `task`* · `start`* · `end` · `progress` · `resource` | Project schedule timeline with progress fills and milestone diamonds |
 | `candlestick` | `category`* · `open`* · `high`* · `low`* · `close`* · `volume` | Financial OHLC stock chart with wicks, bodies and bottom volume bars |
 | `chord` | `source`* · `target`* · `values`* | Circular relationship flows and inter-entity transfers with quadratic ribbons |
+| `network` | `source`* · `target`* · `values` · `group` · `size` | Force-directed entity network graph with Coulomb repulsion, Hooke springs, node dragging, cluster coloring and cross-filtering |
 | `text` (`textbox`) | `values` (optional) | Mini-markdown with `{{Measure name}}` placeholders |
 
 `*` marks a required role.
@@ -257,6 +260,38 @@ Line charts can automatically detect and highlight statistical outliers and unex
 - **Visual Outlier Beacons:** Anomalous marks are rendered with halo rings and beacon dots (`.pbi-anomaly-beacon`, `.pbi-anomaly-ring`).
 - **Smart Detrending:** The series is detrended via least-squares linear regression so genuine departures are flagged without penalizing points on natural growth or seasonal trends.
 - **Interactive Tooltip Badges:** Hovering over an anomaly data point appends an outlier badge with exact deviation metrics (e.g. `⚠️ Total Sales (Outlier): High (+2.4x IQR above expected)` or `Low (-3.1σ from expected)`).
+
+## Network graph
+
+Visualizes entity topologies, communication links, infrastructure, and relational flows with an interactive force-directed physics simulation:
+
+```ts
+{
+  type: 'network',
+  fields: {
+    source: 'Topology[From]',
+    target: 'Topology[To]',
+    values: 'Topology[Bandwidth]',
+    group: 'Topology[Cluster]',
+    size: 'Topology[Importance]',
+  },
+  format: {
+    network: {
+      nodeSize: 9,        // base radius
+      linkWidth: 1.5,     // link line width
+      repulsion: 120,     // node-to-node repulsion
+      gravity: 0.05,      // centering pull
+      arrows: true,       // directional arrowheads
+      labels: true,       // node text labels
+    },
+  },
+}
+```
+
+- **Interactive Physics:** Physics-based numerical relaxation with Coulomb repulsion and Hooke spring attraction places interconnected clusters naturally.
+- **Node Dragging:** Click and drag any node to pin or adjust layout in real-time with automatic edge tracking.
+- **Cluster Highlighting:** Hovering over a node highlights adjacent connections and dims non-neighboring nodes.
+- **Cross-Filtering:** Clicking any node cross-filters all downstream visuals in the report.
 
 ## Error bars
 

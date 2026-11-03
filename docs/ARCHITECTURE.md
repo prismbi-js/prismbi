@@ -11,7 +11,7 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 │ report/           Report · VisualHost · FilterPane · Tooltip  │  runtime & chrome
 │                   cross-filter state, bookmarks, JSON, events │
 ├──────────────────────────────────────────────────────────────┤
-│ visuals/          defineVisual registry · 39 built-ins        │  presentation
+│ visuals/          defineVisual registry · 40 built-ins        │  presentation
 │ render/           svg/html helpers · scales · colour          │
 ├──────────────────────────────────────────────────────────────┤
 │ data/query.ts     QuerySpec → QueryResult (group, sort, top)  │  query engine
@@ -37,7 +37,7 @@ PrismBI is five layers. Each one depends only on the layers below it, and each i
 | `src/format/format.ts` | Power BI format strings, display units, date tokens |
 | `src/theme/theme.ts` | Theme tokens, light and dark themes, Power BI theme import |
 | `src/render/*` | SVG/HTML element helpers, bar and arc paths, text measurement, linear, band and point scales, colour math |
-| `src/visuals/*` | Visual contract (`types.ts`), base format pane (`format.ts`), shared chart plumbing (`common.ts`), 39 built-ins |
+| `src/visuals/*` | Visual contract (`types.ts`), base format pane (`format.ts`), shared chart plumbing (`common.ts`), 40 built-ins |
 | `src/report/visualHost.ts` | One visual: chrome, query building from data roles, query cache, render context, drill, CSV/Excel/PPTX/DOCX/HTML/clipboard export |
 | `src/report/report.ts` | Pages, grid layout, interaction state (selection, slicers, filters), bookmarks, theme, events, scheduling, PDF/PPTX/DOCX/HTML export |
 | `src/report/pptx.ts` | Standalone zero-dependency PowerPoint `.pptx` generator |
