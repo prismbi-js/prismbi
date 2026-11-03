@@ -48,6 +48,8 @@ export type { PowerBIThemeJson, Theme } from './theme/theme';
 export { defineVisual, getVisual, hasVisual, listVisuals, registerVisual } from './visuals/registry';
 export { baseFormat } from './visuals/format';
 export type { ReferenceLine, VisualFormat } from './visuals/format';
+export { detectAnomalies } from './visuals/anomaly';
+export type { AnomalyOptions, AnomalyPoint } from './visuals/anomaly';
 export type {
   DataPointIdentity,
   QueryBuildContext,
@@ -87,7 +89,7 @@ export type { SparklineOptions, MatrixFormat } from './visuals/table';
 
 // report runtime
 export { Report, reviveDates, registerMenuItems, autoMobileLayout } from './report/report';
-export type { MobileLayout , ReportSubscription, ReportAlert, ReportTranslation } from './report/report';
+export type { MobileLayout , ReportSubscription, ReportAlert, ReportTranslation, PushDataOptions } from './report/report';
 export type { MenuContext, MenuProvider } from './report/report';
 export type { MenuItem } from './report/contextMenu';
 export type { Bookmark, PageDefinition, PageLayout, ReportChrome, ReportDefinition, ReportOptions, UsageEvent, VisualHandle } from './report/report';

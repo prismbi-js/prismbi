@@ -1,6 +1,7 @@
 import { s, h, barPath, measureText } from '../render/svg';
 import { downsampleRuns } from '../render/lttb';
 import { forecastSeries, futureKeys, type Forecast } from './forecast';
+import { detectAnomalies, type AnomalyPoint } from './anomaly';
 import { bandScale, linearScale, logScale, pointScale, timeScale } from '../render/scales';
 import type { RenderContext } from './types';
 import { defineVisual } from './registry';
@@ -331,6 +332,27 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   drawReferenceLines(ctx, g, scale, 'y', [left, width - right], (secondary ? colSeries : all).flatMap((se) => se.values.filter((v): v is number => v !== null)), valueField);
   if (!stacked) lineSeries.forEach((se) => drawTrendLine(ctx, g, se.values, xAt, lscale, se.color));
 
+  // anomaly detection
+  const anOpt = f.analytics.anomalies;
+  const anomalyMap = new Map<number, { se: Series; an: AnomalyPoint }[]>();
+  const anColor = (typeof anOpt === 'object' && anOpt.color) ? anOpt.color : (t.bad ?? '#ef4444');
+  if (anOpt && anOpt.enabled !== false && !stacked) {
+    lineSeries.forEach((se) => {
+      const detected = detectAnomalies(se.values, anOpt);
+      for (const an of detected) {
+        let list = anomalyMap.get(an.index);
+        if (!list) anomalyMap.set(an.index, (list = []));
+        list.push({ se, an });
+        const x = xAt(an.index);
+        const y = lscale(an.value);
+        const beacon = s('g', { class: 'pbi-anomaly-beacon', 'pointer-events': 'none' });
+        beacon.append(s('circle', { cx: x, cy: y, r: 8, fill: 'none', stroke: anColor, 'stroke-width': 2, class: 'pbi-anomaly-ring' }));
+        beacon.append(s('circle', { cx: x, cy: y, r: 3.5, fill: anColor, class: 'pbi-anomaly-dot' }));
+        marks.append(beacon);
+      }
+    });
+  }
+
   // end labels (value at the end of each line)
   if (endLabels) {
     const placed: number[] = [];
@@ -414,7 +436,20 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       const yv = stacked ? (cum[i] += v) : v;
       dots.append(s('circle', { cx: x, cy: lscale(yv), r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2 }));
     }
-    if (f.tooltip.show) ctx.host.showTooltip(e, tooltipItems(ctx, categories[i], all, i), categories[i].label, categories[i].identity);
+    if (f.tooltip.show) {
+      const items = tooltipItems(ctx, categories[i], all, i);
+      const ans = anomalyMap.get(i);
+      if (ans?.length) {
+        for (const { se, an } of ans) {
+          items.push({
+            label: `⚠️ ${se.name} (Outlier)`,
+            value: `${an.direction === 'high' ? 'High' : 'Low'} (${an.explanation})`,
+            color: anColor,
+          });
+        }
+      }
+      ctx.host.showTooltip(e, items, categories[i].label, categories[i].identity);
+    }
   });
   hit.addEventListener('mouseleave', () => {
     cross.setAttribute('visibility', 'hidden');

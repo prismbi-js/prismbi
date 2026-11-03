@@ -1,9 +1,9 @@
-import type { CellValue } from '../data/types';
+import type { CellValue, Row } from '../data/types';
 import { parseColumnRef, valueKey } from '../data/types';
 import type { ColumnRef } from '../data/types';
 import type { FilterSpec } from '../data/filters';
 import type { QueryResult } from '../data/query';
-import type { DataModel } from '../data/model';
+import type { DataModel, AppendOptions } from '../data/model';
 import { compileFilter } from '../data/filters';
 import type { Theme } from '../theme/theme';
 import { getTheme } from '../theme/theme';
@@ -61,6 +61,11 @@ export interface MobileLayout {
   columns?: number;
   rowHeight?: number;
   visuals: { id: string; layout: VisualLayout }[];
+}
+
+export interface PushDataOptions extends AppendOptions {
+  /** Immediately render scheduled visual queries synchronously rather than waiting for next RAF frame. */
+  immediate?: boolean;
 }
 
 export interface Bookmark {
@@ -1323,6 +1328,20 @@ export class Report implements ReportRuntime {
     if (this.frame) return;
     this.frame = true;
     raf(() => this.flush(true));
+  }
+
+  /**
+   * Append streaming rows to a table in the report's data model, invalidating queries on visuals
+   * that depend on that table. Useful for live streaming telemetry, sensor feeds and IoT dashboards.
+   * Pass `maxRows` in options to bound the table with sliding-window FIFO eviction.
+   */
+  pushData(table: string, rows: Row[], options?: PushDataOptions): this {
+    this.model.appendRows(table, rows, options);
+    this.emit('dataPushed', { table, rowCount: rows.length });
+    if (options?.immediate) {
+      this.flush();
+    }
+    return this;
   }
 
   /**

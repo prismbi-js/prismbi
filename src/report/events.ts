@@ -18,4 +18,6 @@ export interface ReportEvents {
   definitionChanged: { reason: string };
   /** Design-time selection changed (edit mode) or a visual was activated. */
   visualSelected: { visualId: string | null };
+  /** Rows streamed into a table via `report.pushData(...)`. */
+  dataPushed: { table: string; rowCount: number };
 }

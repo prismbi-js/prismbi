@@ -408,8 +408,8 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 **Planned:**
 - [x] **Chord diagram visual:** Built-in `chord` visual (`src/visuals/chord.ts`) for radial relationship flows and inter-entity transfers with quadratic Bézier ribbons.
-- [ ] **Live streaming data pushdown:** `DataModel.appendRows()` and `Report.pushData()` with bounded rolling window eviction for real-time telemetry and IoT dashboards.
-- [ ] **Automated anomaly detection:** Time-series outlier detection (IQR / z-score) with visual anomaly markers and automated natural-language explanation badges.
+- [x] **Live streaming data pushdown:** `DataModel.appendRows()` and `Report.pushData()` with bounded rolling window eviction for real-time telemetry and IoT dashboards.
+- [x] **Automated anomaly detection:** Time-series outlier detection (IQR / z-score) with visual anomaly markers and automated natural-language explanation badges.
 - [ ] **Force-directed Network graphs:** Built-in `network` visual for entity relationship networks with draggable nodes and community clusters.
 - [ ] **Vector PDF rendering:** Direct vector path drawing into OpenXML/PDF exports for crisp infinite scaling.
 

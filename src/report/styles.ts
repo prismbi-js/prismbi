@@ -80,6 +80,8 @@ export const CSS = /* css */ `
 @keyframes pbi-pop{from{transform:scale(.85);opacity:0}to{transform:none}}
 .pbi-draw{animation:pbi-draw ease-out forwards}
 @keyframes pbi-draw{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}
+.pbi-anomaly-ring{animation:pbi-pulse 2s infinite ease-in-out}
+@keyframes pbi-pulse{0%,100%{opacity:1;stroke-width:2px}50%{opacity:.3;stroke-width:3.5px}}
 .pbi-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--pbi-fg-2);align-content:flex-start}
 .pbi-legend-left,.pbi-legend-right{flex-direction:column;flex-wrap:nowrap;max-width:40%;overflow:auto}
 .pbi-legend-item{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:2px 0;cursor:pointer;color:var(--pbi-fg-2);font-size:inherit;max-width:100%;text-align:left}

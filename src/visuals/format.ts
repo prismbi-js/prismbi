@@ -1,4 +1,5 @@
 import type { DisplayUnits } from '../format/format';
+import type { AnomalyOptions } from './anomaly';
 
 export interface ReferenceLine {
   type: 'constant' | 'average' | 'median' | 'min' | 'max' | 'percentile';
@@ -84,6 +85,8 @@ export interface VisualFormat {
     trendLine: boolean | { color?: string };
     /** Forecast on line/area charts with a date or number axis: `{ periods: 6, confidence: 0.95, seasonality: 'auto' }`. */
     forecast?: false | { periods: number; confidence?: number; seasonality?: number | 'auto' | 'none' };
+    /** Statistical anomaly detection: `{ enabled: true, sensitivity?: 1.5, method?: 'iqr' | 'zscore' }`. */
+    anomalies?: false | AnomalyOptions;
   };
   bars: { maxThickness: number; radius: number; gap: number; categoryGap: number };
   lines: { width: number; markers: boolean | 'auto'; smooth: boolean; area: boolean; areaOpacity: number; endLabels: boolean };
@@ -104,7 +107,7 @@ export const baseFormat: VisualFormat = {
   categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto', gridlines: false, type: 'auto' },
   valueAxis: { show: true, displayUnits: 'auto', gridlines: true, tickCount: 5 },
   colors: {},
-  analytics: { referenceLines: [], trendLine: false },
+  analytics: { referenceLines: [], trendLine: false, forecast: false, anomalies: false },
   bars: { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },
   lines: { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true },
   animation: { enabled: true, duration: 280 },

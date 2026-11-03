@@ -232,6 +232,32 @@ Line and area charts with a date or number axis can extend each series (up to th
 - **Non-negative series:** a series that has never been negative (sales, counts) is never forecast below zero.
 - **Dates:** future dates follow the calendar for monthly, quarterly and yearly data.
 
+## Anomaly detection
+
+Line charts can automatically detect and highlight statistical outliers and unexpected deviations across continuous time series:
+
+```ts
+{
+  type: 'line',
+  fields: { category: 'Date[Date]', values: 'Total Sales' },
+  format: {
+    analytics: {
+      anomalies: {
+        enabled: true,
+        sensitivity: 1.5,   // IQR multiplier (default 1.5) or z-score threshold (default 2.5)
+        method: 'iqr',      // 'iqr' (interquartile range, default) or 'zscore'
+        color: '#ef4444',   // custom beacon color (default: theme bad alert color)
+        detrend: true,      // detrend series via regression to avoid false positives on trends
+      },
+    },
+  },
+}
+```
+
+- **Visual Outlier Beacons:** Anomalous marks are rendered with halo rings and beacon dots (`.pbi-anomaly-beacon`, `.pbi-anomaly-ring`).
+- **Smart Detrending:** The series is detrended via least-squares linear regression so genuine departures are flagged without penalizing points on natural growth or seasonal trends.
+- **Interactive Tooltip Badges:** Hovering over an anomaly data point appends an outlier badge with exact deviation metrics (e.g. `⚠️ Total Sales (Outlier): High (+2.4x IQR above expected)` or `Low (-3.1σ from expected)`).
+
 ## Error bars
 
 Clustered column and bar charts with a single series accept two optional measure roles, **Error bars: lower** (`errorLower`) and **Error bars: upper** (`errorUpper`):

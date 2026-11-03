@@ -254,6 +254,7 @@ Data points show their tooltip on focus, and every chart has a plain-language de
 | `error` | `{ visualId, error }` |
 | `drillThrough` | `{ fromPageId, toPageId, visualId?, filters }` |
 | `themeChanged`, `bookmarkApplied` | `{ name }` |
+| `dataPushed` | `{ table, rowCount }` |
 
 ```ts
 const off = report.on('dataPointClick', ({ keys }) => router.push(`/category/${keys[0]}`));
@@ -270,6 +271,21 @@ new Report(el, { model, pages, onUsage: (e) => analytics.track(e.type, e) });
 ```
 
 Actions are `select`, `drill`, `drillThrough`, `filter` and `bookmark`. A handler that throws is logged and doesn't break the report.
+
+## Live streaming & telemetry (`report.pushData`)
+
+For real-time feeds, telemetry, stock tickers, and IoT dashboards, push incoming row batches directly into the report:
+
+```ts
+report.pushData('Telemetry', [
+  { Timestamp: new Date(), SensorId: 'A-102', Temp: 24.3, Pressure: 101.4 }
+], { maxRows: 1000, immediate: true });
+```
+
+- **Sliding-window bounded eviction:** `maxRows` automatically evicts the oldest rows in FIFO order, keeping memory constant and preventing runaway heap growth.
+- **Targeted invalidation:** Only visuals that query the modified table re-run queries; unaffected visuals remain untouched.
+- **Immediate or RAF batched:** Set `immediate: true` for synchronous rendering, or omit for automatic `requestAnimationFrame` debouncing across high-frequency bursts.
+- **Stream events:** Listen to `report.on('dataPushed', ({ table, rowCount }) => ...)` to monitor throughput.
 
 ## Conditional visibility
 
