@@ -239,7 +239,7 @@ export function svgPathToPdf(d: string): string {
 }
 
 /** Translate an SVG root element or SVG string into a PDF vector content stream. */
-export function svgToPdf(svgInput: string | Element, width: number, height: number): string {
+export function svgToPdf(svgInput: string | Element, _width: number, height: number): string {
   let doc: Element | null = null;
   if (typeof svgInput === 'string') {
     if (typeof DOMParser !== 'undefined') {
@@ -250,7 +250,6 @@ export function svgToPdf(svgInput: string | Element, width: number, height: numb
     doc = svgInput;
   }
 
-  void width;
   const hPt = +(height * 0.75).toFixed(2);
   let out = `q 0.75 0 0 -0.75 0 ${hPt} cm\n`;
 
