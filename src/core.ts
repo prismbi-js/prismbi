@@ -68,6 +68,7 @@ export { linearScale, bandScale, pointScale, niceStep } from './render/scales';
 export { mix, ramp, textOn, contrastRatio, withAlpha } from './render/color';
 export { relativeRange } from './visuals/slicer';
 export type { SlicerFormat, SlicerStyle } from './visuals/slicer';
+export type { SecondaryValueAxisFormat } from './visuals/format';
 export type { ConditionalFormat, ConditionalRule } from './visuals/table';
 export { squarify } from './visuals/parts';
 export { wQuantile } from './visuals/distribution';

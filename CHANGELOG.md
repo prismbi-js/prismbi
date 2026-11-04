@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.0 (Unreleased / Phase 13: Enterprise Fabric & Advanced Charting)
+
+- **Dual-axis (Secondary Y-Axis) for combo charts (`lineClusteredColumn`):**
+  - Added `SecondaryValueAxisFormat` to `src/visuals/format.ts` and exported via `src/visuals.ts` and `src/core.ts`.
+  - Supports configurable secondary scale options: `show`, `title`, `format`, `displayUnits`, `decimals`, `min`, `max`, `tickCount`, and `mode: 'auto' | 'on' | 'off'`.
+  - Independent secondary Y-scale renders on the right margin for line series when units/scales diverge or when `mode: 'on'` is selected.
+  - Added primary and secondary rotated axis titles (`valueAxis.title`, `secondaryValueAxis.title`) aligned with respective series colors.
+  - Added column bar data labels alongside line series markers with conflict-free positioning.
+  - Fully backwards compatible: preserves single shared scale when secondary axes are unconfigured.
+
 ## 0.13.0 (2026-11-03): Live streaming pushdown, automated anomaly detection, force-directed network graphs, and vector PDF rendering
 
 - **Live streaming data ingestion & bounded pushdown:**

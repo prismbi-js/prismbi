@@ -104,6 +104,8 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const height = fullHeight - zoomH;
   const fs = t.labelFontSize;
   const va = f.valueAxis;
+  const sva = f.secondaryValueAxis ?? {};
+  const svaMode = sva.mode ?? 'auto';
 
   const stacked = kind === 'stackedArea';
   // forecast: continuous axis, plain lines/areas, at most three series
@@ -153,14 +155,21 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const [, colMax] = extent(colSeries);
   const [lineMin, lineMax] = extent(lineSeries);
   const ratio = Math.max(Math.abs(colMax), 1e-9) / Math.max(Math.abs(lineMax), Math.abs(lineMin), 1e-9);
-  const secondary = kind === 'combo' && colSeries.length > 0 && lineSeries.length > 0 && (ratio > 8 || ratio < 1 / 8 || isPct(colSeries[0]) !== isPct(lineSeries[0]));
+  const autoSecondary = ratio > 4 || ratio < 1 / 4 || isPct(colSeries[0]) !== isPct(lineSeries[0]);
+  const secondary = kind === 'combo' && colSeries.length > 0 && lineSeries.length > 0 && sva.show !== false && (svaMode === 'on' || (svaMode === 'auto' && autoSecondary));
   if (secondary) {
     const [cMin] = extent(colSeries);
-    lo = Math.min(0, cMin);
-    hi = Math.max(0, colMax);
+    lo = va.min ?? Math.min(0, cMin);
+    hi = va.max ?? Math.max(0, colMax);
   }
   const lineField = secondary ? lineSeries[0].field : undefined;
-  const makeY2 = (range: [number, number], tickCount: number) => linearScale(Math.min(0, lineMin), Math.max(0, lineMax), range, { includeZero: true, tickCount });
+  const makeY2 = (range: [number, number], tickCount: number) =>
+    linearScale(sva.min ?? Math.min(0, lineMin), sva.max ?? Math.max(0, lineMax), range, {
+      includeZero: sva.min === undefined,
+      fixedMin: sva.min,
+      fixedMax: sva.max,
+      tickCount: sva.tickCount ?? tickCount,
+    });
   const valueField = all[0]?.field;
   // end labels would sit on top of a forecast
   const endLabels = f.lines.endLabels && lineSeries.length <= 4 && kind !== 'combo' && !forecasts.length;
@@ -174,10 +183,14 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const makeY = (range: [number, number], tickCount: number) =>
     useLog && positives.length ? logScale(va.min ?? Math.min(...positives), va.max ?? Math.max(...positives), range) : linearScale(lo, hi, range, { includeZero, fixedMin: va.min, fixedMax: va.max, tickCount });
   let scale = makeY([height - 30, top], Math.max(2, Math.min(va.tickCount, Math.floor(height / 40))));
-  const fmtAxis = valueAxisFormatter(ctx, valueField, scale);
-  const left = va.show ? Math.ceil(Math.max(...scale.ticks.map((x) => measureText(fmtAxis(x), fs, t.fontFamily)))) + 12 : 8;
-  const fmtAxis2 = lineField ? valueAxisFormatter(ctx, lineField, makeY2([height - 30, top], 4)) : null;
-  const right = fmtAxis2 ? Math.max(endW, Math.ceil(Math.max(...makeY2([height - 30, top], 4).ticks.map((x) => measureText(fmtAxis2(x), fs, t.fontFamily)))) + 14) : endW;
+  const fmtAxis = valueAxisFormatter(ctx, valueField, scale, va);
+  const pTitle = typeof va.title === 'string' ? va.title : va.title === true ? (valueField?.name ?? '') : '';
+  const pTitleW = pTitle && va.show ? fs + 8 : 0;
+  const left = (va.show ? Math.ceil(Math.max(...scale.ticks.map((x) => measureText(fmtAxis(x), fs, t.fontFamily)))) + 12 : 8) + pTitleW;
+  const sTitle = typeof sva.title === 'string' ? sva.title : sva.title === true ? (lineField?.name ?? '') : '';
+  const sTitleW = secondary && sTitle && sva.show !== false ? fs + 10 : 0;
+  const fmtAxis2 = lineField ? valueAxisFormatter(ctx, lineField, makeY2([height - 30, top], sva.tickCount ?? 4), sva) : null;
+  const right = fmtAxis2 && sva.show !== false ? Math.max(endW, Math.ceil(Math.max(...makeY2([height - 30, top], sva.tickCount ?? 4).ticks.map((x) => measureText(fmtAxis2(x), fs, t.fontFamily)))) + 14 + sTitleW) : endW;
   const useBand = kind === 'combo';
   let xs = useBand ? bandScale(categories.length, [left, width - right], f.bars.categoryGap, 0.15) : pointScale(categories.length, [left, width - right], 6);
   let xAt = (i: number) => (useBand ? xs(i) + xs.bandwidth / 2 : xs(i));
@@ -224,16 +237,29 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   const catLayout = continuous ? { angle: 0 as const, height: f.categoryAxis.show ? fs + 10 : 4, every: 1, maxWidth: 0 } : categoryLabelLayout(ctx, labels, Math.max(xs.step, 1));
   const bottom = height - catLayout.height - 2;
   scale = makeY([bottom, top], Math.max(2, Math.min(va.tickCount, Math.floor((bottom - top) / 36))));
-  const lscale = secondary ? makeY2([bottom, top], Math.max(2, Math.min(va.tickCount, Math.floor((bottom - top) / 36)))) : scale;
+  const lscale = secondary ? makeY2([bottom, top], Math.max(2, Math.min(sva.tickCount ?? va.tickCount, Math.floor((bottom - top) / 36)))) : scale;
 
   const svg = s('svg', { width, height, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Line chart' });
   const g = s('g');
   svg.append(g);
   plot.append(svg);
-  drawValueAxisY(ctx, g, scale, left, width - right, valueAxisFormatter(ctx, valueField, scale));
-  if (secondary && va.show) {
-    const fmt2 = valueAxisFormatter(ctx, lineField, lscale);
-    for (const tick of lscale.ticks) g.append(s('text', { x: width - right + 8, y: lscale(tick) + fs / 3, 'text-anchor': 'start', class: 'pbi-tick pbi-tick-secondary', fill: lineSeries[0].color }, fmt2(tick)));
+  drawValueAxisY(ctx, g, scale, left, width - right, fmtAxis);
+  if (pTitle && va.show) {
+    const cy = (top + bottom) / 2;
+    const tx = left - pTitleW + 4;
+    g.append(s('text', { x: tx, y: cy, 'text-anchor': 'middle', transform: `rotate(-90 ${tx} ${cy})`, class: 'pbi-axis-title', fill: t.foregroundMuted }, pTitle));
+  }
+  if (secondary && sva.show !== false && va.show) {
+    const fmt2 = valueAxisFormatter(ctx, lineField, lscale, sva);
+    for (const tick of lscale.ticks) {
+      g.append(s('text', { x: width - right + 8, y: lscale(tick) + fs / 3, 'text-anchor': 'start', class: 'pbi-tick pbi-tick-secondary', fill: lineSeries[0].color }, fmt2(tick)));
+    }
+    if (sTitle) {
+      const cy = (top + bottom) / 2;
+      const sLabelsMaxW = Math.ceil(Math.max(...lscale.ticks.map((x) => measureText(fmt2(x), fs, t.fontFamily))));
+      const tx = width - right + sLabelsMaxW + 16;
+      g.append(s('text', { x: tx, y: cy, 'text-anchor': 'middle', transform: `rotate(90 ${tx} ${cy})`, class: 'pbi-axis-title pbi-axis-title-secondary', fill: lineSeries[0].color }, sTitle));
+    }
   }
   if (continuous) {
     if (f.categoryAxis.show)
@@ -369,6 +395,30 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   if (f.dataLabels.show && !endLabels) {
     const placed: [number, number, number, number][] = [];
     const hit = (x0: number, x1: number, y0: number, y1: number) => placed.some(([a, b, c, d]) => x0 < b && x1 > a && y0 < d && y1 > c);
+    if (colSeries.length) {
+      const n = colSeries.length;
+      const gap = f.bars.gap;
+      const thick = Math.max(1, Math.min(f.bars.maxThickness, (xs.bandwidth - gap * (n - 1)) / n));
+      categories.forEach((_, ci) => {
+        const groupW = thick * n + gap * (n - 1);
+        const x00 = xs(ci) + (xs.bandwidth - groupW) / 2;
+        colSeries.forEach((se, si) => {
+          const v = se.values[ci];
+          if (v === null) return;
+          const fmt = fmtOf(se);
+          const text = fmt(v);
+          const w = measureText(text, fs, t.fontFamily);
+          const cx = x00 + si * (thick + gap) + thick / 2;
+          const rawY = scale(v);
+          const bx0 = cx - w / 2 - 2, bx1 = cx + w / 2 + 2;
+          const y = v >= 0 ? rawY - 6 : rawY + fs + 4;
+          if (!hit(bx0, bx1, y - fs, y + 2)) {
+            placed.push([bx0, bx1, y - fs, y + 2]);
+            marks.append(s('text', { x: cx, y, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary }, text));
+          }
+        });
+      });
+    }
     lineSeries.forEach((se) => {
       const fmt = fmtOf(se);
       se.values.forEach((v, i) => {

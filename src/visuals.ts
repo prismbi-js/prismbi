@@ -36,3 +36,4 @@ export { network } from './visuals/network';
 export type { NetworkFormat } from './visuals/network';
 export { detectAnomalies } from './visuals/anomaly';
 export type { AnomalyOptions, AnomalyPoint } from './visuals/anomaly';
+export type { SecondaryValueAxisFormat } from './visuals/format';

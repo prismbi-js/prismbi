@@ -2,6 +2,27 @@ import type { DisplayUnits } from '../format/format';
 import type { AnomalyOptions } from './anomaly';
 import type { NetworkFormat } from './network';
 
+export interface SecondaryValueAxisFormat {
+  /** Show secondary value axis (default: true in combo charts). */
+  show?: boolean;
+  /** Axis title text or true for field name. */
+  title?: string | boolean;
+  /** Explicit format string (e.g. `0.0%` or `$#,0`). */
+  format?: string;
+  /** Display units (`auto`, `none`, `thousands`, `millions`, `billions`, `trillions`). */
+  displayUnits?: DisplayUnits;
+  /** Number of decimal places. */
+  decimals?: number;
+  /** Custom minimum value. */
+  min?: number;
+  /** Custom maximum value. */
+  max?: number;
+  /** Approximate number of ticks (default: 5). */
+  tickCount?: number;
+  /** Force secondary axis on/off in combo charts (default: 'auto'). */
+  mode?: 'auto' | 'on' | 'off';
+}
+
 export interface ReferenceLine {
   type: 'constant' | 'average' | 'median' | 'min' | 'max' | 'percentile';
   /** For `constant`. */
@@ -66,6 +87,7 @@ export interface VisualFormat {
     /** Show a hint when clustered measures differ by more than 100× (default true). */
     scaleWarning?: boolean;
   };
+  secondaryValueAxis?: SecondaryValueAxisFormat;
   colors: {
     /** Fixed colour per series name (measure name or legend value). */
     series?: Record<string, string>;
@@ -108,6 +130,7 @@ export const baseFormat: VisualFormat = {
   dataLabels: { show: false, displayUnits: 'auto', position: 'auto' },
   categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto', gridlines: false, type: 'auto' },
   valueAxis: { show: true, displayUnits: 'auto', gridlines: true, tickCount: 5 },
+  secondaryValueAxis: { show: true, displayUnits: 'auto', tickCount: 5, mode: 'auto' },
   colors: {},
   analytics: { referenceLines: [], trendLine: false, forecast: false, anomalies: false },
   bars: { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },

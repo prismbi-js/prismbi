@@ -1,3 +1,4 @@
+import type { DisplayUnits } from '../format/format';
 import type { CellValue, ColumnRef } from '../data/types';
 import { valueKey } from '../data/types';
 import type { QueryField } from '../data/query';
@@ -183,10 +184,16 @@ export function markOpacity(ctx: RenderContext, identity: DataPointIdentity): nu
   return sel === false ? 0.3 : 1;
 }
 
-export function valueAxisFormatter(ctx: RenderContext, field: QueryField | undefined, scale: LinearScale): (v: number) => string {
+export function valueAxisFormatter(
+  ctx: RenderContext,
+  field: QueryField | undefined,
+  scale: LinearScale,
+  axisFormat?: { format?: string; displayUnits?: DisplayUnits; decimals?: number },
+): (v: number) => string {
   const ref = Math.max(Math.abs(scale.domain[0]), Math.abs(scale.domain[1]));
-  const va = ctx.format.valueAxis;
-  return (v) => ctx.fmt(field, v, { displayUnits: va.displayUnits, autoReference: ref, decimals: va.decimals, ...(va.format ? {} : {}) });
+  const va = axisFormat ?? ctx.format.valueAxis;
+  const f = va.format ? { ...(field ?? { name: '', ref: '', kind: 'value' as const }), format: va.format } : field;
+  return (v) => ctx.fmt(f, v, { displayUnits: va.displayUnits, autoReference: ref, decimals: va.decimals });
 }
 
 export function labelFormatter(ctx: RenderContext, field: QueryField | undefined): (v: number | null) => string {

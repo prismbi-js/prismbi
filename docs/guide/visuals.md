@@ -58,7 +58,7 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `clusteredBar` (`bar`), `stackedBar`, `percentStackedBar` | same | Horizontal versions |
 | `line` | `category`* (drillable) · `legend` · `values`* · `smallMultiples` | Crosshair tooltip, end labels (four or fewer series), markers (16 or fewer points), cross-highlight |
 | `area`, `stackedArea` | same | 10% area wash. Stacked area sums series |
-| `lineClusteredColumn` (`combo`) | `category`* · `legend` (columns) · `values` (columns) · `lineValues` | **One shared value axis** by design. A second y-axis is a known chart anti-pattern |
+| `lineClusteredColumn` (`combo`) | `category`* · `legend` (columns) · `values` (columns) · `lineValues` | Dual-axis or shared value axis. Configurable secondary Y-axis (`format.secondaryValueAxis`), primary/secondary axis titles, and column data labels |
 | `waterfall` | `category`* (drillable) · `values`* | Running total with connectors, increase / decrease / total colours, optional total bar |
 | `pie`, `donut` | `legend`* (drillable) · `values`* | Folds slices past the palette into "Other". Donut shows a centre total |
 | `treemap` | `category`* (drillable) · `values`* | Squarified layout |
@@ -111,7 +111,8 @@ format: {
   categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto'|0|45|90,
                   type: 'auto'|'categorical'|'continuous',   // auto = continuous for date/number fields on line & area
                   scale: 'linear'|'log' },                   // scatter x-axis
-  valueAxis:  { show: true, displayUnits: 'auto', decimals, min, max, gridlines: true, tickCount: 5, scale: 'linear'|'log' },
+  valueAxis:  { show: true, displayUnits: 'auto', decimals, min, max, gridlines: true, tickCount: 5, scale: 'linear'|'log', title?: string },
+  secondaryValueAxis: { show: true, displayUnits: 'auto', decimals, min, max, tickCount: 5, mode: 'auto'|'on'|'off', title?: string, format?: string },
   colors:     { default, palette: [...], series: { 'Total Sales': '#...' }, categories: { 'Bikes': '#...' },
                 rules: [{ op: '<', value: 0, color: '#d03b3b' }],      // single-series charts, first match wins
                 gradient: { min: '#cde2fb', max: '#0d366b' } },        // single-series charts, by value
@@ -130,6 +131,20 @@ format: {
 ### Visual-specific sections
 
 ```ts
+// combo chart (lineClusteredColumn) with dual Y-axes and axis titles
+format: {
+  valueAxis: { title: 'Revenue ($)', displayUnits: 'auto' },
+  secondaryValueAxis: {
+    show: true,
+    title: 'Margin %',
+    mode: 'auto' | 'on' | 'off',   // 'auto' detects scale difference, 'on' forces secondary axis, 'off' forces single axis
+    format: '0.0%',
+    min: 0,
+    max: 1,
+    tickCount: 5,
+  },
+}
+
 // card
 format: { card: { labelPosition: 'top'|'bottom', showLabel: true, align: 'left'|'center', valueFontSize, upIsGood: true, deltaLabel: 'vs LY' } }
 
