@@ -17,6 +17,8 @@ import {
   scheduleRefresh,
   streamInto,
   type MessageSourceLike,
+  type ReportLike,
+  type StreamConnectionState,
 } from '@prismbi/prismbi/connectors';
 
 /** fetch stub answering from a url → body map (functions get the parsed URL / init). */
@@ -192,19 +194,19 @@ describe('Arrow and SQL', () => {
 
 describe('streaming and refresh', () => {
   class Source implements MessageSourceLike {
-    fns = new Set<(e: { data: unknown }) => void>();
+    fns: Record<string, Set<(e: any) => void>> = {};
     closed = false;
-    addEventListener(_t: 'message', fn: (e: { data: unknown }) => void) {
-      this.fns.add(fn);
+    addEventListener(type: string, fn: (e: any) => void) {
+      (this.fns[type] ??= new Set()).add(fn);
     }
-    removeEventListener(_t: 'message', fn: (e: { data: unknown }) => void) {
-      this.fns.delete(fn);
+    removeEventListener(type: string, fn: (e: any) => void) {
+      this.fns[type]?.delete(fn);
     }
     close() {
       this.closed = true;
     }
     send(data: unknown) {
-      for (const f of this.fns) f({ data });
+      for (const f of this.fns['message'] || []) f({ data });
     }
   }
 
@@ -238,6 +240,199 @@ describe('streaming and refresh', () => {
     }
   });
 
+  it('pushes streaming rows into ReportLike target with sliding window and immediate option', () => {
+    vi.useFakeTimers();
+    try {
+      const dummyModel = new DataModel();
+      const pushDataMock = vi.fn();
+      const mockReport: ReportLike = {
+        model: dummyModel,
+        pushData: pushDataMock,
+      };
+      const src = new Source();
+      const batches: any[][] = [];
+      const h = streamInto(mockReport, 'Telemetry', src, {
+        maxRows: 50,
+        immediate: true,
+        intervalMs: 100,
+        onBatch: (b) => batches.push(b),
+      });
+
+      src.send([{ sensor: 'A', temp: 21.5 }, { sensor: 'B', temp: 19.8 }]);
+      expect(pushDataMock).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(100);
+      expect(pushDataMock).toHaveBeenCalledTimes(1);
+      expect(pushDataMock).toHaveBeenCalledWith('Telemetry', [
+        { sensor: 'A', temp: 21.5 },
+        { sensor: 'B', temp: 19.8 },
+      ], { maxRows: 50, immediate: true });
+      expect(batches).toHaveLength(1);
+      expect(h.received).toBe(2);
+
+      h.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('filters and transforms rows via transform option', () => {
+    vi.useFakeTimers();
+    try {
+      const m = new DataModel().addTable('Filtered', [{ id: 0, val: 0, processed: false }]);
+      const src = new Source();
+      const h = streamInto(m, 'Filtered', src, {
+        intervalMs: 0,
+        transform: (row) => {
+          const val = Number(row.val);
+          if (val < 0) return null; // filter out negative values
+          return { ...row, val: val * 10, processed: true };
+        },
+      });
+
+      src.send([
+        { id: 1, val: -5 },
+        { id: 2, val: 12 },
+        { id: 3, val: -1 },
+        { id: 4, val: 7 },
+      ]);
+
+      expect(h.received).toBe(2);
+      expect(m.table('Filtered').column('val').values).toEqual([0, 120, 70]);
+      expect(m.table('Filtered').column('processed').values).toEqual([false, true, true]);
+
+      h.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tracks connection states and invokes onStateChange callbacks', () => {
+    class EventSourceMock implements MessageSourceLike {
+      listeners: Record<string, Set<(e: any) => void>> = {};
+      closed = false;
+      readyState = 0;
+      addEventListener(type: string, fn: (e: any) => void) {
+        (this.listeners[type] ??= new Set()).add(fn);
+      }
+      removeEventListener(type: string, fn: (e: any) => void) {
+        this.listeners[type]?.delete(fn);
+      }
+      close() {
+        this.closed = true;
+        this.readyState = 2;
+      }
+      emit(type: string, event: any) {
+        for (const fn of this.listeners[type] || []) fn(event);
+      }
+    }
+
+    const src = new EventSourceMock();
+    const states: StreamConnectionState[] = [];
+    const m = new DataModel().addTable('S', []);
+
+    const h = streamInto(m, 'S', src, {
+      onStateChange: (state) => states.push(state),
+    });
+
+    expect(h.state).toBe('connecting');
+    expect(states).toEqual(['connecting']);
+
+    src.emit('open', {});
+    expect(h.state).toBe('open');
+    expect(states).toEqual(['connecting', 'open']);
+
+    src.emit('close', {});
+    expect(h.state).toBe('closed');
+    expect(states).toEqual(['connecting', 'open', 'closed']);
+
+    h.close();
+  });
+
+  it('handles URL string connection and auto-reconnects with exponential backoff on error', () => {
+    vi.useFakeTimers();
+    const origWs = (globalThis as any).WebSocket;
+    const socketInstances: any[] = [];
+
+    class MockWebSocket implements MessageSourceLike {
+      listeners: Record<string, Set<(e: any) => void>> = {};
+      readyState = 0;
+      url: string;
+      closed = false;
+
+      constructor(url: string) {
+        this.url = url;
+        socketInstances.push(this);
+      }
+
+      addEventListener(type: string, fn: (e: any) => void) {
+        (this.listeners[type] ??= new Set()).add(fn);
+      }
+      removeEventListener(type: string, fn: (e: any) => void) {
+        this.listeners[type]?.delete(fn);
+      }
+      close() {
+        this.closed = true;
+        this.readyState = 3;
+      }
+      emit(type: string, event: any) {
+        for (const fn of this.listeners[type] || []) fn(event);
+      }
+    }
+
+    (globalThis as any).WebSocket = MockWebSocket;
+
+    try {
+      const m = new DataModel().addTable('Stream', [{ id: 0, price: 0 }]);
+      const states: string[] = [];
+      const h = streamInto(m, 'Stream', 'wss://example.com/feed', {
+        intervalMs: 10,
+        reconnect: {
+          delayMs: 100,
+          maxDelayMs: 1000,
+          backoffMultiplier: 2,
+          maxRetries: 3,
+        },
+        onStateChange: (st) => states.push(st),
+      });
+
+      expect(socketInstances).toHaveLength(1);
+      expect(h.state).toBe('connecting');
+
+      // Socket 1 opens
+      socketInstances[0].emit('open', {});
+      expect(h.state).toBe('open');
+
+      // Socket 1 fails with error/close
+      socketInstances[0].emit('error', new Error('network down'));
+      expect(h.state).toBe('reconnecting');
+
+      // Advance by 50ms - should still be waiting (backoff delay 100ms)
+      vi.advanceTimersByTime(50);
+      expect(socketInstances).toHaveLength(1);
+
+      // Advance another 50ms -> 100ms elapsed -> reconnect triggers Socket 2
+      vi.advanceTimersByTime(50);
+      expect(socketInstances).toHaveLength(2);
+      expect(h.state).toBe('connecting');
+
+      // Socket 2 opens and delivers message
+      socketInstances[1].emit('open', {});
+      expect(h.state).toBe('open');
+      socketInstances[1].emit('message', { data: JSON.stringify([{ id: 100, price: 42.5 }]) });
+
+      vi.advanceTimersByTime(10);
+      expect(m.table('Stream').column('price').values).toEqual([0, 42.5]);
+
+      h.close();
+      expect(h.state).toBe('closed');
+      expect(socketInstances[1].closed).toBe(true);
+    } finally {
+      (globalThis as any).WebSocket = origWs;
+      vi.useRealTimers();
+    }
+  });
+
   it('refreshes on a schedule and cancels in-flight loads on stop', async () => {
     vi.useFakeTimers();
     try {
@@ -253,6 +448,36 @@ describe('streaming and refresh', () => {
       h.stop();
       await vi.advanceTimersByTimeAsync(5000);
       expect(n).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('supports scheduleRefresh targeting ReportLike in append mode', async () => {
+    vi.useFakeTimers();
+    try {
+      const dummyModel = new DataModel();
+      const pushDataMock = vi.fn();
+      const mockReport: ReportLike = {
+        model: dummyModel,
+        pushData: pushDataMock,
+      };
+
+      let count = 0;
+      const h = scheduleRefresh(
+        mockReport,
+        'Live',
+        async () => [{ count: ++count }],
+        { intervalMs: 500, mode: 'append', maxRows: 10, immediate: true }
+      );
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(pushDataMock).toHaveBeenCalledWith('Live', [{ count: 1 }], { maxRows: 10, immediate: true });
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(pushDataMock).toHaveBeenCalledWith('Live', [{ count: 2 }], { maxRows: 10, immediate: true });
+
+      h.stop();
     } finally {
       vi.useRealTimers();
     }

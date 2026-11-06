@@ -11,6 +11,6 @@ export type { ArrowTableLike } from './connectors/arrow';
 export { loadSqlTables } from './connectors/sql';
 export type { SqlAdapter, SqlTableSpec } from './connectors/sql';
 export { streamInto, scheduleRefresh } from './connectors/stream';
-export type { MessageSourceLike, StreamOptions, StreamHandle, RefreshOptions, RefreshHandle } from './connectors/stream';
+export type { MessageSourceLike, StreamOptions, StreamHandle, RefreshOptions, RefreshHandle, ReportLike, StreamTarget, StreamConnectionState, ReconnectOptions } from './connectors/stream';
 export { cachedTables, clearCachedTables, idbStore, loadTables, saveTables } from './connectors/cache';
 export type { TableCacheOptions, TableStore } from './connectors/cache';

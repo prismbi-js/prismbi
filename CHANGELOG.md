@@ -2,6 +2,14 @@
 
 ## 0.14.0 (Unreleased / Phase 13: Enterprise Fabric & Advanced Charting)
 
+- **Streaming Ingestion Harness (`streamInto` & `scheduleRefresh`):**
+  - Upgraded `streamInto(target, table, source, options)` in `@prismbi/prismbi/connectors` to accept `ReportLike` targets (`DataModel | ReportLike`) for direct sliding window pushdown (`report.pushData()`) with automatic scoped visual re-renders.
+  - Added URL string source resolution supporting direct WebSocket (`ws://`, `wss://`) and Server-Sent Events (`http://`, `https://`) endpoint strings without manual socket construction.
+  - Added resilient auto-reconnection policies (`reconnect: boolean | ReconnectOptions`) featuring configurable exponential backoff (`delayMs`, `maxDelayMs`, `backoffMultiplier`, `maxRetries`).
+  - Added connection lifecycle state tracking (`state: StreamConnectionState`: `'connecting' | 'open' | 'closed' | 'reconnecting' | 'error'`) and `onStateChange` callbacks.
+  - Added in-flight row transformation and filter predicate pipeline via `options.transform(row)`.
+  - Updated `scheduleRefresh` to support `ReportLike` targets in `'append'` mode with sliding window `maxRows` enforcement.
+
 - **Standardized PDF print paper sizes, orientations, margins & running headers/footers:**
   - Added `PdfExportOptions`, `PdfPaperFormat`, `PdfOrientation`, `PdfMarginOptions`, `STANDARD_PAPER_SIZES`, `resolvePaperSize`, and `resolveMargins` to `src/report/pdf.ts` and exported via `src/core.ts`.
   - Added paper presets for `'a4'`, `'letter'`, `'legal'`, `'ledger'`, and `'a3'`, with `'portrait'` and `'landscape'` orientations.

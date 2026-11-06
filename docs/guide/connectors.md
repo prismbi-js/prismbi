@@ -131,17 +131,37 @@ model.appendRows('Ticks', rows, { maxRows: 100_000 });
 ### Streaming
 
 ```ts
-const socket = new WebSocket('wss://example.com/ticks');
-const live = streamInto(model, 'Ticks', socket, { maxRows: 50_000, intervalMs: 250 });
-// later
-live.close();
+import { streamInto } from '@prismbi/prismbi/connectors';
+
+// Connect directly via WebSocket or EventSource URL:
+const live = streamInto(report, 'Ticks', 'wss://example.com/ticks', {
+  maxRows: 50_000,
+  intervalMs: 250,
+  reconnect: { delayMs: 1000, backoffMultiplier: 1.5, maxRetries: 10 },
+  transform: (row) => (row.price <= 0 ? null : { ...row, price: Math.round(row.price * 100) / 100 }),
+  onStateChange: (state) => console.log('Stream status:', state),
+  onBatch: (rows) => console.log(`Ingested ${rows.length} rows`),
+});
+
+// Or connect to an existing message source instance (WebSocket, EventSource, BroadcastChannel, Worker):
+const liveChannel = streamInto(model, 'Ticks', new BroadcastChannel('telemetry'));
+
+// Inspection and teardown:
+console.log(live.state); // 'connecting' | 'open' | 'closed' | 'reconnecting' | 'error'
+live.flush();            // Apply buffered rows immediately
+live.close();            // Close stream and tear down connection
 ```
 
-`streamInto(model, table, source, options)` listens to any message source: a `WebSocket`, an `EventSource`, a `BroadcastChannel` or a worker port.
+`streamInto(target, table, source, options)` streams live rows into a `DataModel` or directly into a `Report`:
 
-- **Parsing:** each message is JSON-parsed when it is a string. It can be one row, an array of rows, `{ rows: [...] }` or column arrays. Pass `parse(data)` for other formats.
-- **Batching:** rows are batched and appended every `intervalMs` (default 250), so a fast feed re-renders visuals at a steady rate instead of once per message.
-- **Handle:** `onBatch` and `onError` report progress. The handle has `flush()`, `close()` (which also closes the source) and `received`.
+- **Target:** Pass a `DataModel` or a `Report`. When passing a `Report`, incoming rows route through `Report.pushData()`, updating the underlying table with sliding window truncation and triggering scoped visual re-renders.
+- **Source:** Pass a URL string (`wss://`, `ws://` for WebSocket, or `http://`, `https://` for EventSource SSE) or any message-like source (`WebSocket`, `EventSource`, `BroadcastChannel`, Worker `MessagePort`).
+- **Auto-Reconnection:** When passing a URL (or with `reconnect: true`), connections automatically retry on network failure or socket close using configurable exponential backoff (`delayMs`, `maxDelayMs`, `backoffMultiplier`, `maxRetries`).
+- **Connection Lifecycle:** The handle tracks `handle.state` (`'connecting' | 'open' | 'closed' | 'reconnecting' | 'error'`) and notifies `onStateChange(state, detail)`.
+- **Parsing:** String payloads are JSON-parsed automatically. Accepts a single row, an array of rows, `{ rows: [...] }`, or column arrays (`{ x: [...], y: [...] }`). Provide custom `parse(data)` for binary or custom wire formats.
+- **Transform & Filter:** The optional `transform(row)` pipeline modifies incoming rows on the fly or returns `null`/`undefined` to discard unwanted rows before buffering.
+- **Batching & Sliding Window:** Rows buffer in memory and flush every `intervalMs` (default 250 ms) to keep visual redraws smooth and bounded. `maxRows` automatically trims the oldest entries.
+- **Handle:** Exposes `flush()`, `close()`, `received`, and `state`.
 
 ### Scheduled refresh
 

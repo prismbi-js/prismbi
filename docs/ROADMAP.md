@@ -421,11 +421,11 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 **In Progress / Delivered:**
 - [x] **Dual-Axis (Secondary Y-Axis) for Combo Charts:** Independent right-side Y2 scale for `lineClusteredColumn` (`secondaryValueAxis`), customizable scale boundaries (`min`, `max`), display units, tick counts, mode toggles (`auto` | `on` | `off`), column data labels, and primary/secondary rotated axis titles.
 - [x] **Standardized PDF Print Page Sizes & Orientations:** Presets for `'a4'`, `'letter'`, `'legal'`, `'ledger'`, and `'a3'`, with orientation (`'portrait'` | `'landscape'`), margins, running headers/footers, and auto-scaling canvas aspect ratios in `report.toPdf()` / `exportPdf()`.
-- [ ] **Streaming Ingestion Harness:** Helper utilities for binding WebSocket, SSE, and polling sources directly to `report.pushData()` and `DataModel.appendRows()`.
+- [x] **Streaming Ingestion Harness:** Resilient connection harness (`streamInto`) binding WebSocket (`ws://`, `wss://`), SSE (`http://`, `https://`), and message sources directly to `Report.pushData()` and `DataModel.appendRows()` with automatic exponential backoff reconnection, connection state machine, sliding window eviction, and row transform/filter pipelines.
 - [ ] **Network Graph Conditional Formatting:** Rule-based node color overrides and metric threshold highlighting in `network` visual.
 
 **Acceptance:**
-- 566 passing tests across 52 test suites (100% pass rate).
+- 571 passing tests across 52 test suites (100% pass rate).
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 
