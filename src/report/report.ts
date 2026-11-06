@@ -1106,7 +1106,7 @@ export class Report implements ReportRuntime {
   async exportPdf(opts: PdfExportOptions = {}): Promise<void> {
     const { download } = await import('./snapshot');
     const pdf = await this.toPdf(opts);
-    download(new Blob([pdf], { type: 'application/pdf' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pdf`);
+    download(new Blob([pdf as unknown as BlobPart], { type: 'application/pdf' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pdf`);
   }
 
   /**
@@ -1139,7 +1139,7 @@ export class Report implements ReportRuntime {
   /** Download {@link toXlsx} as a file. */
   async exportXlsx(opts: { pages?: 'current' | 'all'; filename?: string } = {}): Promise<void> {
     const [{ XLSX_MIME }, { download }, bytes] = await Promise.all([import('./xlsx'), import('./snapshot'), this.toXlsx(opts)]);
-    download(new Blob([bytes], { type: XLSX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.xlsx`);
+    download(new Blob([bytes as unknown as BlobPart], { type: XLSX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.xlsx`);
   }
 
   /** Export the current page (or every visible page) as a PowerPoint presentation (.pptx). */
@@ -1168,7 +1168,7 @@ export class Report implements ReportRuntime {
     }
     if (this.current !== start) this.showPage(start, false);
     const pptx = buildPptx(slides, this.name);
-    download(new Blob([pptx], { type: PPTX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pptx`);
+    download(new Blob([pptx as unknown as BlobPart], { type: PPTX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pptx`);
   }
 
   /** Export executive briefing document as a Microsoft Word (.docx) file. */
@@ -1219,7 +1219,7 @@ export class Report implements ReportRuntime {
       date: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
       sections,
     });
-    download(new Blob([docx], { type: DOCX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.docx`);
+    download(new Blob([docx as unknown as BlobPart], { type: DOCX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.docx`);
   }
 
   /** Export a self-contained, autonomous single-file HTML report dashboard. */

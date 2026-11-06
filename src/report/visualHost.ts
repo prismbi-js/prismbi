@@ -533,7 +533,7 @@ export class VisualHost {
 
   async exportXlsx(filename = `${this.exportName.replace(/[^\w-]+/g, '_')}.xlsx`): Promise<void> {
     const [{ XLSX_MIME }, bytes] = await Promise.all([import('./xlsx'), this.toXlsx()]);
-    download(new Blob([bytes], { type: XLSX_MIME }), filename);
+    download(new Blob([bytes as unknown as BlobPart], { type: XLSX_MIME }), filename);
   }
 
   exportCsv(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.csv`): void {
