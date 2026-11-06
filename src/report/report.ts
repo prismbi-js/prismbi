@@ -24,6 +24,7 @@ import { REPORT_SCHEMA_VERSION, migrateReport } from './migrate';
 import type { MenuItem } from './contextMenu';
 import type { TooltipRenderer } from './tooltip';
 import { VisualHost, identitiesToFilters } from './visualHost';
+import type { PdfExportOptions } from './pdf';
 
 export interface PageLayout {
   /** Grid columns (default 12). */
@@ -1092,34 +1093,17 @@ export class Report implements ReportRuntime {
 
   /**
    * The pages of the report rendered as a PDF document byte array (1.4 spec, zero dependencies).
-   * Supports rasterized pages (`vector: false`, default) and crisp resolution-independent vector paths (`vector: true`).
+   * Supports rasterized pages (`vector: false`, default) and crisp resolution-independent vector paths (`vector: true`),
+   * standard paper formats (`format: 'a4' | 'letter' | 'legal' | 'ledger' | 'a3' | 'auto'`), orientations, margins,
+   * and running headers/footers.
    */
-  async toPdf(opts: { pages?: 'current' | 'all'; vector?: boolean } = {}): Promise<Uint8Array> {
-    const { elementToSvg, svgToCanvas } = await import('./snapshot');
-    const { buildPdf, dataUrlToBytes, svgToPdf } = await import('./pdf');
-    const start = this.current;
-    const targets = opts.pages === 'all' ? this.pages.map((_, i) => i).filter((i) => !this.pages[i].def.hidden && !this.pages[i].def.tooltip) : [start];
-    const out = [];
-    for (const i of targets) {
-      if (i !== this.current) this.showPage(i, false);
-      this.flush();
-      const el = this.page.el!;
-      const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1200);
-      const hh = Math.max(1, el.scrollHeight || el.offsetHeight || 800);
-      const svg = elementToSvg(el, this._theme, w, hh);
-      if (opts.vector) {
-        out.push({ vectorCommands: svgToPdf(svg, w, hh), width: w, height: hh });
-      } else {
-        const canvas = await svgToCanvas(svg, this._theme.background, 2);
-        out.push({ jpeg: dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.92)), pixelWidth: canvas.width, pixelHeight: canvas.height, width: w, height: hh });
-      }
-    }
-    if (this.current !== start) this.showPage(start, false);
-    return buildPdf(out, this.name);
+  async toPdf(opts: PdfExportOptions = {}): Promise<Uint8Array> {
+    const { exportReportPdf } = await import('./pdf');
+    return exportReportPdf(this, opts);
   }
 
   /** Export the current page (or every visible page) as a PDF, one page per report page. */
-  async exportPdf(opts: { pages?: 'current' | 'all'; filename?: string; vector?: boolean } = {}): Promise<void> {
+  async exportPdf(opts: PdfExportOptions = {}): Promise<void> {
     const { download } = await import('./snapshot');
     const pdf = await this.toPdf(opts);
     download(new Blob([pdf], { type: 'application/pdf' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.pdf`);

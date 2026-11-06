@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Report, buildPdf, parseColor, svgPathToPdf, svgToPdf } from '../src/index';
+import {
+  Report,
+  STANDARD_PAPER_SIZES,
+  buildPdf,
+  parseColor,
+  resolveMargins,
+  resolvePaperSize,
+  svgPathToPdf,
+  svgToPdf,
+} from '../src/index';
 import type { PdfPage, PdfVectorPage } from '../src/index';
 import { makeModel } from './fixtures';
 
@@ -191,6 +200,130 @@ describe('PDF Vector Engine', () => {
       expect(text.startsWith('%PDF-1.4')).toBe(true);
       expect(text).toContain('/MediaBox');
       expect(text.trimEnd().endsWith('%%EOF')).toBe(true);
+    });
+
+    it('renders with standard paper formats (A4 landscape) and running footers', async () => {
+      const r = new Report(el, {
+        model: makeModel(),
+        pages: [
+          {
+            name: 'Financial Summary',
+            visuals: [
+              { id: 'c1', type: 'card', fields: { value: 'Total Sales' }, layout: { x: 0, y: 0, w: 6, h: 4 } },
+            ],
+          },
+        ],
+      });
+      r.flush();
+
+      const pdfBytes = await r.toPdf({
+        format: 'a4',
+        orientation: 'landscape',
+        vector: true,
+        footer: true,
+        header: 'Confidential Executive Report',
+      });
+      const text = new TextDecoder('latin1').decode(pdfBytes);
+
+      expect(text.startsWith('%PDF-1.4')).toBe(true);
+      expect(text).toContain(`/MediaBox [0 0 841.89 595.28]`);
+      expect(text).toContain('Confidential Executive Report');
+      expect(text).toContain('Page 1 of 1');
+    });
+
+    it('renders Letter portrait with custom margin and dynamic footer callback', async () => {
+      const r = new Report(el, {
+        model: makeModel(),
+        pages: [
+          {
+            name: 'Operations',
+            visuals: [
+              { id: 'c1', type: 'card', fields: { value: 'Total Sales' }, layout: { x: 0, y: 0, w: 12, h: 4 } },
+            ],
+          },
+        ],
+      });
+      r.flush();
+
+      const pdfBytes = await r.toPdf({
+        format: 'letter',
+        orientation: 'portrait',
+        vector: true,
+        margin: 30,
+        footer: (ctx) => `${ctx.pageName} - Document #${ctx.pageNumber}/${ctx.totalPages}`,
+      });
+      const text = new TextDecoder('latin1').decode(pdfBytes);
+
+      expect(text.startsWith('%PDF-1.4')).toBe(true);
+      expect(text).toContain(`/MediaBox [0 0 612 792]`);
+      expect(text).toContain('Operations - Document #1/1');
+    });
+  });
+
+  describe('Standard Paper Sizes & Layout Math', () => {
+    it('resolves paper sizes correctly across orientations', () => {
+      expect(STANDARD_PAPER_SIZES.a4).toEqual({ width: 595.28, height: 841.89 });
+      expect(resolvePaperSize('a4', 'landscape')).toEqual({ width: 841.89, height: 595.28 });
+      expect(resolvePaperSize('a4', 'portrait')).toEqual({ width: 595.28, height: 841.89 });
+
+      expect(resolvePaperSize('letter', 'landscape')).toEqual({ width: 792.0, height: 612.0 });
+      expect(resolvePaperSize('letter', 'portrait')).toEqual({ width: 612.0, height: 792.0 });
+
+      expect(resolvePaperSize('legal', 'landscape')).toEqual({ width: 1008.0, height: 612.0 });
+      expect(resolvePaperSize('legal', 'portrait')).toEqual({ width: 612.0, height: 1008.0 });
+
+      expect(resolvePaperSize('ledger', 'landscape')).toEqual({ width: 1224.0, height: 792.0 });
+      expect(resolvePaperSize('ledger', 'portrait')).toEqual({ width: 792.0, height: 1224.0 });
+
+      expect(resolvePaperSize('a3', 'landscape')).toEqual({ width: 1190.55, height: 841.89 });
+      expect(resolvePaperSize('a3', 'portrait')).toEqual({ width: 841.89, height: 1190.55 });
+
+      expect(resolvePaperSize('auto', undefined, 1000, 600)).toEqual({ width: 750, height: 450 });
+    });
+
+    it('resolves margins accurately with defaults', () => {
+      expect(resolveMargins(25)).toEqual({ top: 25, right: 25, bottom: 25, left: 25 });
+      expect(resolveMargins({ top: 10, bottom: 15 }, true)).toEqual({ top: 10, right: 20, bottom: 15, left: 20 });
+      expect(resolveMargins(undefined, true)).toEqual({ top: 20, right: 20, bottom: 20, left: 20 });
+      expect(resolveMargins(undefined, false)).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    });
+
+    it('svgToPdf transforms coordinates with custom scale, offset, and page height', () => {
+      const svg = `<svg><rect x="0" y="0" width="100" height="100" fill="#f00"/></svg>`;
+      const stream = svgToPdf(svg, 100, 100, {
+        scale: 0.5,
+        x: 20,
+        y: 30,
+        pageHeight: 600,
+      });
+
+      // 0.75 * 0.5 = 0.375
+      expect(stream).toContain('q 0.375 0 0 -0.375 20 570 cm');
+      expect(stream).toContain('0.00 0.00 100.00 100.00 re');
+    });
+
+    it('buildPdf renders headers, footers and explicit page dimensions', () => {
+      const pages: PdfVectorPage[] = [
+        {
+          width: 800,
+          height: 600,
+          pageWidth: 841.89,
+          pageHeight: 595.28,
+          x: 20,
+          y: 20,
+          targetWidth: 801.89,
+          targetHeight: 555.28,
+          header: 'Header Title',
+          footer: 'Page 1 of 5',
+          vectorCommands: '1.000 0.000 0.000 rg 0.00 0.00 100.00 100.00 re f\n',
+        },
+      ];
+      const bytes = buildPdf(pages, 'Header Footer Test');
+      const text = new TextDecoder('latin1').decode(bytes);
+
+      expect(text).toContain('/MediaBox [0 0 841.89 595.28]');
+      expect(text).toContain('(Header Title) Tj');
+      expect(text).toContain('(Page 1 of 5) Tj');
     });
   });
 });

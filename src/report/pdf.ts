@@ -3,34 +3,174 @@
  * Zero dependencies.
  */
 
-/** One PDF page holding a full-bleed JPEG image (with optional vector overlays). */
+/** Standard paper formats (dimensions in 1/72-inch PDF points). */
+export type PdfPaperFormat = 'a4' | 'letter' | 'legal' | 'ledger' | 'a3' | 'auto';
+
+/** Page orientation ('portrait' or 'landscape'). */
+export type PdfOrientation = 'portrait' | 'landscape';
+
+/** Page margin options in PDF points (1/72 inch). */
+export interface PdfMarginOptions {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
+
+/** Information passed to running header and footer generator functions. */
+export interface PdfHeaderFooterContext {
+  pageNumber: number;
+  totalPages: number;
+  pageName: string;
+  reportName: string;
+}
+
+/** Dynamic header or footer generator callback. */
+export type PdfHeaderFooterFn = (ctx: PdfHeaderFooterContext) => string;
+
+/** Export options for generating PDF documents. */
+export interface PdfExportOptions {
+  /** 'current' exports only the active page; 'all' exports all non-hidden report pages (default: 'current'). */
+  pages?: 'current' | 'all';
+  /** Vector mode translates SVG paths directly into PDF drawing operators (default: false). */
+  vector?: boolean;
+  /** Custom output file name for browser download. */
+  filename?: string;
+  /** Standard paper format preset ('a4', 'letter', 'legal', 'ledger', 'a3', or 'auto'). Default: 'auto'. */
+  format?: PdfPaperFormat;
+  /** Paper orientation ('portrait' or 'landscape'). Default: 'landscape' when format is specified, else 'auto'. */
+  orientation?: PdfOrientation;
+  /** Margins in PDF points. Accepts a single number or top/right/bottom/left object. Default: 20 when format specified, else 0. */
+  margin?: number | PdfMarginOptions;
+  /** Running header text or function. */
+  header?: string | PdfHeaderFooterFn;
+  /** Running footer text or function. Pass `true` for standard 'Page X of Y'. */
+  footer?: string | boolean | PdfHeaderFooterFn;
+}
+
+/** Configuration options for translating SVG elements to a PDF vector content stream. */
+export interface SvgToPdfOptions {
+  /** Uniform scale factor relative to 0.75 pt/px (default: 1). */
+  scale?: number;
+  /** Horizontal origin offset in PDF points from the left edge (default: 0). */
+  x?: number;
+  /** Vertical origin offset in PDF points from the top edge (default: 0). */
+  y?: number;
+  /** Target paper height in PDF points (used to invert the coordinate system). */
+  pageHeight?: number;
+}
+
+/** One PDF page holding a full-bleed or scaled JPEG image (with optional vector overlays). */
 export interface PdfImagePage {
   jpeg: Uint8Array;
   /** Pixel dimensions of the JPEG. */
   pixelWidth: number;
   pixelHeight: number;
-  /** Page size in CSS px (the image is scaled to fill it). */
+  /** Source content width in CSS px. */
   width: number;
+  /** Source content height in CSS px. */
   height: number;
   /** Optional scalable vector path commands overlaid onto the page. */
   vectorCommands?: string;
+  /** Explicit target paper width in PDF points. Defaults to width * 0.75. */
+  pageWidth?: number;
+  /** Explicit target paper height in PDF points. Defaults to height * 0.75. */
+  pageHeight?: number;
+  /** Printable x offset in PDF points from left. Defaults to 0. */
+  x?: number;
+  /** Printable y offset in PDF points from top. Defaults to 0. */
+  y?: number;
+  /** Target fitted width in PDF points. Defaults to pageWidth. */
+  targetWidth?: number;
+  /** Target fitted height in PDF points. Defaults to pageHeight. */
+  targetHeight?: number;
+  /** Running header string. */
+  header?: string;
+  /** Running footer string. */
+  footer?: string;
 }
 
 /** One PDF page holding scalable vector graphics instructions. */
 export interface PdfVectorPage {
-  /** Page size in CSS px (converted to 0.75 points). */
+  /** Source content width in CSS px. */
   width: number;
+  /** Source content height in CSS px. */
   height: number;
   /** PDF content stream commands (vector path operators: re, m, l, c, f, S, B, etc.). */
   vectorCommands: string;
+  /** Explicit target paper width in PDF points. Defaults to width * 0.75. */
+  pageWidth?: number;
+  /** Explicit target paper height in PDF points. Defaults to height * 0.75. */
+  pageHeight?: number;
+  /** Printable x offset in PDF points from left. Defaults to 0. */
+  x?: number;
+  /** Printable y offset in PDF points from top. Defaults to 0. */
+  y?: number;
+  /** Target fitted width in PDF points. Defaults to pageWidth. */
+  targetWidth?: number;
+  /** Target fitted height in PDF points. Defaults to pageHeight. */
+  targetHeight?: number;
+  /** Running header string. */
+  header?: string;
+  /** Running footer string. */
+  footer?: string;
 }
 
 export type PdfPage = PdfImagePage | PdfVectorPage;
 
+export const STANDARD_PAPER_SIZES: Record<Exclude<PdfPaperFormat, 'auto'>, { width: number; height: number }> = {
+  a4: { width: 595.28, height: 841.89 },
+  letter: { width: 612.0, height: 792.0 },
+  legal: { width: 612.0, height: 1008.0 },
+  ledger: { width: 792.0, height: 1224.0 },
+  a3: { width: 841.89, height: 1190.55 },
+};
+
+export function resolvePaperSize(
+  format: PdfPaperFormat = 'auto',
+  orientation?: PdfOrientation,
+  fallbackWidth = 1200,
+  fallbackHeight = 800
+): { width: number; height: number } {
+  if (format === 'auto') {
+    let w = fallbackWidth * 0.75;
+    let h = fallbackHeight * 0.75;
+    if (orientation === 'portrait' && w > h) [w, h] = [h, w];
+    else if (orientation === 'landscape' && h > w) [w, h] = [h, w];
+    return { width: +w.toFixed(2), height: +h.toFixed(2) };
+  }
+  const base = STANDARD_PAPER_SIZES[format] || STANDARD_PAPER_SIZES.a4;
+  const isLandscape = orientation === 'landscape' || (!orientation && base.width < base.height);
+  const w = isLandscape ? Math.max(base.width, base.height) : Math.min(base.width, base.height);
+  const h = isLandscape ? Math.min(base.width, base.height) : Math.max(base.width, base.height);
+  return { width: +w.toFixed(2), height: +h.toFixed(2) };
+}
+
+export function resolveMargins(
+  margin?: number | PdfMarginOptions,
+  hasFormat = false
+): { top: number; right: number; bottom: number; left: number } {
+  if (typeof margin === 'number') {
+    return { top: margin, right: margin, bottom: margin, left: margin };
+  }
+  const def = hasFormat ? 20 : 0;
+  return {
+    top: margin?.top ?? def,
+    right: margin?.right ?? def,
+    bottom: margin?.bottom ?? def,
+    left: margin?.left ?? def,
+  };
+}
+
+export function escapePdfText(str: string): string {
+  return str.replace(/[()\\]/g, (c) => `\\${c}`);
+}
+
 const enc = new TextEncoder();
 
 /**
- * Minimal PDF 1.4 writer: supports DCT (JPEG) image XObjects and scalable vector paths.
+ * Minimal PDF 1.4 writer: supports DCT (JPEG) image XObjects, scalable vector paths,
+ * standard paper sizes, margins, and running headers/footers.
  */
 export function buildPdf(pages: PdfPage[], title = 'Report'): Uint8Array {
   const chunks: Uint8Array[] = [];
@@ -57,6 +197,8 @@ export function buildPdf(pages: PdfPage[], title = 'Report'): Uint8Array {
     const cid = nextId++;
     const hasImage = 'jpeg' in p && p.jpeg && p.jpeg.length > 0;
     const iid = hasImage ? nextId++ : undefined;
+    const w = p.pageWidth !== undefined ? +p.pageWidth.toFixed(2) : +(p.width * 0.75).toFixed(2);
+    const h = p.pageHeight !== undefined ? +p.pageHeight.toFixed(2) : +(p.height * 0.75).toFixed(2);
     return {
       index: i,
       page: p,
@@ -64,23 +206,44 @@ export function buildPdf(pages: PdfPage[], title = 'Report'): Uint8Array {
       cid,
       iid,
       hasImage,
-      w: +(p.width * 0.75).toFixed(2),
-      h: +(p.height * 0.75).toFixed(2),
+      w,
+      h,
     };
   });
 
   const pageIds = entries.map((e) => e.pid);
   obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
   obj(2, () => push(`<< /Type /Pages /Count ${pages.length} /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] >>`));
-  obj(3, () => push(`<< /Title (${title.replace(/[()\\]/g, (c) => `\\${c}`)}) /Producer (PrismBI) >>`));
+  obj(3, () => push(`<< /Title (${escapePdfText(title)}) /Producer (PrismBI) >>`));
 
   entries.forEach((e) => {
     let content = '';
+    const targetW = e.page.targetWidth !== undefined ? e.page.targetWidth : e.w;
+    const targetH = e.page.targetHeight !== undefined ? e.page.targetHeight : e.h;
+    const targetX = e.page.x ?? 0;
+    const targetY = e.page.y ?? 0;
+    const pdfY = +(e.h - (targetY + targetH)).toFixed(2);
+
     if (e.hasImage) {
-      content += `q ${e.w} 0 0 ${e.h} 0 0 cm /Im${e.index} Do Q`;
-      if (e.page.vectorCommands) content += `\n${e.page.vectorCommands}`;
+      content += `q ${targetW.toFixed(2)} 0 0 ${targetH.toFixed(2)} ${targetX.toFixed(2)} ${pdfY.toFixed(2)} cm /Im${e.index} Do Q\n`;
+      if (e.page.vectorCommands) content += e.page.vectorCommands;
     } else if (e.page.vectorCommands) {
       content = e.page.vectorCommands;
+    }
+
+    if (e.page.header) {
+      const hText = escapePdfText(e.page.header);
+      const hY = +(e.h - Math.min(24, Math.max(12, targetY / 2 || 14))).toFixed(2);
+      const hX = +(targetX || 20).toFixed(2);
+      content += `q BT /F1 9 Tf 0.35 0.35 0.35 rg ${hX} ${hY} Td (${hText}) Tj ET Q\n`;
+    }
+
+    if (e.page.footer) {
+      const fText = escapePdfText(e.page.footer);
+      const fY = +(Math.min(20, Math.max(8, pdfY / 2 || 12))).toFixed(2);
+      const textLen = fText.length * 9 * 0.52;
+      const fX = +Math.max(20, (e.w - textLen) / 2).toFixed(2);
+      content += `q BT /F1 9 Tf 0.45 0.45 0.45 rg ${fX} ${fY} Td (${fText}) Tj ET Q\n`;
     }
 
     const res = e.hasImage
@@ -119,6 +282,118 @@ export function buildPdf(pages: PdfPage[], title = 'Report'): Uint8Array {
     o += c.length;
   }
   return out;
+}
+
+/**
+ * Render a Report instance's pages into a PDF 1.4 Uint8Array.
+ * Lazy-loaded on demand to keep the core bundle lightweight.
+ */
+export async function exportReportPdf(report: any, opts: PdfExportOptions = {}): Promise<Uint8Array> {
+  const { elementToSvg, svgToCanvas } = await import('./snapshot');
+  const start = report.current;
+  const targets = opts.pages === 'all'
+    ? report.pages.map((_: any, i: number) => i).filter((i: number) => !report.pages[i].def.hidden && !report.pages[i].def.tooltip)
+    : [start];
+  const totalPages = targets.length;
+  const hasFormat = Boolean(opts.format && opts.format !== 'auto');
+  const margins = resolveMargins(opts.margin, hasFormat);
+  const out = [];
+
+  for (let pageNum = 1; pageNum <= targets.length; pageNum++) {
+    const i = targets[pageNum - 1];
+    if (i !== report.current) report.showPage(i, false);
+    report.flush();
+    const el = report.page.el!;
+    const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1200);
+    const hh = Math.max(1, el.scrollHeight || el.offsetHeight || 800);
+    const pageName = report.page.def.name ?? `Page ${pageNum}`;
+
+    const paper = resolvePaperSize(opts.format, opts.orientation, w, hh);
+    const pageW = paper.width;
+    const pageH = paper.height;
+
+    const headerSpace = opts.header ? 18 : 0;
+    const footerSpace = opts.footer ? 18 : 0;
+    const ctxInfo: PdfHeaderFooterContext = {
+      pageNumber: pageNum,
+      totalPages,
+      pageName,
+      reportName: report.name,
+    };
+
+    let headerText: string | undefined;
+    if (typeof opts.header === 'function') {
+      headerText = opts.header(ctxInfo);
+    } else if (typeof opts.header === 'string') {
+      headerText = opts.header;
+    }
+
+    let footerText: string | undefined;
+    if (typeof opts.footer === 'function') {
+      footerText = opts.footer(ctxInfo);
+    } else if (typeof opts.footer === 'string') {
+      footerText = opts.footer;
+    } else if (opts.footer === true) {
+      footerText = `Page ${pageNum} of ${totalPages}`;
+    }
+
+    const printW = Math.max(10, pageW - margins.left - margins.right);
+    const printH = Math.max(10, pageH - margins.top - margins.bottom - headerSpace - footerSpace);
+
+    const contentWPt = w * 0.75;
+    const contentHPt = hh * 0.75;
+
+    const fitScale = hasFormat || opts.margin !== undefined
+      ? Math.min(printW / contentWPt, printH / contentHPt)
+      : 1;
+
+    const targetWPt = +(contentWPt * fitScale).toFixed(2);
+    const targetHPt = +(contentHPt * fitScale).toFixed(2);
+    const targetX = +(margins.left + (printW - targetWPt) / 2).toFixed(2);
+    const targetY = +(margins.top + headerSpace + (printH - targetHPt) / 2).toFixed(2);
+
+    const svg = elementToSvg(el, report._theme, w, hh);
+    if (opts.vector) {
+      const vectorCommands = svgToPdf(svg, w, hh, {
+        scale: fitScale,
+        x: targetX,
+        y: targetY,
+        pageHeight: pageH,
+      });
+      out.push({
+        vectorCommands,
+        width: w,
+        height: hh,
+        pageWidth: pageW,
+        pageHeight: pageH,
+        x: targetX,
+        y: targetY,
+        targetWidth: targetWPt,
+        targetHeight: targetHPt,
+        header: headerText,
+        footer: footerText,
+      });
+    } else {
+      const canvas = await svgToCanvas(svg, report._theme.background, 2);
+      out.push({
+        jpeg: dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.92)),
+        pixelWidth: canvas.width,
+        pixelHeight: canvas.height,
+        width: w,
+        height: hh,
+        pageWidth: pageW,
+        pageHeight: pageH,
+        x: targetX,
+        y: targetY,
+        targetWidth: targetWPt,
+        targetHeight: targetHPt,
+        header: headerText,
+        footer: footerText,
+      });
+    }
+  }
+  if (report.current !== start) report.showPage(start, false);
+  return buildPdf(out, report.name);
 }
 
 /** Parse a CSS/SVG color string to RGB 0-1 values. */
@@ -239,7 +514,12 @@ export function svgPathToPdf(d: string): string {
 }
 
 /** Translate an SVG root element or SVG string into a PDF vector content stream. */
-export function svgToPdf(svgInput: string | Element, _width: number, height: number): string {
+export function svgToPdf(
+  svgInput: string | Element,
+  _width: number,
+  height: number,
+  options?: SvgToPdfOptions
+): string {
   let doc: Element | null = null;
   if (typeof svgInput === 'string') {
     if (typeof DOMParser !== 'undefined') {
@@ -250,8 +530,15 @@ export function svgToPdf(svgInput: string | Element, _width: number, height: num
     doc = svgInput;
   }
 
-  const hPt = +(height * 0.75).toFixed(2);
-  let out = `q 0.75 0 0 -0.75 0 ${hPt} cm\n`;
+  const scale = options?.scale ?? 1;
+  const sx = +(0.75 * scale).toFixed(4);
+  const sy = +(-0.75 * scale).toFixed(4);
+  const ox = +(options?.x ?? 0).toFixed(2);
+  const oy = options?.pageHeight !== undefined
+    ? +(options.pageHeight - (options.y ?? 0)).toFixed(2)
+    : +(height * 0.75).toFixed(2);
+
+  let out = `q ${sx} 0 0 ${sy} ${ox} ${oy} cm\n`;
 
   if (!doc) {
     return out + 'Q\n';

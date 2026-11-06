@@ -9,7 +9,8 @@ Last updated 2026-10-30. Work happens on branch `phase-5`; `master` is fast-forw
   - Live streaming pushdown (`report.pushData()`, `DataModel.appendRows()`), time-series anomaly detection (`format.analytics.anomalies`), built-in force-directed `network` graph visual (`src/visuals/network.ts`, `@prismbi/prismbi/visuals/network`), and resolution-independent vector PDF rendering (`src/report/pdf.ts`, `Report.toPdf({ vector: true })`, `svgToPdf()`, `svgPathToPdf()`).
 - **Phase 13 (In Progress):**
   - Delivered Dual-Axis (Secondary Y-Axis) for Combo Charts (`lineClusteredColumn`) with `secondaryValueAxis`, customizable scales (`min`, `max`, `tickCount`, `displayUnits`, `decimals`, `format`), primary/secondary rotated axis titles (`valueAxis.title`, `secondaryValueAxis.title`), and column bar data labels.
-- **Tests:** 560 pass across 52 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
+  - Delivered Standardized PDF Print Page Sizes, Orientations, Margins & Running Headers/Footers with presets for A4, Letter, Legal, Ledger, and A3, configurable aspect-ratio fit scaling, and dynamic header/footer callbacks.
+- **Tests:** 566 pass across 52 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
 - **Entries:**
   - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (26 visual entries, 40 built-in visuals).
   - UI and frameworks: `/studio`, `/react`, `/elements`.

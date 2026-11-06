@@ -2,6 +2,13 @@
 
 ## 0.14.0 (Unreleased / Phase 13: Enterprise Fabric & Advanced Charting)
 
+- **Standardized PDF print paper sizes, orientations, margins & running headers/footers:**
+  - Added `PdfExportOptions`, `PdfPaperFormat`, `PdfOrientation`, `PdfMarginOptions`, `STANDARD_PAPER_SIZES`, `resolvePaperSize`, and `resolveMargins` to `src/report/pdf.ts` and exported via `src/core.ts`.
+  - Added paper presets for `'a4'`, `'letter'`, `'legal'`, `'ledger'`, and `'a3'`, with `'portrait'` and `'landscape'` orientations.
+  - Automatically calculates aspect-ratio fit scaling (`scaleFactor`), centering offsets, and printable boundary boxes within custom margins (`margin: number | { top, right, bottom, left }`).
+  - Added running headers and footers supporting static strings, boolean (`footer: true` prints "Page X of Y"), and dynamic callback functions `(ctx) => string`.
+  - Fully compatible with both vector (`vector: true`) and raster JPEG output in `report.toPdf()` and `report.exportPdf()`.
+
 - **Dual-axis (Secondary Y-Axis) for combo charts (`lineClusteredColumn`):**
   - Added `SecondaryValueAxisFormat` to `src/visuals/format.ts` and exported via `src/visuals.ts` and `src/core.ts`.
   - Supports configurable secondary scale options: `show`, `title`, `format`, `displayUnits`, `decimals`, `min`, `max`, `tickCount`, and `mode: 'auto' | 'on' | 'off'`.
