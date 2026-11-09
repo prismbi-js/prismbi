@@ -1,6 +1,7 @@
 import { s, measureText } from '../render/svg';
 import { bandScale, linearScale } from '../render/scales';
 import { defineVisual } from './registry';
+import { renderSmallMultiples } from './multiples';
 import {
   categoryLabelLayout,
   drawCategoryLabels,
@@ -31,10 +32,12 @@ export const waterfall = /* @__PURE__ */ defineVisual({
   roles: [
     { name: 'category', displayName: 'Category', kind: 'grouping', required: true, drillable: true, multiple: true },
     { name: 'values', displayName: 'Y-axis', kind: 'measure', required: true },
+    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping', multiple: true },
   ],
   defaultSort: 'key',
   defaultFormat: { dataLabels: { show: true } },
   render(ctx) {
+    if (renderSmallMultiples(ctx, (p) => waterfall.render(p))) return;
     const pv = pivot(ctx, 'category', '__none__', 'values');
     const se = pv.series[0];
     if (!se || !pv.categories.length) return emptyState(ctx);

@@ -187,7 +187,12 @@ export const COMMON_SECTIONS: Record<string, FormatSection> = {
     label: 'Small multiples',
     controls: [
       { path: 'smallMultiples.columns', label: 'Columns', type: 'number', min: 1, max: 12, placeholder: 'Auto' },
-      { path: 'smallMultiples.sharedAxis', label: 'Shared axis', type: 'boolean' },
+      { path: 'smallMultiples.rows', label: 'Rows', type: 'number', min: 1, max: 12, placeholder: 'Auto' },
+      { path: 'smallMultiples.sharedAxis', label: 'Shared value axis', type: 'boolean' },
+      { path: 'smallMultiples.sharedCategoryAxis', label: 'Shared category axis', type: 'boolean' },
+      { path: 'smallMultiples.outerAxesOnly', label: 'Outer axes only', type: 'boolean' },
+      { path: 'smallMultiples.border', label: 'Border', type: 'boolean' },
+      { path: 'smallMultiples.headerAlignment', label: 'Title alignment', type: 'select', options: [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }] },
     ],
   },
   animation: {

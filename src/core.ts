@@ -100,6 +100,7 @@ export { buildXlsx, resultToSheet, excelFormat, XLSX_MIME } from './report/xlsx'
 export type { XlsxSheet, XlsxColumn } from './report/xlsx';
 export { renderSparkline } from './visuals/table';
 export type { SparklineOptions, MatrixFormat } from './visuals/table';
+export type { SmallMultiplesFormat } from './visuals/multiples';
 
 // report runtime
 export { Report, reviveDates, registerMenuItems, autoMobileLayout } from './report/report';

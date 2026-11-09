@@ -1,6 +1,7 @@
 import type { DisplayUnits } from '../format/format';
 import type { AnomalyOptions } from './anomaly';
 import type { NetworkFormat } from './network';
+import type { SmallMultiplesFormat } from './multiples';
 
 export interface SecondaryValueAxisFormat {
   /** Show secondary value axis (default: true in combo charts). */
@@ -115,6 +116,7 @@ export interface VisualFormat {
   lines: { width: number; markers: boolean | 'auto'; smooth: boolean; area: boolean; areaOpacity: number; endLabels: boolean };
   animation: { enabled: boolean; duration: number };
   network?: NetworkFormat;
+  smallMultiples?: SmallMultiplesFormat;
   [section: string]: unknown;
 }
 

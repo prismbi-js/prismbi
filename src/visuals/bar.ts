@@ -30,7 +30,7 @@ const ROLES = [
   { name: 'category', displayName: 'Axis', kind: 'grouping' as const, multiple: true, drillable: true },
   { name: 'legend', displayName: 'Legend', kind: 'grouping' as const },
   { name: 'values', displayName: 'Values', kind: 'measure' as const, multiple: true, required: true },
-  { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const },
+  { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const, multiple: true },
   { name: 'errorLower', displayName: 'Error bars: lower', kind: 'measure' as const },
   { name: 'errorUpper', displayName: 'Error bars: upper', kind: 'measure' as const },
 ];

@@ -91,7 +91,12 @@ Every built-in visual with the demo data (light theme). The same images back the
 
 `*` marks a required role.
 
-**Small multiples:** put a field in `smallMultiples` (column, bar, line, area, scatter and bullet charts) to get one panel per member, with a shared value axis and a single legend. Configure it with `format.smallMultiples: { columns?, sharedAxis: true, minWidth: 160, minHeight: 110 }`.
+**Small multiples (Trellis / Grid Layouts):** put one or more fields in `smallMultiples` (column, bar, line, area, combo, waterfall, scatter and bullet charts) to facet the visual into a responsive multi-panel grid with unified scales and a single shared legend:
+- **Unified Axis Domains:** `sharedAxis: true` (default) harmonizes primary and secondary Y-scales across panels. `sharedCategoryAxis: true` (default) guarantees that all panels share the identical X-axis categories and scale positions, inserting blank slots where a panel lacks data for side-by-side comparability.
+- **2D Trellis Matrix:** provide two fields in `smallMultiples: ['Region[Country]', 'Product[Category]']` and set `layout: 'matrix'` to render a true 2D matrix facet with column headers on top and row headers on the left.
+- **Grid Density & Sizing:** customize `columns`, `rows`, and `gap` (px).
+- **Axis Deduplication:** `outerAxesOnly: true` hides repetitive Y-axis labels on inner columns and X-axis labels on inner rows, maximizing data ink while preserving grid alignment.
+- **Card & Header Polish:** style panels with `border: true`, `borderColor`, `panelBackground`, `padding`, `headerAlignment: 'left' | 'center' | 'right'`, `headerPosition: 'top' | 'bottom'`, `headerFontSize`, and `headerColor`.
 
 ## Common format options
 

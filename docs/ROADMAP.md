@@ -436,12 +436,12 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 **In Progress / Delivered:**
 - [x] **Table & Matrix In-Cell Visualizations:** Rich mini sparklines (`line`, `area`, `column`, `winloss`) with marker dots (`endpoints`, `minmax`), zero-axis aligned bi-directional data bars (`axis: true`), custom negative colors, and `barOnly` rating display.
-- [ ] **Small Multiples (Trellis / Grid Layouts):** Unified multi-chart gridding across category/dimension fields for bar, column, and line visuals.
+- [x] **Small Multiples (Trellis / Grid Layouts):** Unified multi-chart gridding across category/dimension fields for bar, column, line, combo, waterfall, scatter, and bullet visuals; unified Category Axis alignment (`sharedCategoryAxis: true`); 2D Trellis Matrix layout (`layout: 'matrix'`); outer axes label deduplication (`outerAxesOnly`); custom grid dimensions (`rows`, `columns`, `gap`), panel borders, and header alignment.
 - [ ] **Studio DAX Formatter & Beautifier:** Pure TypeScript syntax-aware DAX indentation and beautification engine.
 - [ ] **PDF Document Outlines & Bookmarks:** Structured PDF 1.4 outline bookmarks tree for pages and visuals.
 
 **Acceptance:**
-- 573 passing tests across 52 test suites (100% pass rate).
+- 578 passing tests across 52 test suites (100% pass rate).
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

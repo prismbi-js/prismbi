@@ -41,7 +41,7 @@ function linePath(pts: ([number, number] | null)[], smooth: boolean): string {
 }
 
 function renderLine(ctx: RenderContext, kind: Kind): void {
-  if (kind !== 'combo' && renderSmallMultiples(ctx, (panel) => renderLine(panel, kind), kind === 'stackedArea')) return;
+  if (renderSmallMultiples(ctx, (panel) => renderLine(panel, kind), kind === 'stackedArea')) return;
   const pv = pivot(ctx, 'category', 'legend', 'values');
   let lineSeries: Series[] = [];
   let colSeries: Series[] = [];
@@ -547,7 +547,7 @@ const ROLES = [
   { name: 'category', displayName: 'X-axis', kind: 'grouping' as const, multiple: true, drillable: true },
   { name: 'legend', displayName: 'Legend', kind: 'grouping' as const },
   { name: 'values', displayName: 'Y-axis', kind: 'measure' as const, multiple: true, required: true },
-  { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const },
+  { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const, multiple: true },
 ];
 
 export const lineChart = /* @__PURE__ */ defineVisual({ type: 'line', displayName: 'Line chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'line') });
@@ -562,6 +562,7 @@ export const comboChart = /* @__PURE__ */ defineVisual({
     { name: 'legend', displayName: 'Column legend', kind: 'grouping' },
     { name: 'values', displayName: 'Column y-axis', kind: 'measure', multiple: true },
     { name: 'lineValues', displayName: 'Line y-axis', kind: 'measure', multiple: true },
+    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping', multiple: true },
   ],
   defaultSort: 'key',
   render: (c) => renderLine(c, 'combo'),

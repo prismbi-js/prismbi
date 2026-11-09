@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DataModel } from '@prismbi/prismbi/core';
 import { createVisual, renderSparkline } from '../src/index';
+import { makeModel } from './fixtures';
 
 const mount = () => {
   const el = document.createElement('div');
@@ -420,5 +421,157 @@ describe('shared text and date values', () => {
     m.appendRows('T', [{ d: new Date(2025, 0, 1), s: 'a', n: 1 }]);
     expect(m.table('T').column('d').values[1000]).toBe(d[0]);
     expect(m.query({ groupBy: ['T[s]'], values: [{ field: 'T[n]', aggregation: 'countRows' }] }).rows.map((r) => r.values[0])).toEqual([335, 333, 333]);
+  });
+});
+
+describe('Small multiples trellis and grid layouts', () => {
+  it('unifies category domains across panels with sharedCategoryAxis: true', () => {
+    const el = mount();
+    const m = makeModel();
+    const v = createVisual(el, {
+      model: m,
+      type: 'clusteredColumn',
+      fields: {
+        category: 'Products[Category]',
+        values: 'Total Sales',
+        smallMultiples: 'Region[Name]',
+      },
+    } as never);
+    v.flush();
+
+    const cells = el.querySelectorAll('.pbi-sm-cell');
+    expect(cells).toHaveLength(2); // North and South
+
+    // In both panels, category labels should include all 3 categories: Bikes, Accessories, Clothing
+    const panel0Cats = [...cells[0].querySelectorAll('.pbi-cat')].map((c) => c.textContent);
+    const panel1Cats = [...cells[1].querySelectorAll('.pbi-cat')].map((c) => c.textContent);
+    expect(panel0Cats).toEqual(['Bikes', 'Accessories', 'Clothing']);
+    expect(panel1Cats).toEqual(['Bikes', 'Accessories', 'Clothing']);
+
+    v.destroy();
+    el.remove();
+  });
+
+  it('supports outerAxesOnly deduplication, borders, and custom header formatting', () => {
+    const el = mount();
+    const m = makeModel();
+    const v = createVisual(el, {
+      model: m,
+      type: 'clusteredBar',
+      fields: {
+        category: 'Products[Category]',
+        values: 'Total Sales',
+        smallMultiples: 'Region[Name]',
+      },
+      format: {
+        smallMultiples: {
+          columns: 2,
+          outerAxesOnly: true,
+          border: true,
+          headerAlignment: 'center',
+          headerPosition: 'bottom',
+        },
+      },
+    } as never);
+    v.flush();
+
+    const cells = el.querySelectorAll('.pbi-sm-cell');
+    expect(cells).toHaveLength(2);
+    expect(cells[0].classList.contains('has-border')).toBe(true);
+    expect(cells[1].classList.contains('pbi-sm-inner-col')).toBe(true);
+
+    const titles = el.querySelectorAll('.pbi-sm-title');
+    expect((titles[0] as HTMLElement).style.textAlign).toBe('center');
+
+    v.destroy();
+    el.remove();
+  });
+
+  it('supports 2D Trellis Matrix layout (layout: matrix) with row and column headers', () => {
+    const el = mount();
+    const m = new DataModel()
+      .addTable('T', [
+        { region: 'North', channel: 'Retail', product: 'Bikes', sales: 100 },
+        { region: 'North', channel: 'Online', product: 'Bikes', sales: 80 },
+        { region: 'South', channel: 'Retail', product: 'Bikes', sales: 60 },
+        { region: 'South', channel: 'Online', product: 'Bikes', sales: 90 },
+      ])
+      .addMeasure('TotalSales', 'SUM(T[sales])');
+
+    const v = createVisual(el, {
+      model: m,
+      type: 'clusteredColumn',
+      fields: {
+        category: 'T[product]',
+        values: 'TotalSales',
+        smallMultiples: ['T[region]', 'T[channel]'],
+      },
+      format: {
+        smallMultiples: {
+          layout: 'matrix',
+        },
+      },
+    } as never);
+    v.flush();
+
+    expect(el.querySelector('.pbi-sm-matrix')).not.toBeNull();
+    const colHeaders = [...el.querySelectorAll('.pbi-sm-col-header')].map((h) => h.textContent);
+    expect(colHeaders).toEqual(['Online', 'Retail']);
+
+    const rowHeaders = [...el.querySelectorAll('.pbi-sm-row-header')].map((h) => h.textContent);
+    expect(rowHeaders).toEqual(['North', 'South']);
+
+    const matrixCells = el.querySelectorAll('.pbi-sm-cell');
+    expect(matrixCells).toHaveLength(4); // 2 rows x 2 columns
+
+    v.destroy();
+    el.remove();
+  });
+
+  it('supports combo charts (lineClusteredColumn) with dual-axis scaling in small multiples', () => {
+    const el = mount();
+    const m = makeModel();
+    const v = createVisual(el, {
+      model: m,
+      type: 'lineClusteredColumn',
+      fields: {
+        category: 'Products[Category]',
+        values: 'Total Sales',
+        lineValues: 'Orders',
+        smallMultiples: 'Region[Name]',
+      },
+    } as never);
+    v.flush();
+
+    const cells = el.querySelectorAll('.pbi-sm-cell');
+    expect(cells).toHaveLength(2);
+    // Check that each panel rendered both columns and lines
+    expect(cells[0].querySelectorAll('path.pbi-line').length).toBeGreaterThan(0);
+    expect(cells[0].querySelectorAll('.pbi-mark').length).toBeGreaterThan(0);
+
+    v.destroy();
+    el.remove();
+  });
+
+  it('supports waterfall charts in small multiples', () => {
+    const el = mount();
+    const m = makeModel();
+    const v = createVisual(el, {
+      model: m,
+      type: 'waterfall',
+      fields: {
+        category: 'Products[Category]',
+        values: 'Total Sales',
+        smallMultiples: 'Region[Name]',
+      },
+    } as never);
+    v.flush();
+
+    const cells = el.querySelectorAll('.pbi-sm-cell');
+    expect(cells).toHaveLength(2);
+    expect(cells[0].querySelectorAll('rect.pbi-mark').length).toBeGreaterThan(0);
+
+    v.destroy();
+    el.remove();
   });
 });

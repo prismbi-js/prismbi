@@ -198,7 +198,7 @@ export const scatter = /* @__PURE__ */ defineVisual({
     { name: 'x', displayName: 'X-axis', kind: 'measure', required: true },
     { name: 'y', displayName: 'Y-axis', kind: 'measure', required: true },
     { name: 'size', displayName: 'Size', kind: 'measure' },
-    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' },
+    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping', multiple: true },
   ],
   supportsHighlight: true,
   render(ctx) {

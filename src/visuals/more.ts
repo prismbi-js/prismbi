@@ -26,7 +26,7 @@ export const bullet = /* @__PURE__ */ defineVisual({
     { name: 'value', displayName: 'Value', kind: 'measure', required: true },
     { name: 'target', displayName: 'Target', kind: 'measure' },
     { name: 'maximum', displayName: 'Maximum', kind: 'measure' },
-    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' },
+    { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping', multiple: true },
   ],
   defaultSort: 'key',
   render(ctx) {

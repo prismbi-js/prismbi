@@ -2,6 +2,15 @@
 
 ## 0.15.0 (Unreleased / Phase 14: Analytical Depth & Studio Polish)
 
+- **Small Multiples (Trellis / Grid Layouts):**
+  - Unified multi-chart gridding across cartesian, combo, and distribution visuals (`clusteredColumn`, `stackedColumn`, `percentStackedColumn`, `clusteredBar`, `stackedBar`, `percentStackedBar`, `line`, `area`, `stackedArea`, `lineClusteredColumn`, `waterfall`, `scatter`, `bullet`).
+  - Added unified Category Axis synchronization (`sharedCategoryAxis: true` by default) across panels, ensuring all facets share the identical domain ordering and category scale positions with blank placeholder slots for side-by-side comparability.
+  - Added 2D Trellis Matrix layout (`layout: 'matrix'`) supporting row and column dimension facets (`smallMultiples: ['Region[Country]', 'Product[Category]']`) with aligned top column headers and left row headers.
+  - Added outer axes deduplication (`outerAxesOnly: true`) hiding redundant Y-axis tick values on inner columns and X-axis category labels on inner rows while maintaining exact grid spacing and gridlines.
+  - Added grid dimensions (`columns`, `rows`, `gap`), panel borders (`border: true`, `borderColor`, `panelBackground`, `padding`), and panel title formatting (`headerAlignment: 'left' | 'center' | 'right'`, `headerPosition: 'top' | 'bottom'`, `headerFontSize`, `headerColor`).
+  - Added dual-axis shared scaling support for combo charts (`lineClusteredColumn`) in small multiples with unified secondary Y-axis boundaries and composite series legend.
+  - Re-exported `SmallMultiplesFormat` in `@prismbi/prismbi/core` and `@prismbi/prismbi/visuals`.
+
 - **Table & Matrix In-Cell Visualizations (Sparklines & Bi-Directional Data Bars):**
   - Upgraded in-cell sparkline renderer (`renderSparkline`, `src/visuals/table.ts`) to support `'line'`, `'area'` (with translucent filled baseline path), `'column'` (positive/negative zero-axis bar scaling), and `'winloss'` micro-charts.
   - Added configurable point marker dots (`markers: true | 'endpoints' | 'minmax'`) with customizable dot radius (`dotRadius`) and distinct min/max extreme colors.
