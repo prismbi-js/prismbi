@@ -17,6 +17,7 @@ export type { GoalFormat, GoalStatus, ScorecardFormat } from './visuals/scorecar
 export { scatter } from './visuals/scatter';
 export { card, gauge, kpi, multiRowCard } from './visuals/cards';
 export { matrix, table } from './visuals/table';
+export type { ConditionalFormat, ConditionalRule, DataBarOptions, SparklineOptions, TableFormat, MatrixFormat } from './visuals/table';
 export { slicer } from './visuals/slicer';
 export { textBox } from './visuals/text';
 export { waterfall } from './visuals/waterfall';

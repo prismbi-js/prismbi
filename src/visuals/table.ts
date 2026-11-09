@@ -16,8 +16,27 @@ export interface ConditionalRule {
   icon?: string;
 }
 
+export interface DataBarOptions {
+  /** Bar fill color for positive values (default: theme accent / data color). */
+  color?: string;
+  /** Bar fill color for negative values (default: theme.bad). */
+  negativeColor?: string;
+  /** Whether to align around a zero axis when negative values exist (default: true). */
+  axis?: boolean;
+  /** Zero axis line color (default: theme.axis). */
+  axisColor?: string;
+  /** Fixed scale minimum. */
+  min?: number;
+  /** Fixed scale maximum. */
+  max?: number;
+  /** When true, hides the numeric text and only shows the visual bar. */
+  barOnly?: boolean;
+  /** Bar fill opacity (0–1, default 0.28). */
+  opacity?: number;
+}
+
 export interface ConditionalFormat {
-  dataBars?: boolean | { color?: string; negativeColor?: string };
+  dataBars?: boolean | DataBarOptions;
   /** Colour scale on cell background: `true` uses the theme sequential ramp. */
   background?: boolean | { min?: string; mid?: string; max?: string };
   rules?: ConditionalRule[];
@@ -25,12 +44,14 @@ export interface ConditionalFormat {
   icons?: boolean;
 }
 
-interface TableFormat {
+export interface TableFormat {
   totals?: boolean;
   rowBanding?: boolean;
   wrap?: boolean;
   density?: 'compact' | 'normal' | 'comfortable';
   conditional?: Record<string, ConditionalFormat>;
+  /** In-cell sparkline configurations per measure column name. */
+  sparklines?: Record<string, SparklineOptions>;
   /** Pixel width per column name. */
   columnWidths?: Record<string, number>;
   pageSize?: number;
@@ -120,42 +141,165 @@ function ruleMatch(r: ConditionalRule, v: number): boolean {
 }
 
 export interface SparklineOptions {
-  type?: 'line' | 'column';
+  type?: 'line' | 'column' | 'area' | 'winloss';
   color?: string;
+  negativeColor?: string;
   width?: number;
   height?: number;
+  /** Whether to draw dots/markers: true for all points, 'endpoints' for first & last, 'minmax' for extremes. */
+  markers?: boolean | 'endpoints' | 'minmax';
+  /** Marker dot radius in pixels (default 2). */
+  dotRadius?: number;
+  /** Area fill opacity (0–1, default 0.18 for type: 'area'). */
+  areaOpacity?: number;
+  /** Explicit numeric values or historical trend series. */
+  values?: number[];
+}
+
+function renderMarkers(
+  svg: SVGSVGElement,
+  values: number[],
+  pts: [number, number][],
+  opts: SparklineOptions,
+  color: string,
+  negColor: string,
+  dotR: number
+): void {
+  if (!opts.markers || !values.length) return;
+  const n = values.length;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const minIdx = values.indexOf(min);
+  const maxIdx = values.lastIndexOf(max);
+
+  pts.forEach(([cx, cy], i) => {
+    let show = false;
+    let dotColor = color;
+    if (opts.markers === true) {
+      show = true;
+    } else if (opts.markers === 'endpoints') {
+      show = i === 0 || i === n - 1;
+    } else if (opts.markers === 'minmax') {
+      if (i === maxIdx) {
+        show = true;
+        dotColor = color;
+      } else if (i === minIdx) {
+        show = true;
+        dotColor = negColor;
+      }
+    }
+    if (show) {
+      svg.append(s('circle', {
+        cx: cx.toFixed(1),
+        cy: cy.toFixed(1),
+        r: String(dotR),
+        fill: dotColor,
+        class: 'pbi-sparkline-dot',
+      }));
+    }
+  });
 }
 
 export function renderSparkline(values: number[], opts: SparklineOptions = {}): SVGSVGElement {
   const w = opts.width ?? 60;
   const h = opts.height ?? 16;
   const color = opts.color ?? 'currentColor';
-  const svg = s('svg', { width: w, height: h, class: 'pbi-sparkline', role: 'img' });
+  const negColor = opts.negativeColor ?? '#e74c3c';
+  const dotR = opts.dotRadius ?? 2;
+  const pad = 2;
+
+  const svg = s('svg', {
+    width: w,
+    height: h,
+    class: `pbi-sparkline pbi-sparkline-${opts.type ?? 'line'}`,
+    role: 'img',
+  });
+
   if (!values.length) return svg;
+
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
-  const pad = 2;
   const scaleY = (v: number) => h - pad - ((v - min) / span) * (h - pad * 2);
   const scaleX = (i: number) => pad + (i / Math.max(1, values.length - 1)) * (w - pad * 2);
 
   if (opts.type === 'column') {
     const colW = Math.max(1.5, (w - pad * 2) / values.length - 1);
+    const zeroY = min < 0 && max > 0 ? scaleY(0) : min >= 0 ? h - pad : pad;
     values.forEach((v, i) => {
-      const y = scaleY(Math.max(0, v));
-      const y0 = scaleY(0);
-      const barH = Math.max(1, Math.abs(y0 - y));
-      svg.append(s('rect', { x: scaleX(i) - colW / 2, y: Math.min(y, y0), width: colW, height: barH, fill: color }));
+      const y = scaleY(v);
+      const isNeg = v < 0;
+      const top = Math.min(y, zeroY);
+      const barH = Math.max(1, Math.abs(y - zeroY));
+      svg.append(s('rect', {
+        x: scaleX(i) - colW / 2,
+        y: top,
+        width: colW,
+        height: barH,
+        fill: isNeg ? negColor : color,
+      }));
     });
+  } else if (opts.type === 'winloss') {
+    const colW = Math.max(1.5, (w - pad * 2) / values.length - 1);
+    const midY = h / 2;
+    const barH = Math.max(1, (h - pad * 2) / 2 - 1);
+    values.forEach((v, i) => {
+      const isWin = v > 0;
+      const isLoss = v < 0;
+      const x = scaleX(i) - colW / 2;
+      if (isWin) {
+        svg.append(s('rect', { x, y: pad, width: colW, height: barH, fill: color }));
+      } else if (isLoss) {
+        svg.append(s('rect', { x, y: midY + 1, width: colW, height: barH, fill: negColor }));
+      } else {
+        svg.append(s('rect', { x, y: midY - 0.5, width: colW, height: 1, fill: color, opacity: '0.4' }));
+      }
+    });
+  } else if (opts.type === 'area') {
+    const pts: [number, number][] = values.map((v, i) => [scaleX(i), scaleY(v)]);
+    const baselineY = min < 0 && max > 0 ? scaleY(0) : h - pad;
+    const pathD = `M ${pts[0][0]},${baselineY} ` +
+      pts.map(([x, y]) => `L ${x.toFixed(1)},${y.toFixed(1)}`).join(' ') +
+      ` L ${pts[pts.length - 1][0]},${baselineY} Z`;
+    const areaOp = opts.areaOpacity ?? 0.18;
+    svg.append(s('path', { d: pathD, fill: color, opacity: String(areaOp) }));
+
+    const linePts = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    svg.append(s('polyline', {
+      points: linePts,
+      fill: 'none',
+      stroke: color,
+      'stroke-width': '1.5',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    }));
+    renderMarkers(svg, values, pts, opts, color, negColor, dotR);
   } else {
-    const pts = values.map((v, i) => `${scaleX(i).toFixed(1)},${scaleY(v).toFixed(1)}`).join(' ');
-    svg.append(s('polyline', { points: pts, fill: 'none', stroke: color, 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+    const pts: [number, number][] = values.map((v, i) => [scaleX(i), scaleY(v)]);
+    const linePts = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    svg.append(s('polyline', {
+      points: linePts,
+      fill: 'none',
+      stroke: color,
+      'stroke-width': '1.5',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    }));
+    renderMarkers(svg, values, pts, opts, color, negColor, dotR);
   }
   return svg;
 }
 
 /** Apply conditional formatting to a value cell. */
-export function decorateCell(ctx: RenderContext, td: HTMLElement, cf: ConditionalFormat | undefined, v: CellValue, stats: { min: number; max: number }, text: string, sparkline?: SparklineOptions & { values: number[] }): void {
+export function decorateCell(
+  ctx: RenderContext,
+  td: HTMLElement,
+  cf: ConditionalFormat | undefined,
+  v: CellValue,
+  stats: { min: number; max: number },
+  text: string,
+  sparkline?: SparklineOptions & { values: number[] }
+): void {
   const span = h('span', { class: 'pbi-cell-text' }, text);
   if (sparkline?.values.length) span.prepend(renderSparkline(sparkline.values, sparkline));
   if (!cf || typeof v !== 'number') {
@@ -164,7 +308,9 @@ export function decorateCell(ctx: RenderContext, td: HTMLElement, cf: Conditiona
   }
   const t = ctx.theme;
   if (cf.background) {
-    const stops = typeof cf.background === 'object' ? [cf.background.min ?? t.sequential[0], ...(cf.background.mid ? [cf.background.mid] : []), cf.background.max ?? t.sequential[t.sequential.length - 2]] : [t.sequential[0], t.sequential[Math.floor(t.sequential.length * 0.7)]];
+    const stops = typeof cf.background === 'object'
+      ? [cf.background.min ?? t.sequential[0], ...(cf.background.mid ? [cf.background.mid] : []), cf.background.max ?? t.sequential[t.sequential.length - 2]]
+      : [t.sequential[0], t.sequential[Math.floor(t.sequential.length * 0.7)]];
     const tt = stats.max === stats.min ? 1 : (v - stats.min) / (stats.max - stats.min);
     const bg = ramp(stops, tt);
     td.style.background = bg;
@@ -177,14 +323,61 @@ export function decorateCell(ctx: RenderContext, td: HTMLElement, cf: Conditiona
       if (r.icon) span.prepend(h('i', { class: 'pbi-cf-icon' }, r.icon + ' '));
     }
   if (cf.icons) span.prepend(h('i', { class: `pbi-cf-icon ${v > 0 ? 'is-good' : v < 0 ? 'is-bad' : 'is-flat'}` }, v > 0 ? '▲ ' : v < 0 ? '▼ ' : '● '));
+
   if (cf.dataBars) {
-    const color = (typeof cf.dataBars === 'object' && cf.dataBars.color) || ctx.format.colors.default || t.dataColors[0];
-    const neg = (typeof cf.dataBars === 'object' && cf.dataBars.negativeColor) || t.bad;
-    const span0 = Math.max(Math.abs(stats.min), Math.abs(stats.max)) || 1;
-    const pct = (Math.abs(v) / span0) * 100;
+    const db = typeof cf.dataBars === 'object' ? cf.dataBars : {};
+    const color = db.color || ctx.format.colors.default || t.dataColors[0];
+    const neg = db.negativeColor || t.bad;
+    const opacity = db.opacity ?? 0.28;
+    const showAxis = db.axis !== false;
+    const minVal = db.min ?? stats.min;
+    const maxVal = db.max ?? stats.max;
+
     td.classList.add('pbi-databar-cell');
-    td.append(h('i', { class: 'pbi-databar', style: `width:${pct.toFixed(1)}%;background:${v < 0 ? neg : color}` }));
+
+    if (showAxis && minVal < 0 && maxVal > 0) {
+      // Bi-directional zero-axis alignment
+      const range = maxVal - minVal;
+      const zeroPct = (Math.abs(minVal) / range) * 100;
+
+      // Axis marker
+      const axisLine = h('i', {
+        class: 'pbi-databar-axis',
+        style: `left:${zeroPct.toFixed(1)}%;background:${db.axisColor ?? t.axis}`,
+      });
+      td.append(axisLine);
+
+      if (v >= 0) {
+        const wPct = Math.min(100 - zeroPct, (v / range) * 100);
+        td.append(h('i', {
+          class: 'pbi-databar is-positive',
+          style: `left:${zeroPct.toFixed(1)}%;right:auto;width:${wPct.toFixed(1)}%;background:${color};opacity:${opacity}`,
+        }));
+      } else {
+        const wPct = Math.min(zeroPct, (Math.abs(v) / range) * 100);
+        const leftPct = zeroPct - wPct;
+        td.append(h('i', {
+          class: 'pbi-databar is-negative',
+          style: `left:${leftPct.toFixed(1)}%;right:auto;width:${wPct.toFixed(1)}%;background:${neg};opacity:${opacity}`,
+        }));
+      }
+    } else {
+      // Unidirectional bar
+      const span0 = Math.max(Math.abs(minVal), Math.abs(maxVal)) || 1;
+      const pct = Math.min(100, (Math.abs(v) / span0) * 100);
+      const isNeg = v < 0;
+      td.append(h('i', {
+        class: `pbi-databar ${isNeg ? 'is-negative' : 'is-positive'}`,
+        style: `width:${pct.toFixed(1)}%;background:${isNeg ? neg : color};opacity:${opacity}`,
+      }));
+    }
+
+    if (db.barOnly) {
+      span.style.visibility = 'hidden';
+      span.style.width = '0';
+    }
   }
+
   td.append(span);
 }
 
@@ -275,8 +468,13 @@ export const table = /* @__PURE__ */ defineVisual({
         // a calculation item in this row may bring its own format (e.g. YoY % as a percentage)
         const rf = c.kind === 'value' ? r.formats?.[c.i] : undefined;
         const text = ctx.fmt(rf ? { ...c.field, format: rf } : c.field, v);
-        if (c.kind === 'value') decorateCell(ctx, td, tf.conditional?.[c.field.name] ?? tf.conditional?.[c.field.ref], v, stats[ci], text);
-        else td.textContent = text;
+        if (c.kind === 'value') {
+          const sl = tf.sparklines?.[c.field.name] ?? tf.sparklines?.[c.field.ref];
+          const sparkOpts = sl && typeof v === 'number' ? { ...sl, values: sl.values ?? [v * 0.85, v * 0.95, v * 1.05, v] } : undefined;
+          decorateCell(ctx, td, tf.conditional?.[c.field.name] ?? tf.conditional?.[c.field.ref], v, stats[ci], text, sparkOpts);
+        } else {
+          td.textContent = text;
+        }
         tr.append(td);
       });
       if (identity) {
@@ -451,7 +649,7 @@ export const matrix = /* @__PURE__ */ defineVisual({
           const td = h('td', { class: 'is-num' });
           const v = vals?.[i] ?? null;
           const sl = mf.sparklines?.[vf.name];
-          const sparkOpts = sl && typeof v === 'number' ? { ...sl, values: [v * 0.85, v * 0.95, v * 1.05, v] } : undefined;
+          const sparkOpts = sl && typeof v === 'number' ? { ...sl, values: sl.values ?? [v * 0.85, v * 0.95, v * 1.05, v] } : undefined;
           decorateCell(ctx, td, lvl === rowFields.length ? mf.conditional?.[vf.name] : undefined, v, stats[i], ctx.fmt(fmts?.[i] ? { ...vf, format: fmts[i] } : vf, v), sparkOpts);
           tr.append(td);
         });

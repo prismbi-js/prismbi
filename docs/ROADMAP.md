@@ -19,6 +19,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 11 | Executive Intelligence: Periodic DAX, Word/HTML exports, Gantt/Candlestick, ClickHouse | `0.12.0` | ✅ Implemented |
 | 12 | Advanced Analytics: Chord, Live Streaming, Anomaly Detection, Network Graphs, Vector PDF | `0.13.0` | ✅ Implemented |
 | 13 | Enterprise Fabric & Advanced Charting | `0.14.0` | ✅ Implemented |
+| 14 | Analytical Depth & Studio Polish | `0.15.0` | 🔄 In Progress |
 
 ## Guiding principles
 
@@ -426,6 +427,21 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 **Acceptance:**
 - 572 passing tests across 52 test suites (100% pass rate).
+- 98 visual regression screenshots with 0 failures.
+- Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
+
+## Phase 14: Analytical Depth & Studio Polish 🔄
+
+**Goal:** in-cell tabular visualizations (sparklines & zero-axis data bars), small multiples trellis charts, studio DAX formatter, and multi-page PDF outline bookmarks.
+
+**In Progress / Delivered:**
+- [x] **Table & Matrix In-Cell Visualizations:** Rich mini sparklines (`line`, `area`, `column`, `winloss`) with marker dots (`endpoints`, `minmax`), zero-axis aligned bi-directional data bars (`axis: true`), custom negative colors, and `barOnly` rating display.
+- [ ] **Small Multiples (Trellis / Grid Layouts):** Unified multi-chart gridding across category/dimension fields for bar, column, and line visuals.
+- [ ] **Studio DAX Formatter & Beautifier:** Pure TypeScript syntax-aware DAX indentation and beautification engine.
+- [ ] **PDF Document Outlines & Bookmarks:** Structured PDF 1.4 outline bookmarks tree for pages and visuals.
+
+**Acceptance:**
+- 573 passing tests across 52 test suites (100% pass rate).
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

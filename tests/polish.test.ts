@@ -201,6 +201,89 @@ describe('virtualized matrix', () => {
     r.destroy();
     el.remove();
   });
+
+  it('renders area, winloss and marker sparklines with table in-cell integration', () => {
+    // Area sparkline with endpoints
+    const svgArea = renderSparkline([10, 40, 20, 50], { type: 'area', markers: 'endpoints' });
+    expect(svgArea.querySelector('path')).not.toBeNull();
+    expect(svgArea.querySelector('polyline')).not.toBeNull();
+    const dots = svgArea.querySelectorAll('.pbi-sparkline-dot');
+    expect(dots.length).toBe(2);
+
+    // Winloss sparkline
+    const svgWinloss = renderSparkline([1, -1, 0, 1, -1], { type: 'winloss', negativeColor: '#e74c3c' });
+    const rects = svgWinloss.querySelectorAll('rect');
+    expect(rects.length).toBe(5);
+
+    // Min-max markers
+    const svgMinMax = renderSparkline([20, 5, 35, 10], { type: 'line', markers: 'minmax' });
+    const minMaxDots = svgMinMax.querySelectorAll('.pbi-sparkline-dot');
+    expect(minMaxDots.length).toBe(2);
+
+    // Table in-cell sparklines and bi-directional zero-axis data bars
+    const m = new DataModel()
+      .addTable('Financials', [
+        { Entity: 'East', Profit: -150, Margin: 12 },
+        { Entity: 'West', Profit: 300, Margin: 25 },
+        { Entity: 'Central', Profit: 50, Margin: 8 },
+      ])
+      .addMeasure('Total Profit', 'SUM(Financials[Profit])')
+      .addMeasure('Total Margin', 'SUM(Financials[Margin])');
+
+    const el = mount();
+    const v = createVisual(el, {
+      model: m,
+      type: 'table',
+      fields: { columns: ['Financials[Entity]', 'Total Profit', 'Total Margin'] },
+      format: {
+        table: {
+          conditional: {
+            'Total Profit': {
+              dataBars: {
+                axis: true,
+                color: '#2ecc71',
+                negativeColor: '#e74c3c',
+              },
+            },
+            'Total Margin': {
+              dataBars: {
+                barOnly: true,
+              },
+            },
+          },
+          sparklines: {
+            'Total Profit': {
+              type: 'area',
+              markers: 'endpoints',
+              values: [-100, -120, -50, -150],
+            },
+          },
+        },
+      } as never,
+    });
+    v.flush();
+
+    // Verify zero-axis data bars
+    const axes = el.querySelectorAll('.pbi-databar-axis');
+    expect(axes.length).toBeGreaterThan(0);
+
+    const posBars = el.querySelectorAll('.pbi-databar.is-positive');
+    expect(posBars.length).toBeGreaterThan(0);
+
+    const negBars = el.querySelectorAll('.pbi-databar.is-negative');
+    expect(negBars.length).toBeGreaterThan(0);
+
+    // Verify in-cell sparkline in table
+    const tableSparklines = el.querySelectorAll('.pbi-table .pbi-sparkline');
+    expect(tableSparklines.length).toBeGreaterThan(0);
+
+    // Verify barOnly hides text on Total Margin
+    const marginText = el.querySelector('tbody tr td:last-child .pbi-cell-text') as HTMLElement;
+    expect(marginText.style.visibility).toBe('hidden');
+
+    v.destroy();
+    el.remove();
+  });
 });
 
 describe('Studio undo history', () => {

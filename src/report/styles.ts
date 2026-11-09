@@ -132,7 +132,9 @@ export const CSS = /* css */ `
 .pbi-table tr.is-dim td,.pbi-table tr.is-dim th{opacity:.4}
 .pbi-table tr.is-selected td{background:color-mix(in srgb,var(--pbi-accent) 12%,transparent)}
 .pbi-databar-cell{position:relative}
-.pbi-databar{position:absolute;right:8px;top:5px;bottom:5px;opacity:.22;border-radius:3px 0 0 3px;max-width:calc(100% - 16px)}
+.pbi-databar{position:absolute;top:5px;bottom:5px;border-radius:3px;max-width:calc(100% - 16px)}
+.pbi-databar-axis{position:absolute;top:3px;bottom:3px;width:1.5px;z-index:1}
+svg.pbi-sparkline{vertical-align:middle;margin-right:6px;display:inline-block}
 .pbi-cell-text{position:relative}
 .pbi-cf-icon{font-style:normal;font-size:10px}
 .pbi-matrix tbody th{font-weight:500;background:var(--pbi-surface)}

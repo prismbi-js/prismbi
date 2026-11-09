@@ -158,8 +158,12 @@ format: { pie: { maxSlices: 8 }, donut: { innerRadius: 0.62, centerLabel: true }
 format: { table: {
   totals: true, rowBanding: true, wrap: false, density: 'compact'|'normal'|'comfortable', pageSize: 200,
   columnWidths: { 'Total Sales': 140 },
+  sparklines: {
+    'Total Sales': { type: 'area', markers: 'endpoints' },      // 'line' | 'column' | 'area' | 'winloss'
+  },
   conditional: {
-    'Total Sales': { dataBars: true },                         // or { color, negativeColor }
+    'Total Sales': { dataBars: { axis: true, color: '#3498db', negativeColor: '#e74c3c' } }, // bi-directional zero axis
+    'Total Margin': { dataBars: { barOnly: true } },            // hides number, displays visual bar only
     'Margin %':    { background: true },                       // or { min, mid, max } colours
     'YoY %':       { icons: true },                            // ▲ ▼ ● by sign
     'Profit':      { rules: [{ op: '<', value: 0, color: '#d03b3b' }, { op: 'between', value: 0, value2: 1000, background: '#fff4d6' }] },
@@ -170,7 +174,9 @@ format: { table: {
 format: { matrix: {
   expandAll: false, columnTotals: true,
   stepped: false,                      // false = dedicated column per row hierarchy level (Power BI tabular style)
-  sparklines: { 'Total Sales': { type: 'line', trend: 'Date[MonthYear]' } }, // embedded SVG trend sparklines / mini-bars
+  sparklines: {
+    'Total Sales': { type: 'line', markers: 'minmax' },        // 'line' | 'column' | 'area' | 'winloss'
+  },
   virtualize: undefined,               // auto above 500 visible rows
   conditional: { /* as table */ },
 } }

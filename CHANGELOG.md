@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.14.0 (Unreleased / Phase 13: Enterprise Fabric & Advanced Charting)
+## 0.15.0 (Unreleased / Phase 14: Analytical Depth & Studio Polish)
+
+- **Table & Matrix In-Cell Visualizations (Sparklines & Bi-Directional Data Bars):**
+  - Upgraded in-cell sparkline renderer (`renderSparkline`, `src/visuals/table.ts`) to support `'line'`, `'area'` (with translucent filled baseline path), `'column'` (positive/negative zero-axis bar scaling), and `'winloss'` micro-charts.
+  - Added configurable point marker dots (`markers: true | 'endpoints' | 'minmax'`) with customizable dot radius (`dotRadius`) and distinct min/max extreme colors.
+  - Enabled in-cell sparklines in both `table` (`TableFormat.sparklines`) and `matrix` (`MatrixFormat.sparklines`) with custom values arrays and row series data.
+  - Upgraded cell data bars (`ConditionalFormat.dataBars`) with bi-directional zero-axis alignment (`axis: true`), dedicated axis marker line (`axisColor`), distinct negative colors (`negativeColor`), and `barOnly: true` mode (hiding text for compact visual rating columns).
+  - Re-exported `TableFormat`, `MatrixFormat`, `SparklineOptions`, and `DataBarOptions` in `@prismbi/prismbi/core` and `@prismbi/prismbi/visuals`.
+
+## 0.14.0 (2026-11-09 / Phase 13: Enterprise Fabric & Advanced Charting)
 
 - **Network graph conditional formatting & metric-driven styling:**
   - Extended `network` visual (`src/visuals/network.ts`, `@prismbi/prismbi/visuals/network`) and `NetworkFormat` with rule-based conditional formatting (`format.colors.rules`), smooth gradient interpolation (`format.colors.gradient`), and category-specific overrides (`format.colors.categories`).

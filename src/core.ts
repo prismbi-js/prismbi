@@ -70,7 +70,7 @@ export { relativeRange } from './visuals/slicer';
 export type { SlicerFormat, SlicerStyle } from './visuals/slicer';
 export type { SecondaryValueAxisFormat } from './visuals/format';
 export type { NetworkFormat } from './visuals/network';
-export type { ConditionalFormat, ConditionalRule } from './visuals/table';
+export type { ConditionalFormat, ConditionalRule, DataBarOptions, TableFormat } from './visuals/table';
 export { squarify } from './visuals/parts';
 export { wQuantile } from './visuals/distribution';
 export type { GeoFeature, GeoFeatureCollection, MapFormat } from './visuals/map';
