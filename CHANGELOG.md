@@ -2,6 +2,14 @@
 
 ## 0.14.0 (Unreleased / Phase 13: Enterprise Fabric & Advanced Charting)
 
+- **Network graph conditional formatting & metric-driven styling:**
+  - Extended `network` visual (`src/visuals/network.ts`, `@prismbi/prismbi/visuals/network`) and `NetworkFormat` with rule-based conditional formatting (`format.colors.rules`), smooth gradient interpolation (`format.colors.gradient`), and category-specific overrides (`format.colors.categories`).
+  - Added configurable metric threshold targeting (`network.metric`: `'degree'` | `'size'` | `'inWeight'` | `'outWeight'`), allowing rules and color ramps to evaluate against topological connectivity or edge traffic volume.
+  - Added individual node ID and cluster group color overrides via `format.colors.categories`, supporting fixed styling per entity or community cluster.
+  - Added edge styling controls: customizable link stroke color (`network.edgeColor`) and dynamic weight-scaled edge stroke width bounds (`network.edgeWidthRange: [min, max]`).
+  - Integrated conditional node coloring into interactive hover cascades (adjacent links glow in the highlighted node's rule color) and rich data tooltips.
+  - Re-exported `NetworkFormat` in `src/core.ts` alongside existing visual formats.
+
 - **Streaming Ingestion Harness (`streamInto` & `scheduleRefresh`):**
   - Upgraded `streamInto(target, table, source, options)` in `@prismbi/prismbi/connectors` to accept `ReportLike` targets (`DataModel | ReportLike`) for direct sliding window pushdown (`report.pushData()`) with automatic scoped visual re-renders.
   - Added URL string source resolution supporting direct WebSocket (`ws://`, `wss://`) and Server-Sent Events (`http://`, `https://`) endpoint strings without manual socket construction.

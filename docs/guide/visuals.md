@@ -291,6 +291,17 @@ Visualizes entity topologies, communication links, infrastructure, and relationa
     size: 'Topology[Importance]',
   },
   format: {
+    colors: {
+      categories: {
+        'Gateway-1': '#ff0055', // Override specific node color
+        'Core': '#34495e',       // Override cluster group color
+      },
+      rules: [
+        { op: '>=', value: 4, color: '#e74c3c' }, // Highlight bottleneck/hub nodes
+        { op: '<', value: 2, color: '#2ecc71' },  // Peripheral nodes
+      ],
+      gradient: { min: '#3498db', max: '#e74c3c' }, // Or smooth gradient across node metric
+    },
     network: {
       nodeSize: 9,        // base radius
       linkWidth: 1.5,     // link line width
@@ -298,6 +309,9 @@ Visualizes entity topologies, communication links, infrastructure, and relationa
       gravity: 0.05,      // centering pull
       arrows: true,       // directional arrowheads
       labels: true,       // node text labels
+      metric: 'degree',   // metric for rules/gradient: 'degree' | 'size' | 'inWeight' | 'outWeight'
+      edgeColor: '#bdc3c7',        // custom edge stroke color
+      edgeWidthRange: [1.5, 8],    // weight-scaled edge stroke width [min, max]
     },
   },
 }
@@ -305,7 +319,9 @@ Visualizes entity topologies, communication links, infrastructure, and relationa
 
 - **Interactive Physics:** Physics-based numerical relaxation with Coulomb repulsion and Hooke spring attraction places interconnected clusters naturally.
 - **Node Dragging:** Click and drag any node to pin or adjust layout in real-time with automatic edge tracking.
-- **Cluster Highlighting:** Hovering over a node highlights adjacent connections and dims non-neighboring nodes.
+- **Conditional Formatting & Highlighting:** Supports rule-based threshold coloring (`colors.rules`), smooth metric gradients (`colors.gradient`), and category-specific overrides (`colors.categories`) for both individual node IDs and cluster groups.
+- **Custom Edge Scaling:** Configurable edge stroke color (`network.edgeColor`) and dynamic weight scaling bounds (`network.edgeWidthRange`).
+- **Cluster Highlighting:** Hovering over a node highlights adjacent connections in the node's color and dims non-neighboring nodes.
 - **Cross-Filtering:** Clicking any node cross-filters all downstream visuals in the report.
 
 ## Error bars

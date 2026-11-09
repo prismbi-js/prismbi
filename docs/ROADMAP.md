@@ -18,7 +18,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 10 | Enterprise & Scale: Financial/bitwise DAX, multi-dialect SQL pushdown, PPTX, MCP, streaming CSV | `0.11.0` | ✅ Implemented |
 | 11 | Executive Intelligence: Periodic DAX, Word/HTML exports, Gantt/Candlestick, ClickHouse | `0.12.0` | ✅ Implemented |
 | 12 | Advanced Analytics: Chord, Live Streaming, Anomaly Detection, Network Graphs, Vector PDF | `0.13.0` | ✅ Implemented |
-| 13 | Enterprise Fabric & Advanced Charting | `0.14.0` | 🔄 In Progress |
+| 13 | Enterprise Fabric & Advanced Charting | `0.14.0` | ✅ Implemented |
 
 ## Guiding principles
 
@@ -414,18 +414,18 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **Force-directed Network graphs:** Built-in `network` visual (`src/visuals/network.ts`) for entity relationship networks with draggable nodes and community clusters.
 - [x] **Vector PDF rendering:** Direct vector path drawing (`svgToPdf`, `svgPathToPdf`, `Report.toPdf({ vector: true })`) into PDF 1.4 output for crisp infinite scaling.
 
-## Phase 13: Enterprise Fabric & Advanced Charting 🔄
+## Phase 13: Enterprise Fabric & Advanced Charting ✅
 
 **Goal:** enterprise presentation polish, dual-axis combo charts, standardized PDF print layouts, streaming ingestion harness, and enhanced visual conditional formatting.
 
-**In Progress / Delivered:**
+**Delivered:**
 - [x] **Dual-Axis (Secondary Y-Axis) for Combo Charts:** Independent right-side Y2 scale for `lineClusteredColumn` (`secondaryValueAxis`), customizable scale boundaries (`min`, `max`), display units, tick counts, mode toggles (`auto` | `on` | `off`), column data labels, and primary/secondary rotated axis titles.
 - [x] **Standardized PDF Print Page Sizes & Orientations:** Presets for `'a4'`, `'letter'`, `'legal'`, `'ledger'`, and `'a3'`, with orientation (`'portrait'` | `'landscape'`), margins, running headers/footers, and auto-scaling canvas aspect ratios in `report.toPdf()` / `exportPdf()`.
 - [x] **Streaming Ingestion Harness:** Resilient connection harness (`streamInto`) binding WebSocket (`ws://`, `wss://`), SSE (`http://`, `https://`), and message sources directly to `Report.pushData()` and `DataModel.appendRows()` with automatic exponential backoff reconnection, connection state machine, sliding window eviction, and row transform/filter pipelines.
-- [ ] **Network Graph Conditional Formatting:** Rule-based node color overrides and metric threshold highlighting in `network` visual.
+- [x] **Network Graph Conditional Formatting:** Rule-based node color overrides, smooth gradient scales, metric threshold highlighting (`degree`, `size`, `inWeight`, `outWeight`), individual node/group category overrides, and weight-scaled edge stroke styling in `network` visual.
 
 **Acceptance:**
-- 571 passing tests across 52 test suites (100% pass rate).
+- 572 passing tests across 52 test suites (100% pass rate).
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

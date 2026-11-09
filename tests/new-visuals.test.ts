@@ -187,4 +187,92 @@ describe('new visuals (Gantt & Candlestick)', () => {
     v.destroy();
     el.remove();
   });
+
+  it('supports conditional formatting with rules, category overrides, gradients, and edge styling', () => {
+    const model = new DataModel().addTable('Topology', [
+      { Src: 'Hub', Dst: 'Node-1', Traffic: 500, Zone: 'Alpha' },
+      { Src: 'Hub', Dst: 'Node-2', Traffic: 300, Zone: 'Alpha' },
+      { Src: 'Hub', Dst: 'Node-3', Traffic: 100, Zone: 'Beta' },
+      { Src: 'Node-1', Dst: 'Node-4', Traffic: 50, Zone: 'Beta' },
+    ]);
+
+    const el = document.createElement('div');
+    el.style.width = '600px';
+    el.style.height = '500px';
+    document.body.append(el);
+
+    // Test 1: Category overrides by specific node and cluster group
+    const v1 = createVisual(el, {
+      type: 'network',
+      model,
+      fields: {
+        source: 'Topology[Src]',
+        target: 'Topology[Dst]',
+        values: 'Topology[Traffic]',
+        group: 'Topology[Zone]',
+      },
+      format: {
+        colors: {
+          categories: {
+            Hub: '#ff0055', // specific node override
+            Beta: '#00aa55', // group/cluster override
+          },
+        },
+        network: {
+          edgeColor: '#7f8c8d',
+          edgeWidthRange: [2, 10],
+        },
+      },
+    });
+    v1.flush();
+
+    const hubCircle = el.querySelector('.pbi-network-node[data-node-id="Hub"] .pbi-network-circle') as SVGElement;
+    expect(hubCircle).toBeTruthy();
+    expect(hubCircle.getAttribute('fill')).toBe('#ff0055');
+
+    const node4Circle = el.querySelector('.pbi-network-node[data-node-id="Node-4"] .pbi-network-circle') as SVGElement;
+    expect(node4Circle).toBeTruthy();
+    expect(node4Circle.getAttribute('fill')).toBe('#00aa55');
+
+    const edge = el.querySelector('.pbi-network-edge') as SVGLineElement;
+    expect(edge).toBeTruthy();
+    expect(edge.getAttribute('stroke')).toBe('#7f8c8d');
+    const edgeWidth = Number(edge.getAttribute('stroke-width'));
+    expect(edgeWidth).toBeGreaterThanOrEqual(2);
+    expect(edgeWidth).toBeLessThanOrEqual(10);
+
+    v1.destroy();
+
+    // Test 2: Rule-based conditional formatting by connection degree
+    const v2 = createVisual(el, {
+      type: 'network',
+      model,
+      fields: {
+        source: 'Topology[Src]',
+        target: 'Topology[Dst]',
+        values: 'Topology[Traffic]',
+      },
+      format: {
+        colors: {
+          rules: [
+            { op: '>=', value: 3, color: '#e74c3c' }, // High degree (Hub: degree 3)
+            { op: '<', value: 3, color: '#3498db' },  // Leaf nodes
+          ],
+        },
+        network: {
+          metric: 'degree',
+        },
+      },
+    });
+    v2.flush();
+
+    const hubCircleRule = el.querySelector('.pbi-network-node[data-node-id="Hub"] .pbi-network-circle') as SVGElement;
+    expect(hubCircleRule.getAttribute('fill')).toBe('#e74c3c');
+
+    const leafCircleRule = el.querySelector('.pbi-network-node[data-node-id="Node-2"] .pbi-network-circle') as SVGElement;
+    expect(leafCircleRule.getAttribute('fill')).toBe('#3498db');
+
+    v2.destroy();
+    el.remove();
+  });
 });

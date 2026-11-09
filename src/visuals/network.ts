@@ -2,6 +2,7 @@ import { s } from '../render/svg';
 import type { CellValue } from '../data/types';
 import { defineVisual } from './registry';
 import { emptyState, identityOf, interactive, markOpacity } from './common';
+import { hasValueColors, valueColor } from './analytics';
 
 export interface NetworkFormat {
   /** Base node radius in pixels (default 8). */
@@ -18,6 +19,12 @@ export interface NetworkFormat {
   gravity?: number;
   /** Number of physics simulation relaxation iterations (default 80). */
   iterations?: number;
+  /** Metric evaluated for conditional formatting rules or gradients (default: 'size' if bound, else 'degree'). */
+  metric?: 'size' | 'degree' | 'inWeight' | 'outWeight';
+  /** Default link edge stroke color (default: theme.axis). */
+  edgeColor?: string;
+  /** Link stroke width scaling bounds [min, max] (default: [linkWidth, max(linkWidth * 3, 6)]). */
+  edgeWidthRange?: [number, number];
 }
 
 interface NetworkNode {
@@ -138,12 +145,29 @@ export const network = /* @__PURE__ */ defineVisual({
     const fs = Math.max(9, t.labelFontSize - 1);
     const margin = baseRadius * 2 + 16;
 
+    const hasRules = hasValueColors(ctx);
+    const metricType = fmt.metric ?? (zi !== undefined ? 'size' : 'degree');
+    const getNodeMetric = (m: { size: number; degree: number; inWeight: number; outWeight: number }) => {
+      switch (metricType) {
+        case 'size': return m.size;
+        case 'inWeight': return m.inWeight;
+        case 'outWeight': return m.outWeight;
+        case 'degree':
+        default:
+          return m.degree;
+      }
+    };
+    const allMetrics = [...nodeMap.values()].map(getNodeMetric);
+    const minMetric = allMetrics.length ? Math.min(...allMetrics) : 0;
+    const maxMetric = allMetrics.length ? Math.max(...allMetrics) : 1;
+
     // Collect distinct groups for cluster coloring
     const groupColors = new Map<string, string>();
     let colIdx = 0;
     for (const n of nodeMap.values()) {
       if (!groupColors.has(n.group)) {
-        groupColors.set(n.group, ctx.seriesColor(n.group, colIdx++));
+        const catCol = ctx.format.colors.categories?.[n.group];
+        groupColors.set(n.group, catCol ?? ctx.seriesColor(n.group, colIdx++));
       }
     }
 
@@ -169,6 +193,12 @@ export const network = /* @__PURE__ */ defineVisual({
         r = baseRadius + Math.min(8, Math.sqrt(meta.degree) * 1.5);
       }
 
+      const baseCol = ctx.format.colors.categories?.[meta.group] ?? groupColors.get(meta.group) ?? ctx.format.colors.default ?? t.accent;
+      let nodeCol = ctx.format.colors.categories?.[id] ?? baseCol;
+      if (hasRules && !ctx.format.colors.categories?.[id]) {
+        nodeCol = valueColor(ctx, getNodeMetric(meta), [minMetric, maxMetric], baseCol);
+      }
+
       nodes.push({
         id,
         label: id,
@@ -183,7 +213,7 @@ export const network = /* @__PURE__ */ defineVisual({
         vx: 0,
         vy: 0,
         r,
-        color: groupColors.get(meta.group) ?? t.accent,
+        color: nodeCol,
       });
       i++;
     }
@@ -268,6 +298,9 @@ export const network = /* @__PURE__ */ defineVisual({
       'aria-label': ctx.spec.title ?? 'Network graph',
     });
 
+    const defaultEdgeColor = fmt.edgeColor ?? t.axis;
+    const [minEdgeW, maxEdgeW] = fmt.edgeWidthRange ?? [linkBaseWidth, 6];
+
     // Arrow markers if requested
     if (showArrows) {
       const defs = s('defs');
@@ -280,7 +313,7 @@ export const network = /* @__PURE__ */ defineVisual({
         markerHeight: '6',
         orient: 'auto-start-reverse',
       });
-      marker.append(s('path', { d: 'M 0 1.5 L 8 5 L 0 8.5 z', fill: t.foregroundSecondary }));
+      marker.append(s('path', { d: 'M 0 1.5 L 8 5 L 0 8.5 z', fill: fmt.edgeColor ?? t.foregroundSecondary }));
       defs.append(marker);
       svg.append(defs);
     }
@@ -291,7 +324,7 @@ export const network = /* @__PURE__ */ defineVisual({
     ctx.root.replaceChildren(svg);
 
     // Max weight for scaling link widths
-    const maxWeight = Math.max(...links.map((l) => l.weight));
+    const maxWeight = Math.max(...links.map((l) => l.weight), 1);
 
     // Render links
     for (const lk of links) {
@@ -299,13 +332,16 @@ export const network = /* @__PURE__ */ defineVisual({
       const v = lk.tgtNode;
       if (!u || !v) continue;
 
-      const sw = Math.min(6, Math.max(linkBaseWidth, linkBaseWidth + (lk.weight / maxWeight) * 4));
+      const sw = fmt.edgeWidthRange
+        ? Math.min(maxEdgeW, Math.max(minEdgeW, minEdgeW + (lk.weight / maxWeight) * (maxEdgeW - minEdgeW)))
+        : Math.min(6, Math.max(linkBaseWidth, linkBaseWidth + (lk.weight / maxWeight) * 4));
+
       const line = s('line', {
         x1: u.x,
         y1: u.y,
         x2: v.x,
         y2: v.y,
-        stroke: t.axis,
+        stroke: defaultEdgeColor,
         'stroke-width': sw,
         'stroke-opacity': 0.45,
         class: 'pbi-network-edge',
@@ -432,7 +468,7 @@ export const network = /* @__PURE__ */ defineVisual({
           if (lk.line) {
             const isConn = lk.srcNode === n || lk.tgtNode === n;
             lk.line.style.strokeOpacity = isConn ? '0.9' : '0.08';
-            lk.line.style.stroke = isConn ? n.color : t.axis;
+            lk.line.style.stroke = isConn ? n.color : defaultEdgeColor;
           }
         }
       });

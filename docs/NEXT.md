@@ -7,11 +7,12 @@ Last updated 2026-10-30. Work happens on branch `phase-5`; `master` is fast-forw
 - **v0.13.0 enhancements delivered:**
   - Periodic financial DAX functions, Executive Word (.docx), Standalone HTML dashboard exporter, Gantt, Candlestick, Chord visuals, ClickHouse pushdown, and visual containers.
   - Live streaming pushdown (`report.pushData()`, `DataModel.appendRows()`), time-series anomaly detection (`format.analytics.anomalies`), built-in force-directed `network` graph visual (`src/visuals/network.ts`, `@prismbi/prismbi/visuals/network`), and resolution-independent vector PDF rendering (`src/report/pdf.ts`, `Report.toPdf({ vector: true })`, `svgToPdf()`, `svgPathToPdf()`).
-- **Phase 13 (In Progress):**
+- **Phase 13 (Delivered):**
   - Delivered Dual-Axis (Secondary Y-Axis) for Combo Charts (`lineClusteredColumn`) with `secondaryValueAxis`, customizable scales (`min`, `max`, `tickCount`, `displayUnits`, `decimals`, `format`), primary/secondary rotated axis titles (`valueAxis.title`, `secondaryValueAxis.title`), and column bar data labels.
   - Delivered Standardized PDF Print Page Sizes, Orientations, Margins & Running Headers/Footers with presets for A4, Letter, Legal, Ledger, and A3, configurable aspect-ratio fit scaling, and dynamic header/footer callbacks.
   - Delivered Streaming Ingestion Harness (`streamInto` & `scheduleRefresh`) in `@prismbi/prismbi/connectors` with `ReportLike` pushdown support (`pushData`), direct URL resolution (WebSocket & EventSource SSE), resilient auto-reconnect with exponential backoff, connection state tracking (`StreamConnectionState`), and row transform/filter pipelines.
-- **Tests:** 571 pass across 52 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
+  - Delivered Network Graph Conditional Formatting (`network`) with rule-based node color overrides (`colors.rules`), smooth gradient interpolation (`colors.gradient`), metric-driven threshold evaluation (`network.metric`), category-specific overrides for node IDs and cluster groups (`colors.categories`), and weight-scaled edge stroke styling (`network.edgeColor`, `network.edgeWidthRange`).
+- **Tests:** 572 pass across 52 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
 - **Entries:**
   - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (26 visual entries, 40 built-in visuals).
   - UI and frameworks: `/studio`, `/react`, `/elements`.
