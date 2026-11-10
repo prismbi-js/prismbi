@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.20.0 (2026-11-10 / Phase 19: Global Search Visual Finder, Radial Slice Elevation, Column Reordering & Bookmark Bar)
+
+- **Report-Level Global Search & Studio Visual Finder (`report.find`, `openFinder`, `Ctrl+F`):**
+  - Added programmatic search across reports via `report.find(query: string | RegExp): VisualSearchResult[]`, returning matching visuals across all pages with matched fields (`title`, `subtitle`, `field`, or `filter`), page names, indices, and exact hit text (`src/report/report.ts`).
+  - Added quick interactive modal search dialog in Studio (`.pbs-finder`, `src/studio/studio.ts`, `src/studio/styles.ts`), togglable via footer zoom bar search button (`🔍`, `.pbs-find-btn`) or `Ctrl+F` keyboard shortcut.
+  - Interactive search results navigation with keyboard arrows (`ArrowDown`, `ArrowUp`), Enter to select, and Escape to dismiss.
+  - Auto-switches active page, selects and centers target visual in viewport, and triggers smooth visual highlight pulse animation (`.pbi-find-target`, `@keyframes pbi-pulse`, `src/report/styles.ts`).
+
+- **Pie & Donut Slice Multi-Selection & Radial Pop-Out Elevation:**
+  - Implemented radial pop-out elevation for selected pie and donut chart slices (`src/visuals/parts.ts`).
+  - Selected slices translate radially outward along their angle bisector `(a0 + a1)/2` by 6px with an SVG drop-shadow filter elevation effect (`filter="url(#pbi-slice-shadow)"`).
+  - Automatically translates slice value labels and highlight overlays synchronously with the pop-out arc.
+  - Enabled additive multi-mark selection across pie/donut slices via Shift+click or Ctrl/Cmd+click (`src/visuals/common.ts`), dimming unselected slices while maintaining multi-slice cross-filtering and drill-down.
+
+- **Interactive Table & Matrix Column Reordering via Drag and Drop (`columnOrder`):**
+  - Added interactive HTML5 drag-and-drop column reordering across tables and matrices (`src/visuals/table.ts`).
+  - Table headers (`<th>`) feature draggable handles (`draggable="true"`), drag source tracking, and dynamic visual drag-over indicators (`.is-drag-over`, `src/report/styles.ts`).
+  - Reordering shifts target columns cleanly and persists column permutations in `format.columnOrder` or local visual state (`TableFormat.columnOrder?: string[]`).
+  - Preserves column widths, pinned sticky column offsets, conditional formatting rules, and column totals.
+
+- **Report Bookmark Navigator Bar (`renderBookmarksBar`):**
+  - Added embedded bookmark navigator bar generation via `report.renderBookmarksBar(container?: HTMLElement): HTMLElement` (`src/report/report.ts`).
+  - Renders sleek navigation pill buttons (`.pbi-bookmark-bar`, `.pbi-bm-pill`, `src/report/styles.ts`) for all saved bookmarks.
+  - Active bookmark state tracking with `aria-pressed="true"` attributes, updating seamlessly upon bookmark capture or application without DOM reconstruction.
+  - One-click bookmark restoration with seamless page transitions, visual filter state synchronization, and slicer state restoration.
+
 ## 0.19.0 (2026-11-10 / Phase 18: Cartesian Bar Brush Selection, Sticky Frozen Columns, Image Export & Studio Minimap)
 
 - **Cartesian Bar & Column Chart Box Brush Multi-Selection (`.pbi-brush`):**

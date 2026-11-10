@@ -9,7 +9,7 @@ import { h } from '../render/svg';
 import { ContextMenu } from '../report/contextMenu';
 import { FilterPane } from '../report/filterPane';
 import { Report, reviveDates } from '../report/report';
-import type { ReportDefinition } from '../report/report';
+import type { ReportDefinition, VisualSearchResult } from '../report/report';
 import { themeVars } from '../report/styles';
 import { createTheme, darkTheme, lightTheme } from '../theme/theme';
 import type { Theme } from '../theme/theme';
@@ -622,6 +622,104 @@ export class Studio implements StudioContext {
     (this.els.canvasWrap ?? this.root).append(minimap);
   }
 
+  openFinder(): void {
+    this.closeFinder();
+    const overlay = h('div', { class: 'pbs-finder', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Visual and field finder' });
+    const input = h('input', { type: 'search', class: 'pbs-finder-input', placeholder: 'Search visuals, fields, measures, or titles…', 'aria-label': 'Search visuals' }) as HTMLInputElement;
+    const list = h('ul', { class: 'pbs-finder-list', role: 'listbox' });
+    overlay.append(input, list);
+
+    let selectedIndex = 0;
+    let results: VisualSearchResult[] = [];
+
+    const updateList = () => {
+      list.replaceChildren();
+      const q = input.value.trim();
+      if (!q) {
+        results = [];
+        return;
+      }
+      results = this.report.find(q);
+      if (!results.length) {
+        list.append(h('li', { style: 'padding:12px 14px;color:var(--pbi-fg-3);font-style:italic' }, 'No visuals or fields match'));
+        return;
+      }
+      results.forEach((r, idx) => {
+        const item = h('button', {
+          type: 'button',
+          class: `pbs-finder-item${idx === selectedIndex ? ' is-selected' : ''}`,
+          role: 'option',
+          'aria-selected': String(idx === selectedIndex),
+        });
+        const left = h('div', { style: 'display:flex;flex-direction:column;gap:2px;min-width:0' });
+        const titleRow = h('div', { style: 'font-weight:600;display:flex;gap:6px;align-items:center' },
+          h('span', {}, r.title ?? r.visualType),
+          h('small', { style: 'color:var(--pbi-fg-3);font-weight:normal' }, `· ${r.pageName}`),
+        );
+        const matchRow = h('div', { style: 'font-size:11px;color:var(--pbi-fg-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap' },
+          r.matches.map((m) => `${m.kind}: ${m.text}`).join(' · '),
+        );
+        left.append(titleRow, matchRow);
+        const badge = h('span', { class: 'pbs-finder-badge' }, r.visualType);
+        item.append(left, badge);
+
+        item.addEventListener('click', () => jump(r));
+        list.append(item);
+      });
+    };
+
+    const jump = (r: VisualSearchResult) => {
+      this.closeFinder();
+      if (r.pageId) this.report.goToPage(r.pageId);
+      if (r.visualId) {
+        this.select(r.visualId);
+        const el = this.root.querySelector(`[data-visual-id="${r.visualId}"]`) as HTMLElement | null;
+        if (el) {
+          el.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+          el.classList.add('pbi-find-target');
+          setTimeout(() => el.classList.remove('pbi-find-target'), 2500);
+        }
+      }
+    };
+
+    input.addEventListener('input', () => {
+      selectedIndex = 0;
+      updateList();
+    });
+
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.closeFinder();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (results.length) {
+          selectedIndex = (selectedIndex + 1) % results.length;
+          updateList();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (results.length) {
+          selectedIndex = (selectedIndex - 1 + results.length) % results.length;
+          updateList();
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (results[selectedIndex]) jump(results[selectedIndex]);
+      }
+    });
+
+    const backdrop = h('div', { class: 'pbs-finder-backdrop', style: 'position:fixed;inset:0;z-index:95;background:transparent' });
+    backdrop.addEventListener('click', () => this.closeFinder());
+    this.root.append(backdrop, overlay);
+    input.focus();
+  }
+
+  closeFinder(): void {
+    this.root.querySelector('.pbs-finder')?.remove();
+    this.root.querySelector('.pbs-finder-backdrop')?.remove();
+  }
+
   private layersOpen = false;
 
   private toggleLayers(): void {
@@ -1203,7 +1301,14 @@ export class Studio implements StudioContext {
       'aria-pressed': String(this.minimapOpen),
     }, '🗺️');
     mapBtn.addEventListener('click', () => this.toggleMinimap());
-    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit, mapBtn);
+    const findBtn = h('button', {
+      type: 'button',
+      class: 'pbs-zoom-btn',
+      title: 'Find visual or field (Ctrl+F)',
+      'aria-label': 'Find visual',
+    }, '🔍');
+    findBtn.addEventListener('click', () => this.openFinder());
+    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit, mapBtn, findBtn);
     bar.append(zoomBar);
   }
 
@@ -1337,6 +1442,11 @@ export class Studio implements StudioContext {
     if (mod && e.key.toLowerCase() === 'l' && !typing && !this.preview) {
       e.preventDefault();
       this.arrangeSelection('lock');
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'f' && !typing) {
+      e.preventDefault();
+      this.openFinder();
       return;
     }
     if (mod && (e.key === '=' || e.key === '+') && !typing) {

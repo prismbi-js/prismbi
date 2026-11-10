@@ -282,7 +282,7 @@ export function interactive(ctx: RenderContext, el: Element, identity: DataPoint
   el.addEventListener('click', (e) => {
     e.stopPropagation();
     const me = e as MouseEvent;
-    ctx.host.select(identity, { multi: me.ctrlKey || me.metaKey });
+    ctx.host.select(identity, { multi: me.ctrlKey || me.metaKey || me.shiftKey });
     ctx.host.emit('dataPointClick', { keys, identity, event: me });
   });
   el.addEventListener('contextmenu', (e) => {
@@ -299,7 +299,7 @@ export function interactive(ctx: RenderContext, el: Element, identity: DataPoint
     if (ke.key === 'Enter' || ke.key === ' ') {
       ke.preventDefault();
       ke.stopPropagation();
-      ctx.host.select(identity, { multi: ke.ctrlKey || ke.metaKey });
+      ctx.host.select(identity, { multi: ke.ctrlKey || ke.metaKey || ke.shiftKey });
       return;
     }
     if (ke.key === 'ContextMenu' || (ke.key === 'F10' && ke.shiftKey)) {

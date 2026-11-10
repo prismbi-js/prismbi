@@ -504,4 +504,29 @@ describe('studio', () => {
 
     st.destroy();
   });
+
+  it('searches and navigates visuals via Studio Quick Finder', () => {
+    const st = open();
+    expect(q<HTMLElement>('.pbs-finder')).toBeNull();
+
+    st.openFinder();
+    const finder = q<HTMLElement>('.pbs-finder')!;
+    expect(finder).toBeTruthy();
+
+    const input = finder.querySelector<HTMLInputElement>('.pbs-finder-input')!;
+    expect(input).toBeTruthy();
+
+    // Query for visual
+    input.value = 'Sales';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const items = finder.querySelectorAll<HTMLButtonElement>('.pbs-finder-item');
+    expect(items.length).toBeGreaterThan(0);
+
+    // Clicking first item navigates and closes finder
+    items[0].click();
+    expect(q<HTMLElement>('.pbs-finder')).toBeNull();
+
+    st.destroy();
+  });
 });

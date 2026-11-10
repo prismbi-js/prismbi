@@ -507,4 +507,77 @@ describe('Report', () => {
       HTMLCanvasElement.prototype.toBlob = origToBlob;
     }
   });
+
+  it('searches across all pages and visuals with report.find()', () => {
+    const m = new DataModel().addTable('Sales', [{ cat: 'Shoes', amt: 150 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        {
+          id: 'p1',
+          name: 'Executive Overview',
+          visuals: [
+            { id: 'v1', type: 'card', title: 'Total Sales Revenue', fields: { value: 'Sales[amt]' } },
+            { id: 'v2', type: 'pie', title: 'Category Breakdown', fields: { legend: 'Sales[cat]', values: 'Sales[amt]' } },
+          ],
+        },
+        {
+          id: 'p2',
+          name: 'Detailed Trends',
+          visuals: [
+            { id: 'v3', type: 'line', title: 'Monthly Velocity', fields: { values: 'Sales[amt]' } },
+          ],
+        },
+      ],
+    });
+    r.flush();
+
+    // Query by title substring
+    const res1 = r.find('Revenue');
+    expect(res1.length).toBe(1);
+    expect(res1[0].visualId).toBe('v1');
+    expect(res1[0].pageName).toBe('Executive Overview');
+    expect(res1[0].matches.some((m) => m.kind === 'title' && m.text.includes('Revenue'))).toBe(true);
+
+    // Query by field reference RegExp
+    const res2 = r.find(/Sales\[amt\]/i);
+    expect(res2.length).toBe(3);
+    expect(res2.map((x) => x.visualId)).toEqual(['v1', 'v2', 'v3']);
+
+    // Query by visual type
+    const res3 = r.find('pie');
+    expect(res3.length).toBe(1);
+    expect(res3[0].visualId).toBe('v2');
+
+    r.destroy();
+  });
+
+  it('renders interactive bookmark navigation bar with report.renderBookmarksBar()', () => {
+    const m = new DataModel().addTable('Sales', [{ a: 1 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [{ id: 'p1', name: 'Page 1', visuals: [] }],
+    });
+    r.flush();
+
+    r.captureBookmark('Default View');
+    r.captureBookmark('Drilled View');
+    expect(r.bookmarkList().length).toBe(2);
+
+    const bar = r.renderBookmarksBar();
+    expect(bar).toBeTruthy();
+    expect(bar.classList.contains('pbi-bookmark-bar')).toBe(true);
+
+    const pills = bar.querySelectorAll<HTMLButtonElement>('.pbi-bm-pill');
+    expect(pills.length).toBe(2);
+    expect(pills[0].textContent).toBe('Default View');
+    expect(pills[1].textContent).toBe('Drilled View');
+
+    // Click pill to apply
+    pills[1].click();
+    expect(pills[1].getAttribute('aria-pressed')).toBe('true');
+    expect(pills[0].getAttribute('aria-pressed')).toBe('false');
+
+    r.destroy();
+  });
 });

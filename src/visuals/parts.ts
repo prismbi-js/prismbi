@@ -78,25 +78,34 @@ function renderPie(ctx: RenderContext, donut: boolean): void {
     const sweep = (d.value / total) * Math.PI * 2;
     const a0 = a + gapAngle / 2;
     const a1 = a + sweep - gapAngle / 2;
+    const mid = (a0 + a1) / 2;
+    const isSel = d.identity ? ctx.host.isSelected(d.identity) === true : false;
     const op = d.identity ? markOpacity(ctx, d.identity) : 1;
     const hasHl = d.highlight !== null;
     const path = s('path', { d: arcPath(cx, cy, r0, r1, a0, Math.max(a0 + 0.001, a1)), fill: d.color, opacity: hasHl ? 0.3 : op });
+    const dx = isSel ? Math.round(Math.sin(mid) * 6) : 0;
+    const dy = isSel ? Math.round(-Math.cos(mid) * 6) : 0;
+    if (isSel) {
+      path.setAttribute('transform', `translate(${dx}, ${dy})`);
+      path.style.filter = 'drop-shadow(0 3px 6px rgb(0 0 0/.3))';
+    }
     if (d.identity) interactive(ctx, path, d.identity, () => ({ title: d.label, items: [{ label: field?.name ?? '', value: ctx.fmt(field, d.value), color: d.color }, { label: 'Share', value: `${((d.value / total) * 100).toFixed(1)}%` }] }), d.keys);
     else path.classList.add('pbi-mark');
     animateIn(ctx, path, 'center');
     g.append(path);
     if (hasHl && d.highlight! > 0) {
       const hr = r0 + (r1 - r0) * Math.min(1, d.highlight! / d.value);
-      g.append(s('path', { d: arcPath(cx, cy, r0, hr, a0, Math.max(a0 + 0.001, a1)), fill: d.color, 'pointer-events': 'none' }));
+      const hlPath = s('path', { d: arcPath(cx, cy, r0, hr, a0, Math.max(a0 + 0.001, a1)), fill: d.color, 'pointer-events': 'none' });
+      if (isSel) hlPath.setAttribute('transform', `translate(${dx}, ${dy})`);
+      g.append(hlPath);
     }
     // percentage label inside when it fits
-    const mid = (a0 + a1) / 2;
     const lr = donut ? (r0 + r1) / 2 : r1 * 0.66;
     const pct = `${((d.value / total) * 100).toFixed(d.value / total < 0.1 ? 1 : 0)}%`;
     const text = ctx.format.dataLabels.show ? fmtLabel(d.value) : pct;
     const arcLen = sweep * lr;
     if (arcLen > measureText(text, fs, t.fontFamily) + 8 && (r1 - r0 > fs + 6 || !donut))
-      g.append(s('text', { x: cx + lr * Math.sin(mid), y: cy - lr * Math.cos(mid) + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(d.color, t.foreground), opacity: op, 'pointer-events': 'none' }, text));
+      g.append(s('text', { x: cx + lr * Math.sin(mid) + dx, y: cy - lr * Math.cos(mid) + fs / 3 + dy, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(d.color, t.foreground), opacity: op, 'pointer-events': 'none' }, text));
     a += sweep;
   }
   if (donut && r0 > 30) {

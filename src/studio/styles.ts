@@ -200,6 +200,12 @@ export const STUDIO_CSS = /* css */ `
 .pbs-minimap{position:absolute;bottom:48px;right:16px;width:180px;height:110px;background:var(--pbs-pane);border:1px solid var(--pbs-line);border-radius:6px;box-shadow:0 8px 24px rgb(0 0 0/.2);z-index:90;overflow:hidden;cursor:crosshair;user-select:none}
 .pbs-minimap-tile{position:absolute;background:color-mix(in srgb,var(--pbi-accent) 40%,transparent);border:1px solid var(--pbi-accent);border-radius:2px;cursor:pointer}
 .pbs-minimap-viewport{position:absolute;border:2px solid var(--pbi-accent);background:color-mix(in srgb,var(--pbi-accent) 15%,transparent);cursor:grab}
+.pbs-finder{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:min(520px,90vw);max-height:420px;background:var(--pbs-pane);border:1px solid var(--pbs-line);border-radius:8px;box-shadow:0 12px 36px rgb(0 0 0/.28);z-index:100;display:flex;flex-direction:column;overflow:hidden;font-size:13px}
+.pbs-finder-input{padding:10px 14px;background:var(--pbi-bg);border:0;border-bottom:1px solid var(--pbs-line);color:inherit;font:inherit;outline:none}
+.pbs-finder-list{overflow-y:auto;max-height:340px;margin:0;padding:4px 0;list-style:none}
+.pbs-finder-item{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer;color:inherit;text-decoration:none;border:0;background:none;width:100%;text-align:left}
+.pbs-finder-item:hover,.pbs-finder-item.is-selected{background:color-mix(in srgb,var(--pbi-accent) 15%,transparent);color:var(--pbi-fg)}
+.pbs-finder-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--pbs-line);color:var(--pbi-fg-3)}
 @media (max-width:900px){.pbs{--pbs-left:0px;--pbs-right:260px}.pbs-left{display:none}}
 @media (prefers-reduced-motion:reduce){.pbs *{transition:none!important}}
 `;

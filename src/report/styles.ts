@@ -277,6 +277,14 @@ svg.pbi-sparkline{vertical-align:middle;margin-right:6px;display:inline-block}
 .pbi-brush{fill:color-mix(in srgb,var(--pbi-accent) 15%,transparent);stroke:var(--pbi-accent);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
 .pbi-col-pinned{position:sticky!important;background:var(--pbi-surface)}
 .pbi-col-pinned-edge{box-shadow:3px 0 6px rgb(0 0 0/.12);border-right:1px solid var(--pbi-border)!important}
+.pbi-bookmark-bar{position:relative;display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--pbi-surface);border-bottom:1px solid var(--pbi-border);overflow-x:auto;flex-shrink:0}
+.pbi-bm-pill{display:inline-flex;align-items:center;padding:4px 10px;border-radius:14px;border:1px solid var(--pbi-border);background:var(--pbi-bg);color:var(--pbi-fg-2);font-size:12px;cursor:pointer;user-select:none;transition:all .15s ease}
+.pbi-bm-pill:hover{background:var(--pbi-hover);color:var(--pbi-fg)}
+.pbi-bm-pill[aria-pressed=true]{background:var(--pbi-accent);color:var(--pbi-accent-fg,#fff);border-color:var(--pbi-accent);font-weight:600}
+.pbi-table th.is-drag-over{border-left:2px solid var(--pbi-accent)!important}
+.pbi-table th[draggable=true]{cursor:grab}
+.pbi-find-target{outline:2px solid var(--pbi-accent)!important;outline-offset:2px;animation:pbi-pulse 1.2s ease 2}
+@keyframes pbi-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--pbi-accent) 60%,transparent)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
 .pbi-datatable-wrap{overflow:auto;height:100%}
 .pbi-network-node{cursor:pointer}
 .pbi-network-node:hover .pbi-network-circle{stroke:var(--pbi-fg);stroke-width:2.5px}

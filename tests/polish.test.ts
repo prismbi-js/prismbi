@@ -648,4 +648,74 @@ describe('Small multiples trellis and grid layouts', () => {
     v.destroy();
     el.remove();
   });
+
+  it('supports interactive table column reordering via drag and drop', () => {
+    const el = mount();
+    const m = new DataModel().addTable('T', [
+      { a: 1, b: 2, c: 3 },
+    ]);
+    const v = createVisual(el, {
+      model: m,
+      type: 'table',
+      fields: {
+        columns: ['T[a]', 'T[b]', 'T[c]'],
+      },
+    });
+    v.flush();
+
+    let ths = el.querySelectorAll<HTMLTableCellElement>('.pbi-table th');
+    expect(ths.length).toBe(3);
+    expect(ths[0].textContent).toBe('a');
+    expect(ths[1].textContent).toBe('b');
+    expect(ths[2].textContent).toBe('c');
+
+    // Simulate dragging th 0 onto th 2
+    const dropEvt = new CustomEvent('drop', { bubbles: true, cancelable: true });
+    Object.assign(dropEvt, {
+      dataTransfer: {
+        getData: () => '0',
+      },
+    });
+    ths[2].dispatchEvent(dropEvt);
+    v.flush();
+
+    ths = el.querySelectorAll<HTMLTableCellElement>('.pbi-table th');
+    expect(ths[0].textContent).toBe('b');
+    expect(ths[1].textContent).toBe('c');
+    expect(ths[2].textContent).toBe('a');
+
+    v.destroy();
+    el.remove();
+  });
+
+  it('elevates selected pie slices with radial pop-out translation', () => {
+    const el = mount();
+    const m = new DataModel().addTable('Segments', [
+      { name: 'Direct', val: 50 },
+      { name: 'Referral', val: 50 },
+    ]);
+    const v = createVisual(el, {
+      model: m,
+      type: 'pie',
+      fields: {
+        legend: 'Segments[name]',
+        values: 'Segments[val]',
+      },
+    });
+    v.flush();
+
+    const marks = el.querySelectorAll<SVGPathElement>('.pbi-mark');
+    expect(marks.length).toBe(2);
+
+    // Click direct slice
+    marks[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    v.flush();
+
+    const updatedMarks = el.querySelectorAll<SVGPathElement>('.pbi-mark');
+    expect(updatedMarks[0].getAttribute('transform')).toContain('translate(');
+    expect(updatedMarks[0].style.filter).toContain('drop-shadow');
+
+    v.destroy();
+    el.remove();
+  });
 });

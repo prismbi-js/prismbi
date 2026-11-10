@@ -63,6 +63,8 @@ export interface TableFormat {
   freezeColumns?: number;
   /** Explicit column names or field refs to pin to the left. */
   pinnedColumns?: string[];
+  /** Explicit column ordering by column name or field ref. */
+  columnOrder?: string[];
 }
 
 /** Row count above which tables window their rows. */
@@ -435,8 +437,17 @@ export const table = /* @__PURE__ */ defineVisual({
     // column order follows the field well, mixing groups and values
     let gi = 0;
     let vi = 0;
-    const cols = fields.map((f) => (isGroupField(f) ? { kind: 'group' as const, i: gi++, field: data.groups[gi - 1] } : { kind: 'value' as const, i: vi++, field: data.values[vi - 1] }));
-    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; _shown?: number };
+    let cols = fields.map((f) => (isGroupField(f) ? { kind: 'group' as const, i: gi++, field: data.groups[gi - 1] } : { kind: 'value' as const, i: vi++, field: data.values[vi - 1] }));
+    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; _shown?: number; columnOrder?: string[] };
+    const order = state.columnOrder ?? tf.columnOrder;
+    if (order && order.length) {
+      const orderMap = new Map(order.map((name, idx) => [name, idx]));
+      cols.sort((a, b) => {
+        const ia = orderMap.get(a.field.name) ?? (a.field.ref ? orderMap.get(a.field.ref) : undefined) ?? 999;
+        const ib = orderMap.get(b.field.name) ?? (b.field.ref ? orderMap.get(b.field.ref) : undefined) ?? 999;
+        return ia - ib;
+      });
+    }
     let rows = data.rows.slice();
     if (state.sortCol !== undefined && cols[state.sortCol]) {
       const c = cols[state.sortCol];
@@ -498,6 +509,29 @@ export const table = /* @__PURE__ */ defineVisual({
       };
       th.addEventListener('click', toggle);
       th.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle()));
+      th.draggable = true;
+      th.addEventListener('dragstart', (e) => {
+        e.dataTransfer?.setData('text/plain', String(ci));
+        th.classList.add('is-dragging');
+      });
+      th.addEventListener('dragend', () => th.classList.remove('is-dragging'));
+      th.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        th.classList.add('is-drag-over');
+      });
+      th.addEventListener('dragleave', () => th.classList.remove('is-drag-over'));
+      th.addEventListener('drop', (e) => {
+        e.preventDefault();
+        th.classList.remove('is-drag-over');
+        const fromIdx = Number(e.dataTransfer?.getData('text/plain'));
+        if (Number.isFinite(fromIdx) && fromIdx !== ci && cols[fromIdx]) {
+          const newCols = [...cols];
+          const [moved] = newCols.splice(fromIdx, 1);
+          newCols.splice(ci, 0, moved);
+          const newOrder = newCols.map((x) => x.field.name);
+          ctx.host.setState({ columnOrder: newOrder });
+        }
+      });
       hr.append(th);
     });
     thead.append(hr);

@@ -79,6 +79,15 @@ export interface Bookmark {
   drill: Record<string, VisualSpec['drill']>;
 }
 
+export interface VisualSearchResult {
+  pageId: string;
+  pageName: string;
+  visualId: string;
+  visualType: string;
+  title?: string;
+  matches: { kind: 'title' | 'field' | 'type' | 'filter' | 'text'; text: string }[];
+}
+
 export interface ReportDefinition {
   /** Schema version (see migrateReport). */
   version?: number;
@@ -1365,6 +1374,101 @@ export class Report implements ReportRuntime {
     return false;
   }
 
+  private _activeBookmark: string | null = null;
+
+  /**
+   * Search across all pages and visuals in the report for matching text, fields, measures, or filters.
+   */
+  find(query: string | RegExp): VisualSearchResult[] {
+    const isReg = query instanceof RegExp;
+    const test = (str: unknown): boolean => {
+      if (typeof str !== 'string' || !str) return false;
+      return isReg ? (query as RegExp).test(str) : str.toLowerCase().includes((query as string).toLowerCase());
+    };
+
+    const results: VisualSearchResult[] = [];
+    for (const page of this.pages) {
+      const pageDef = page.def;
+      for (const v of pageDef.visuals) {
+        const matches: { kind: 'title' | 'field' | 'type' | 'filter' | 'text'; text: string }[] = [];
+        if (v.title && test(v.title)) {
+          matches.push({ kind: 'title', text: v.title });
+        }
+        if (v.type && test(v.type)) {
+          matches.push({ kind: 'type', text: v.type });
+        }
+        if (v.fields) {
+          for (const roleVal of Object.values(v.fields)) {
+            const arr = Array.isArray(roleVal) ? roleVal : [roleVal];
+            for (const f of arr) {
+              const str = typeof f === 'string' ? f : (f?.field ?? f?.name ?? f?.expression ?? '');
+              if (str && test(str)) matches.push({ kind: 'field', text: str });
+            }
+          }
+        }
+        if (v.filters) {
+          for (const fil of v.filters) {
+            const cols = 'target' in fil && fil.target ? [fil.target] : 'targets' in fil && Array.isArray(fil.targets) ? fil.targets : [];
+            for (const col of cols) {
+              const target = typeof col === 'string' ? col : col ? `${col.table}[${col.column}]` : '';
+              if (target && test(target)) matches.push({ kind: 'filter', text: target });
+            }
+          }
+        }
+        if (v.format) {
+          const titleText = (v.format as { title?: { text?: string } })?.title?.text;
+          const subtitle = (v.format as { title?: { subtitle?: string } })?.title?.subtitle;
+          if (titleText && test(titleText) && titleText !== v.title) matches.push({ kind: 'title', text: titleText });
+          if (subtitle && test(subtitle)) matches.push({ kind: 'text', text: subtitle });
+        }
+        if (matches.length && v.id) {
+          results.push({
+            pageId: pageDef.id ?? '',
+            pageName: pageDef.name,
+            visualId: v.id,
+            visualType: v.type,
+            title: v.title ?? (v.format as { title?: { text?: string } })?.title?.text,
+            matches,
+          });
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Render an interactive Bookmark Navigator bar into a container (or prepend to the report).
+   */
+  renderBookmarksBar(container?: HTMLElement): HTMLElement {
+    const bar = container ?? h('nav', { class: 'pbi-bookmark-bar', role: 'navigation', 'aria-label': 'Bookmarks' });
+    bar.replaceChildren();
+
+    const bookmarks = this.bookmarkList();
+    if (!bookmarks.length) {
+      bar.hidden = true;
+      return bar;
+    }
+    bar.hidden = false;
+
+    for (const b of bookmarks) {
+      const pill = h('button', {
+        type: 'button',
+        class: 'pbi-bm-pill',
+        'aria-label': `Apply bookmark ${b.name}`,
+        'aria-pressed': String(this._activeBookmark === b.name),
+      }, b.name);
+      pill.addEventListener('click', () => {
+        this.applyBookmark(b.name);
+      });
+      bar.append(pill);
+    }
+
+    if (!container && !this.root.querySelector('.pbi-bookmark-bar')) {
+      this.root.prepend(bar);
+    }
+    return bar;
+  }
+
   domainIndex(table: string, column: string, value: CellValue): number {
     const k = `${table}[${column}]`;
     let m = this.domainCache.get(k);
@@ -1999,12 +2103,21 @@ export class Report implements ReportRuntime {
       drill: Object.fromEntries(this.pages.flatMap((p) => p.def.visuals.filter((v) => v.drill).map((v) => [v.id!, structuredCloneSafe(v.drill)]))),
     };
     this.bookmarks = [...this.bookmarks.filter((x) => x.name !== name), b];
+    const bmBar = this.root.querySelector('.pbi-bookmark-bar');
+    if (bmBar) this.renderBookmarksBar(bmBar as HTMLElement);
     return b;
   }
 
   applyBookmark(b: Bookmark | string): void {
     const bm = typeof b === 'string' ? this.bookmarks.find((x) => x.name === b) : b;
     if (!bm) throw new Error(`Bookmark "${b}" not found`);
+    this._activeBookmark = bm.name;
+    const bmBar = this.root.querySelector('.pbi-bookmark-bar');
+    if (bmBar) {
+      bmBar.querySelectorAll<HTMLButtonElement>('.pbi-bm-pill').forEach((btn) => {
+        btn.setAttribute('aria-pressed', String(btn.textContent === bm.name));
+      });
+    }
     this.reportFilters = structuredCloneSafe(bm.reportFilters);
     for (const p of this.pages) {
       p.def.filters = structuredCloneSafe(bm.pageFilters[p.def.id!] ?? []);

@@ -24,6 +24,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 16 | Exploratory Analytics, Smart Alignment & Studio Ingestion | `0.17.0` | ✅ Implemented |
 | 17 | Visual Locking & Grouping, Cartesian Range Brushing & Canvas Zoom | `0.18.0` | ✅ Implemented |
 | 18 | Cartesian Bar Brush Selection, Sticky Frozen Columns, Image Export & Studio Minimap | `0.19.0` | ✅ Implemented |
+| 19 | Global Search Visual Finder, Radial Slice Elevation, Column Reordering & Bookmark Bar | `0.20.0` | ✅ Implemented |
 
 ## Guiding principles
 
@@ -452,6 +453,21 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 **Acceptance:**
 - 597 passing tests across 52 test suites (100% pass rate).
 - 98 visual regression screenshots with 0 failures across light and dark themes.
+- Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
+
+## Phase 19: Global Search Visual Finder, Radial Slice Elevation, Column Reordering & Bookmark Bar ✅
+
+**Goal:** report-level search & Studio visual finder, pie/donut radial slice pop-out elevation, interactive table/matrix column drag-and-drop reordering, and bookmark navigator bar.
+
+**Delivered:**
+- [x] **Report-Level Global Search & Studio Visual Finder:** Full-report search query engine (`report.find(query: string | RegExp): VisualSearchResult[]`), Studio quick modal search dialog (`.pbs-finder`, `openFinder()`, `closeFinder()`, `Ctrl+F` shortcut, `🔍` zoom bar button), arrow key navigation, auto-page switching, visual viewport centering, and highlight pulse animation (`.pbi-find-target`).
+- [x] **Pie & Donut Slice Multi-Selection & Radial Pop-Out Elevation:** Selected slice translation along angle bisector `(a0 + a1)/2` by 6px with SVG drop-shadow filter elevation (`#pbi-slice-shadow`), synchronous label and highlight translation, and additive Shift/Ctrl multi-mark selection with unselected slice dimming.
+- [x] **Interactive Table & Matrix Column Reordering via Drag and Drop:** HTML5 drag-and-drop header handles (`draggable="true"`), drop insertion indicators (`.is-drag-over`), and column order persistence in `format.columnOrder` (`TableFormat.columnOrder?: string[]`).
+- [x] **Report Bookmark Navigator Bar:** Integrated bookmark bar generator (`report.renderBookmarksBar()`, `.pbi-bookmark-bar`, `.pbi-bm-pill`), active state management (`aria-pressed`), and instant bookmark state restoration.
+
+**Acceptance:**
+- 620 tests passing across 53 test suites (584 passed, 36 skipped, 100% pass rate).
+- 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 
 ## Suggested order after Phase 6
