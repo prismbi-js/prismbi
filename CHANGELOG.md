@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.22.0 (2026-11-10 / Phase 21: Analytics Reference Bands, Canvas Wallpaper & Watermark, Page Reordering & Visual Size Matching)
+
+- **Analytics Reference Bands & Target Ranges (`referenceBands`, `drawReferenceBands`):**
+  - Added shaded reference bands and target ranges across Cartesian charts (Bar, Column, Line, Area, Scatter, Combo) via `VisualFormat.analytics.referenceBands: ReferenceBand[]` (`src/visuals/format.ts`).
+  - Supports axis selection (`'y'` or `'x'`), interval ranges (`from` and `to`), custom fill color, opacity, borders (`borderColor`, `borderWidth`, `borderDash`), and text labeling with position alignments (`'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'`) (`src/visuals/analytics.ts`, `src/report/styles.ts`).
+  - Seamlessly integrates with existing analytics reference lines and trendlines with zero chart-specific code overhead.
+
+- **Canvas Wallpaper, Page Background Images & Diagonal Watermark (`PageBackground`, `setPageBackground`):**
+  - Extended page styling with rich wallpaper capabilities via `PageBackground` interface on `PageDefinition.background?: string | PageBackground` (`src/report/report.ts`).
+  - Supports background images with custom fit modes (`'cover'`, `'contain'`, `'fit'`, `'center'`), opacity, and background colors.
+  - Added diagonal report text watermarks (`watermark?: string | { text: string; color?: string; opacity?: number; fontSize?: number; angle?: number }`) rendered as non-interactive overlays (`.pbi-watermark`, `src/report/styles.ts`).
+  - Added programmatic background management methods on `Report`: `report.setPageBackground(pageIdOrName, bg)` and `report.getPageBackground(pageIdOrName)`.
+
+- **Page Deletion & Bulk Page Reordering (`removePage`, `reorderPages`):**
+  - Added programmatic page deletion with validation and automatic active page fallback (`report.removePage(idOrName): boolean`, `src/report/report.ts`).
+  - Added bulk page reordering API (`report.reorderPages(order: string[]): void`) enabling arbitrary page tab arrangement.
+  - Enhanced Studio page tabs with context actions and drag reordering support.
+
+- **Studio Visual Size Matching & Dimensions Normalization (`matchVisualSize`):**
+  - Added multi-visual size matching to align visual dimensions across multi-selections via `report.matchVisualSize(how: 'width' | 'height' | 'both', ids?: string[])`.
+  - Normalizes dimensions based on the first selected visual or master visual anchor.
+  - Integrated into Studio visual alignment bar (`.pbs-align-bar`) and dropdown actions (`size:width`, `size:height`, `size:both`, `src/studio/studio.ts`).
+
 ## 0.21.0 (2026-11-10 / Phase 20: Presentation Auto-Play Carousel, Visual Annotations, Direct Data Export & Canvas Grid)
 
 - **Report Presentation Mode & Auto-Play Slideshow Carousel (`startAutoPlay`, `enterFullscreen`, `.pbi-presentation-bar`):**

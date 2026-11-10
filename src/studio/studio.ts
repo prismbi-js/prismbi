@@ -452,6 +452,7 @@ export class Studio implements StudioContext {
     const [kind, arg] = action.split(':');
     if (kind === 'align') this.report.alignVisuals(arg as never, ids);
     else if (kind === 'distribute') this.report.distributeVisuals(arg as never, ids);
+    else if (kind === 'size') this.report.matchVisualSize(arg as never, ids);
     else if (kind === 'group') {
       if (!this.report.groupVisuals(ids)) return this.toast('Select two or more visuals to group them');
     } else if (kind === 'ungroup') this.report.ungroupVisuals(ids);
@@ -1062,6 +1063,8 @@ export class Studio implements StudioContext {
       { id: 'align:bottom', icon: '⤋', title: 'Align bottom', min: 2 },
       { id: 'distribute:horizontal', icon: '⬌', title: 'Distribute horizontally', min: 3 },
       { id: 'distribute:vertical', icon: '⬍', title: 'Distribute vertically', min: 3 },
+      { id: 'size:width', icon: '↔', title: 'Match width', min: 2 },
+      { id: 'size:height', icon: '↕', title: 'Match height', min: 2 },
       { id: 'group', icon: '⧉', title: 'Group visuals (Ctrl+G)', min: 2 },
       { id: 'ungroup', icon: '⧈', title: 'Ungroup visuals (Ctrl+Shift+G)', min: 1 },
       { id: 'lock', icon: '🔒', title: 'Lock / unlock visual (Ctrl+L)', min: 1 },

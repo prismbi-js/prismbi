@@ -301,6 +301,10 @@ svg.pbi-sparkline{vertical-align:middle;margin-right:6px;display:inline-block}
 .pbi-annotation-text{color:var(--pbi-fg-2);line-height:1.3}
 .pbi-report.pbi-grid-visible .pbi-page{background-image:radial-gradient(circle,color-mix(in srgb,var(--pbi-fg) 18%,transparent) 1px,transparent 1px)!important;background-size:var(--pbi-grid-col,80px) var(--pbi-grid-row,56px)!important;background-position:var(--pbi-gap) var(--pbi-gap)!important}
 .pbi-report.is-fullscreen{width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important}
+.pbi-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(48px,10vw,84px);font-weight:900;letter-spacing:0.15em;color:color-mix(in srgb,var(--pbi-fg) 6%,transparent);transform:rotate(-30deg);pointer-events:none;user-select:none;z-index:0;text-transform:uppercase;overflow:hidden}
+.pbi-refband{transition:fill-opacity .15s ease}
+.pbi-refband:hover{fill-opacity:0.25}
+.pbi-refband-label{font-size:11px;font-weight:600}
 .pbi-network-node{cursor:pointer}
 .pbi-network-node:hover .pbi-network-circle{stroke:var(--pbi-fg);stroke-width:2.5px}
 .pbi-network-edge{transition:stroke .15s ease,stroke-opacity .15s ease}

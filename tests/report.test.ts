@@ -759,4 +759,114 @@ describe('Report', () => {
 
     r.destroy();
   });
+
+  it('supports page wallpaper, background image, opacity, and watermark styling', () => {
+    const m = new DataModel().addTable('Sales', [{ a: 1 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        {
+          id: 'p1',
+          name: 'Executive Dashboard',
+          visuals: [],
+          background: {
+            color: '#f8f9fa',
+            opacity: 0.95,
+            image: 'https://example.com/wallpaper.png',
+            fit: 'fill',
+            watermark: 'CONFIDENTIAL',
+          },
+        },
+      ],
+    });
+    r.flush();
+
+    const bg = r.getPageBackground('p1') as any;
+    expect(bg).toBeTruthy();
+    expect(bg.watermark).toBe('CONFIDENTIAL');
+    expect(bg.fit).toBe('fill');
+
+    const pageEl = el.querySelector<HTMLElement>('.pbi-page')!;
+    expect(pageEl).toBeTruthy();
+    expect(pageEl.style.backgroundImage).toContain('wallpaper.png');
+    expect(pageEl.style.backgroundSize).toBe('cover');
+    expect(pageEl.style.opacity).toBe('0.95');
+
+    const wm = pageEl.querySelector('.pbi-watermark');
+    expect(wm).toBeTruthy();
+    expect(wm?.textContent).toBe('CONFIDENTIAL');
+
+    // Update background dynamically
+    r.setPageBackground({ color: '#ffffff', watermark: 'DRAFT' }, 'p1');
+    r.flush();
+    expect((r.getPageBackground('p1') as any).watermark).toBe('DRAFT');
+    expect(pageEl.querySelector('.pbi-watermark')?.textContent).toBe('DRAFT');
+
+    r.destroy();
+  });
+
+  it('supports bulk reordering and deletion of report pages', () => {
+    const m = new DataModel().addTable('Sales', [{ a: 1 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        { id: 'p1', name: 'Page A', visuals: [] },
+        { id: 'p2', name: 'Page B', visuals: [] },
+        { id: 'p3', name: 'Page C', visuals: [] },
+      ],
+    });
+    r.flush();
+
+    expect(r.pageList.map((p) => p.name)).toEqual(['Page A', 'Page B', 'Page C']);
+
+    // Reorder pages
+    r.reorderPages(['p3', 'p1', 'p2']);
+    expect(r.pageList.map((p) => p.name)).toEqual(['Page C', 'Page A', 'Page B']);
+
+    // Remove page
+    const removed = r.removePage('p2');
+    expect(removed).toBe(true);
+    expect(r.pageList.map((p) => p.name)).toEqual(['Page C', 'Page A']);
+
+    // Cannot remove last page (if single)
+    r.removePage('p1');
+    expect(r.pageList.length).toBe(1);
+    r.removePage(r.pageList[0].id);
+    expect(r.pageList.length).toBe(1); // keeps fallback Page 1
+
+    r.destroy();
+  });
+
+  it('matches visual dimensions across selection with matchVisualSize', () => {
+    const m = new DataModel().addTable('Sales', [{ a: 1 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        {
+          id: 'p1',
+          name: 'Page 1',
+          visuals: [
+            { id: 'v1', type: 'card', layout: { x: 0, y: 0, w: 4, h: 6 } },
+            { id: 'v2', type: 'card', layout: { x: 4, y: 0, w: 2, h: 3 } },
+            { id: 'v3', type: 'card', layout: { x: 6, y: 0, w: 3, h: 4 } },
+          ],
+        },
+      ],
+    });
+    r.flush();
+
+    // Match width
+    r.matchVisualSize('width', ['v1', 'v2', 'v3']);
+    r.flush();
+    expect(r.visual('v2').spec.layout?.w).toBe(4);
+    expect(r.visual('v3').spec.layout?.w).toBe(4);
+
+    // Match height
+    r.matchVisualSize('height', ['v1', 'v2', 'v3']);
+    r.flush();
+    expect(r.visual('v2').spec.layout?.h).toBe(6);
+    expect(r.visual('v3').spec.layout?.h).toBe(6);
+
+    r.destroy();
+  });
 });

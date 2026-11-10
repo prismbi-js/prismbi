@@ -35,14 +35,22 @@ export interface PageLayout {
   gap?: number;
 }
 
+export interface PageBackground {
+  color?: string;
+  opacity?: number;
+  image?: string;
+  fit?: 'normal' | 'fit' | 'fill' | 'stretch';
+  watermark?: string;
+}
+
 export interface PageDefinition {
   id?: string;
   name: string;
   visuals: VisualSpec[];
   filters?: FilterSpec[];
   layout?: PageLayout;
-  /** CSS background for the page plane. */
-  background?: string;
+  /** CSS background for the page plane, or structured wallpaper / watermark settings. */
+  background?: string | PageBackground;
   hidden?: boolean;
   /**
    * Make this a drill-through target: right-clicking a data point that carries one of these
@@ -922,6 +930,28 @@ export class Report implements ReportRuntime {
     );
   }
 
+  /** Match width and/or height across the selected visuals to the first selected visual. */
+  matchVisualSize(how: 'width' | 'height' | 'both', ids = this.selectedVisuals): void {
+    if (ids.length < 2) return;
+    const p = this.page;
+    const specs = ids.map((id) => p.def.visuals.find((v) => v.id === id)).filter((v): v is VisualSpec => Boolean(v && v.layout));
+    if (specs.length < 2) return;
+    const ref = specs[0].layout!;
+    const cols = p.def.layout?.columns ?? 12;
+    const updates: { id: string; layout: VisualLayout }[] = [];
+    for (let i = 1; i < specs.length; i++) {
+      const cur = { ...specs[i].layout! };
+      if (how === 'width' || how === 'both') {
+        cur.w = Math.max(1, Math.min(cols - cur.x, ref.w));
+      }
+      if (how === 'height' || how === 'both') {
+        cur.h = Math.max(1, ref.h);
+      }
+      updates.push({ id: specs[i].id!, layout: cur });
+    }
+    this.commitLayouts(updates);
+  }
+
   /** Group visuals (default: the selection) so they select and move together. Returns the group id. */
   groupVisuals(ids = this.selectedVisuals): string | null {
     if (ids.length < 2) return null;
@@ -1709,6 +1739,42 @@ export class Report implements ReportRuntime {
     return id;
   }
 
+  /** Reorder all pages according to the specified list of page ids. */
+  reorderPages(order: string[]): void {
+    const currentId = this.page.def.id;
+    const map = new Map(this.pages.map((p) => [p.def.id!, p]));
+    const next: PageState[] = [];
+    for (const id of order) {
+      const p = map.get(id);
+      if (p) {
+        next.push(p);
+        map.delete(id);
+      }
+    }
+    for (const p of map.values()) next.push(p);
+    this.pages = next;
+    this.current = Math.max(0, this.pages.findIndex((x) => x.def.id === currentId));
+    this.renderTabs();
+    this.changedDefinition('reorderPages');
+  }
+
+  /** Set the canvas background or wallpaper settings for a page. */
+  setPageBackground(bg: string | PageBackground, pageIdOrIndex?: string | number): void {
+    const idx = pageIdOrIndex !== undefined ? (typeof pageIdOrIndex === 'number' ? pageIdOrIndex : this.pageIndex(pageIdOrIndex)) : this.current;
+    if (idx < 0 || idx >= this.pages.length) throw new Error(`Page "${pageIdOrIndex}" not found`);
+    const p = this.pages[idx];
+    p.def.background = bg;
+    if (p.el) this.applyPageLayout(p);
+    this.changedDefinition('setPageBackground');
+  }
+
+  /** Get the canvas background or wallpaper settings of a page. */
+  getPageBackground(pageIdOrIndex?: string | number): string | PageBackground | undefined {
+    const idx = pageIdOrIndex !== undefined ? (typeof pageIdOrIndex === 'number' ? pageIdOrIndex : this.pageIndex(pageIdOrIndex)) : this.current;
+    if (idx < 0 || idx >= this.pages.length) return undefined;
+    return this.pages[idx].def.background;
+  }
+
   /** Replace the whole definition (used by undo/redo and "open report"). Theme and listeners are kept. */
   load(input: ReportDefinition | string): void {
     const def = migrateReport(input, reviveDates);
@@ -1741,15 +1807,16 @@ export class Report implements ReportRuntime {
     this.emit('definitionChanged', { reason });
   }
 
-  removePage(idOrName: string): void {
+  removePage(idOrName: string): boolean {
     const i = this.pageIndex(idOrName);
-    if (i < 0) return;
+    if (i < 0) return false;
     const [p] = this.pages.splice(i, 1);
     for (const host of p.hosts.values()) host.destroy();
     p.el?.remove();
     if (!this.pages.length) this.addPage({ name: 'Page 1', visuals: [] }, false);
     this.showPage(Math.min(this.current, this.pages.length - 1), false);
     this.changedDefinition('removePage');
+    return true;
   }
 
   goToPage(idOrName: string): void {
@@ -1820,7 +1887,36 @@ export class Report implements ReportRuntime {
     p.el!.style.setProperty('--pbi-cols', String(phone ? (p.def.mobile!.columns ?? 4) : (l.columns ?? 12)));
     p.el!.style.setProperty('--pbi-row', `${phone ? (p.def.mobile!.rowHeight ?? l.rowHeight ?? 44) : (l.rowHeight ?? 44)}px`);
     p.el!.style.setProperty('--pbi-gap', `${l.gap ?? 12}px`);
-    p.el!.style.background = p.def.background ?? '';
+
+    p.el!.querySelectorAll(':scope > .pbi-watermark').forEach((w) => w.remove());
+    const bg = p.def.background;
+    if (typeof bg === 'string') {
+      p.el!.style.background = bg;
+      p.el!.style.backgroundImage = '';
+      p.el!.style.backgroundSize = '';
+      p.el!.style.opacity = '';
+    } else if (bg && typeof bg === 'object') {
+      p.el!.style.backgroundColor = bg.color ?? '';
+      if (bg.image) {
+        p.el!.style.backgroundImage = `url("${bg.image}")`;
+        p.el!.style.backgroundRepeat = 'no-repeat';
+        p.el!.style.backgroundPosition = 'center';
+        if (bg.fit === 'fill') p.el!.style.backgroundSize = 'cover';
+        else if (bg.fit === 'fit') p.el!.style.backgroundSize = 'contain';
+        else if (bg.fit === 'stretch') p.el!.style.backgroundSize = '100% 100%';
+        else p.el!.style.backgroundSize = 'auto';
+      } else {
+        p.el!.style.backgroundImage = '';
+      }
+      p.el!.style.opacity = bg.opacity !== undefined ? String(bg.opacity) : '';
+      if (bg.watermark) {
+        p.el!.prepend(h('div', { class: 'pbi-watermark', 'aria-hidden': 'true' }, bg.watermark));
+      }
+    } else {
+      p.el!.style.background = '';
+      p.el!.style.backgroundImage = '';
+      p.el!.style.opacity = '';
+    }
   }
 
   private mountVisual(p: PageState, spec: VisualSpec): VisualHost {

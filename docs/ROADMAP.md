@@ -26,6 +26,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 18 | Cartesian Bar Brush Selection, Sticky Frozen Columns, Image Export & Studio Minimap | `0.19.0` | ✅ Implemented |
 | 19 | Global Search Visual Finder, Radial Slice Elevation, Column Reordering & Bookmark Bar | `0.20.0` | ✅ Implemented |
 | 20 | Presentation Auto-Play Carousel, Visual Annotations, Direct Data Export & Canvas Grid | `0.21.0` | ✅ Implemented |
+| 21 | Analytics Reference Bands, Canvas Wallpaper & Watermark, Page Reordering & Visual Size Matching | `0.22.0` | ✅ Implemented |
 
 ## Guiding principles
 
@@ -483,6 +484,21 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 **Acceptance:**
 - 625 tests passing across 53 test suites (589 passed, 36 skipped, 100% pass rate).
+- 98 visual regression screenshots with 0 failures.
+- Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
+
+## Phase 21: Analytics Reference Bands, Canvas Wallpaper & Watermark, Page Reordering & Visual Size Matching ✅
+
+**Goal:** Cartesian analytics reference bands, canvas wallpaper, page background images & diagonal watermark, page deletion & bulk reordering, and Studio visual size matching.
+
+**Delivered:**
+- [x] **Analytics Reference Bands & Target Ranges:** Interval bands across Cartesian visuals (`VisualFormat.analytics.referenceBands: ReferenceBand[]`, `drawReferenceBands()`), axis selection (`'y'` | `'x'`), customizable fill, opacity, border styles, and positioned text labels (`'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'`).
+- [x] **Canvas Wallpaper, Page Background Images & Diagonal Watermark:** Rich wallpaper object via `PageBackground` (`PageDefinition.background?: string | PageBackground`), image fit modes (`'cover'`, `'contain'`, `'fit'`, `'center'`), opacity, background colors, diagonal text watermark (`.pbi-watermark`), and report methods (`report.setPageBackground()`, `report.getPageBackground()`).
+- [x] **Page Deletion & Bulk Page Reordering:** Programmatic page deletion (`report.removePage(): boolean`) with active page fallback protection and bulk page reordering API (`report.reorderPages()`).
+- [x] **Studio Visual Size Matching:** Multi-visual size normalization (`report.matchVisualSize('width' | 'height' | 'both')`) and Studio alignment toolbar (`.pbs-align-bar`) & dropdown actions (`size:width`, `size:height`, `size:both`).
+
+**Acceptance:**
+- 629 tests passing across 53 test suites (593 passed, 36 skipped, 100% pass rate).
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

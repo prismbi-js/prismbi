@@ -36,6 +36,15 @@ export interface ReferenceLine {
   dash?: boolean;
 }
 
+export interface ReferenceBand {
+  from: number;
+  to: number;
+  label?: string;
+  color?: string;
+  opacity?: number;
+  axis?: 'x' | 'y';
+}
+
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
 export interface VisualFormat {
   title: { show: boolean; text?: string; subtitle?: string; fontSize?: number; color?: string; align: 'left' | 'center' | 'right'; bold: boolean };
@@ -105,6 +114,7 @@ export interface VisualFormat {
   };
   analytics: {
     referenceLines: ReferenceLine[];
+    referenceBands?: ReferenceBand[];
     /** Linear trend line per series (column, bar, line, area, scatter). */
     trendLine: boolean | { color?: string };
     /** Forecast on line/area charts with a date or number axis: `{ periods: 6, confidence: 0.95, seasonality: 'auto' }`. */

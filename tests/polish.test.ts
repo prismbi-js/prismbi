@@ -718,4 +718,41 @@ describe('Small multiples trellis and grid layouts', () => {
     v.destroy();
     el.remove();
   });
+
+  it('renders analytics reference bands and labels across cartesian charts', () => {
+    const el = mount();
+    const m = new DataModel().addTable('Metric', [
+      { x: 'Jan', y: 100 },
+      { x: 'Feb', y: 150 },
+      { x: 'Mar', y: 200 },
+    ]);
+    const v = createVisual(el, {
+      model: m,
+      type: 'line',
+      fields: {
+        category: 'Metric[x]',
+        values: 'Metric[y]',
+      },
+      format: {
+        analytics: {
+          referenceBands: [
+            { from: 120, to: 180, label: 'Target SLA Zone', color: '#27ae60', opacity: 0.2 },
+          ],
+        },
+      } as any,
+    });
+    v.flush();
+
+    const band = el.querySelector<SVGRectElement>('.pbi-refband');
+    expect(band).toBeTruthy();
+    expect(band?.getAttribute('fill')).toBe('#27ae60');
+    expect(band?.getAttribute('fill-opacity')).toBe('0.2');
+
+    const label = el.querySelector<SVGTextElement>('.pbi-refband-label');
+    expect(label).toBeTruthy();
+    expect(label?.textContent).toBe('Target SLA Zone');
+
+    v.destroy();
+    el.remove();
+  });
 });

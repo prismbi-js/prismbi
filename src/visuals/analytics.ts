@@ -34,11 +34,70 @@ export function referenceValue(line: ReferenceLine, values: number[]): number | 
 
 const LABELS: Record<ReferenceLine['type'], string> = { constant: '', average: 'Average', median: 'Median', min: 'Min', max: 'Max', percentile: 'P' };
 
+/** Draw shaded target tolerance reference bands across the plot. */
+export function drawReferenceBands(ctx: RenderContext, g: SVGGElement, scale: LinearScale, axis: 'x' | 'y', span: [number, number]): void {
+  const t = ctx.theme;
+  for (const band of ctx.format.analytics.referenceBands ?? []) {
+    const fromVal = band.from;
+    const toVal = band.to;
+    if (!Number.isFinite(fromVal) || !Number.isFinite(toVal)) continue;
+    const p1 = scale(fromVal);
+    const p2 = scale(toVal);
+    const minP = Math.min(p1, p2);
+    const maxP = Math.max(p1, p2);
+    const bandSize = Math.max(1, maxP - minP);
+    const color = band.color ?? t.accent;
+    const opacity = band.opacity ?? 0.15;
+
+    if (axis === 'y') {
+      g.append(s('rect', {
+        x: span[0],
+        y: minP,
+        width: Math.max(0, span[1] - span[0]),
+        height: bandSize,
+        fill: color,
+        'fill-opacity': opacity,
+        class: 'pbi-refband',
+        'pointer-events': 'none',
+      }));
+      if (band.label) {
+        g.append(s('text', {
+          x: span[1] - 4,
+          y: minP + 12,
+          'text-anchor': 'end',
+          class: 'pbi-label pbi-refband-label',
+          fill: color,
+        }, band.label));
+      }
+    } else {
+      g.append(s('rect', {
+        x: minP,
+        y: span[0],
+        width: bandSize,
+        height: Math.max(0, span[1] - span[0]),
+        fill: color,
+        'fill-opacity': opacity,
+        class: 'pbi-refband',
+        'pointer-events': 'none',
+      }));
+      if (band.label) {
+        g.append(s('text', {
+          x: minP + 4,
+          y: span[0] + 12,
+          class: 'pbi-label pbi-refband-label',
+          fill: color,
+        }, band.label));
+      }
+    }
+  }
+}
+
 /**
  * Draw `format.analytics.referenceLines` across the plot.
  * `axis: 'y'` → horizontal lines (vertical charts); `axis: 'x'` → vertical lines (horizontal bars).
  */
 export function drawReferenceLines(ctx: RenderContext, g: SVGGElement, scale: LinearScale, axis: 'x' | 'y', span: [number, number], values: number[], field?: QueryField): void {
+  drawReferenceBands(ctx, g, scale, axis, span);
   const t = ctx.theme;
   for (const line of ctx.format.analytics.referenceLines ?? []) {
     const v = referenceValue(line, values);
