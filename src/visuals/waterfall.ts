@@ -12,6 +12,7 @@ import {
   markOpacity,
   pivot,
   renderLegend,
+  resolveDataLabelColor,
   valueAxisFormatter,
   withLegend,
 } from './common';
@@ -104,8 +105,10 @@ export const waterfall = /* @__PURE__ */ defineVisual({
       if (f.dataLabels.show) {
         const delta = st.kind === 'total' ? st.end : st.end - st.start;
         const text = st.kind === 'total' || delta < 0 ? fmtLabel(delta) : `+${fmtLabel(delta)}`;
-        if (measureText(text, fs, t.fontFamily) <= band.step + 4)
-          g.append(s('text', { x: x + thick / 2, y: delta >= 0 || st.kind === 'total' ? y0 - 5 : y1 + fs + 3, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary }, text));
+        if (measureText(text, fs, t.fontFamily) <= band.step + 4) {
+          const lColor = resolveDataLabelColor(delta, color, f.dataLabels, f.dataLabels.color ?? t.foregroundSecondary);
+          g.append(s('text', { x: x + thick / 2, y: delta >= 0 || st.kind === 'total' ? y0 - 5 : y1 + fs + 3, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor }, text));
+        }
       }
     });
   },

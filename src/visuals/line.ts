@@ -8,7 +8,7 @@ import { defineVisual } from './registry';
 import type { Series } from './common';
 import { drawReferenceLines, drawTrendLine } from './analytics';
 import { renderSmallMultiples } from './multiples';
-import { categoryLabelLayout, drawCategoryLabels, drawValueAxisY, emptyState, labelFormatter, markOpacity, mergeIdentity, pivot, renderLegend, tooltipItems, valueAxisFormatter, withLegend } from './common';
+import { categoryLabelLayout, drawCategoryLabels, drawValueAxisY, emptyState, labelFormatter, markOpacity, mergeIdentity, pivot, renderLegend, resolveDataLabelColor, tooltipItems, valueAxisFormatter, withLegend } from './common';
 
 type Kind = 'line' | 'area' | 'stackedArea' | 'combo';
 
@@ -414,7 +414,8 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
           const y = v >= 0 ? rawY - 6 : rawY + fs + 4;
           if (!hit(bx0, bx1, y - fs, y + 2)) {
             placed.push([bx0, bx1, y - fs, y + 2]);
-            marks.append(s('text', { x: cx, y, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary }, text));
+            const lColor = resolveDataLabelColor(v, undefined, f.dataLabels, f.dataLabels.color ?? t.foregroundSecondary);
+            marks.append(s('text', { x: cx, y, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor }, text));
           }
         });
       });
@@ -434,7 +435,8 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
           if (hit(x0, x1, y - fs, y + 2)) return;
         }
         placed.push([x0, x1, y - fs, y + 2]);
-        marks.append(s('text', { x, y, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary }, text));
+        const lColor = resolveDataLabelColor(v, undefined, f.dataLabels, f.dataLabels.color ?? t.foregroundSecondary);
+        marks.append(s('text', { x, y, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor }, text));
       });
     });
   }

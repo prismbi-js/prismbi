@@ -46,6 +46,11 @@ export interface ConditionalFormat {
   icons?: boolean;
 }
 
+export interface TableSortCriterion {
+  col: number;
+  dir: 'asc' | 'desc';
+}
+
 export interface TableFormat {
   totals?: boolean;
   rowBanding?: boolean;
@@ -438,7 +443,7 @@ export const table = /* @__PURE__ */ defineVisual({
     let gi = 0;
     let vi = 0;
     let cols = fields.map((f) => (isGroupField(f) ? { kind: 'group' as const, i: gi++, field: data.groups[gi - 1] } : { kind: 'value' as const, i: vi++, field: data.values[vi - 1] }));
-    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; _shown?: number; columnOrder?: string[] };
+    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; sorts?: TableSortCriterion[]; _shown?: number; columnOrder?: string[] };
     const order = state.columnOrder ?? tf.columnOrder;
     if (order && order.length) {
       const orderMap = new Map(order.map((name, idx) => [name, idx]));
@@ -448,16 +453,26 @@ export const table = /* @__PURE__ */ defineVisual({
         return ia - ib;
       });
     }
+    const sortList: TableSortCriterion[] = state.sorts && state.sorts.length
+      ? state.sorts
+      : state.sortCol !== undefined && cols[state.sortCol]
+      ? [{ col: state.sortCol, dir: state.sortDir ?? 'asc' }]
+      : [];
     let rows = data.rows.slice();
-    if (state.sortCol !== undefined && cols[state.sortCol]) {
-      const c = cols[state.sortCol];
-      const dir = state.sortDir === 'desc' ? -1 : 1;
+    if (sortList.length) {
       rows.sort((a, b) => {
-        const x = c.kind === 'group' ? a.keys[c.i] : a.values[c.i];
-        const y = c.kind === 'group' ? b.keys[c.i] : b.values[c.i];
-        if (x === null) return 1;
-        if (y === null) return -1;
-        return compareValues(x, y) * dir;
+        for (const sc of sortList) {
+          const c = cols[sc.col];
+          if (!c) continue;
+          const x = c.kind === 'group' ? a.keys[c.i] : a.values[c.i];
+          const y = c.kind === 'group' ? b.keys[c.i] : b.values[c.i];
+          if (x === null && y === null) continue;
+          if (x === null) return 1;
+          if (y === null) return -1;
+          const cmp = compareValues(x, y) * (sc.dir === 'desc' ? -1 : 1);
+          if (cmp !== 0) return cmp;
+        }
+        return 0;
       });
     }
     const pageSize = tf.pageSize ?? 200;
@@ -490,8 +505,14 @@ export const table = /* @__PURE__ */ defineVisual({
     const thead = h('thead');
     const hr = h('tr');
     cols.forEach((c, ci) => {
-      const sorted = state.sortCol === ci;
-      const th = h('th', { class: c.kind === 'value' ? 'is-num' : '', scope: 'col', 'aria-sort': sorted ? (state.sortDir === 'desc' ? 'descending' : 'ascending') : undefined, tabindex: 0 }, c.field.name, sorted ? h('span', { class: 'pbi-sort' }, state.sortDir === 'desc' ? ' ↓' : ' ↑') : '');
+      const sortIdx = sortList.findIndex((s) => s.col === ci);
+      const sortCrit = sortIdx >= 0 ? sortList[sortIdx] : undefined;
+      const sorted = Boolean(sortCrit);
+      const sortDir = sortCrit?.dir;
+      const arrow = sorted ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
+      const rankBadge = sorted && sortList.length > 1 ? h('span', { class: 'pbi-sort-rank' }, String(sortIdx + 1)) : '';
+      const sortSpan = sorted ? h('span', { class: 'pbi-sort' }, arrow, rankBadge) : '';
+      const th = h('th', { class: c.kind === 'value' ? 'is-num' : '', scope: 'col', 'aria-sort': sorted ? (sortDir === 'desc' ? 'descending' : 'ascending') : undefined, tabindex: 0 }, c.field.name, sortSpan);
       const w = tf.columnWidths?.[c.field.name];
       if (w) th.style.width = `${w}px`;
       const pinLeft = pinOffsets[ci];
@@ -503,12 +524,34 @@ export const table = /* @__PURE__ */ defineVisual({
         th.classList.add('pbi-col-pinned');
         if (ci === lastPinnedIdx) th.classList.add('pbi-col-pinned-edge');
       }
-      const toggle = () => {
-        const dir = sorted && state.sortDir === 'asc' ? 'desc' : sorted && state.sortDir === 'desc' ? 'asc' : c.kind === 'value' ? 'desc' : 'asc';
-        ctx.host.setState({ sortCol: ci, sortDir: dir });
+      const toggle = (shift = false) => {
+        if (shift) {
+          let nextSorts = sortList.map((s) => ({ ...s }));
+          const idx = nextSorts.findIndex((s) => s.col === ci);
+          if (idx >= 0) {
+            if (nextSorts[idx].dir === 'asc') nextSorts[idx].dir = 'desc';
+            else nextSorts.splice(idx, 1);
+          } else {
+            nextSorts.push({ col: ci, dir: c.kind === 'value' ? 'desc' : 'asc' });
+          }
+          ctx.host.setState({ sortCol: nextSorts[0]?.col, sortDir: nextSorts[0]?.dir, sorts: nextSorts });
+        } else {
+          let nextDir: 'asc' | 'desc' | undefined;
+          if (sortCrit && sortList.length === 1) {
+            if (c.kind === 'value') {
+              nextDir = sortDir === 'desc' ? 'asc' : undefined;
+            } else {
+              nextDir = sortDir === 'asc' ? 'desc' : undefined;
+            }
+          } else {
+            nextDir = c.kind === 'value' ? 'desc' : 'asc';
+          }
+          delete (ctx.host.state as Record<string, unknown>).sorts;
+          ctx.host.setState({ sortCol: nextDir !== undefined ? ci : undefined, sortDir: nextDir });
+        }
       };
-      th.addEventListener('click', toggle);
-      th.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle()));
+      th.addEventListener('click', (e) => toggle(e.shiftKey));
+      th.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle(e.shiftKey)));
       th.draggable = true;
       th.addEventListener('dragstart', (e) => {
         e.dataTransfer?.setData('text/plain', String(ci));

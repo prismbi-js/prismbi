@@ -27,6 +27,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 19 | Global Search Visual Finder, Radial Slice Elevation, Column Reordering & Bookmark Bar | `0.20.0` | ✅ Implemented |
 | 20 | Presentation Auto-Play Carousel, Visual Annotations, Direct Data Export & Canvas Grid | `0.21.0` | ✅ Implemented |
 | 21 | Analytics Reference Bands, Canvas Wallpaper & Watermark, Page Reordering & Visual Size Matching | `0.22.0` | ✅ Implemented |
+| 22 | Sync Slicers Across Pages, Data Label Rules & Contrast, Tri-State Multi-Sort & Visual Container Polish | `0.23.0` | ✅ Implemented |
 
 ## Guiding principles
 
@@ -499,6 +500,21 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 **Acceptance:**
 - 629 tests passing across 53 test suites (593 passed, 36 skipped, 100% pass rate).
+- 98 visual regression screenshots with 0 failures.
+- Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
+
+## Phase 22: Sync Slicers Across Pages, Data Label Rules & Contrast, Tri-State Multi-Sort & Visual Container Polish ✅
+
+**Goal:** Multi-page sync slicers system, dynamic contrast and value-rule data labels, tri-state and multi-column table sorting, and visual container header tooltips and title dividers.
+
+**Delivered:**
+- [x] **Sync Slicers System Across Multi-Page Reports:** Report-level slicer synchronization (`report.syncSlicers()`, `report.getSyncSlicers()`, `SyncSlicerConfig`), automated cross-page filter context application, and coordinated resets/bookmarks.
+- [x] **Visual Conditional Formatting for Data Labels:** WCAG relative luminance contrast adaptation (`contrastColor: true`), threshold font color rules (`rules: DataLabelRule[]`), and standalone `resolveDataLabelColor()` helper.
+- [x] **Table & Matrix Tri-State Interactive Sorting & Multi-Column Sorting:** Ascending → descending → none sort clearing cycle, Shift+click multi-column sorting, and header rank badges (`.pbi-sort-rank`).
+- [x] **Visual Container Header Tooltips & Title Dividers:** Header information button (`ℹ`, `.pbi-header-info`), interactive popover cards (`.pbi-header-popover`), and customizable title dividers (`.pbi-title-divider`).
+
+**Acceptance:**
+- 633 tests passing across 53 test suites (597 passed, 36 skipped, 100% pass rate).
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

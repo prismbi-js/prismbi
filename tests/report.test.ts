@@ -869,4 +869,101 @@ describe('Report', () => {
 
     r.destroy();
   });
+
+  it('synchronizes slicers across pages with syncSlicers and getSyncSlicers', () => {
+    const m = new DataModel().addTable('Sales', [
+      { cat: 'Bikes', amt: 100 },
+      { cat: 'Accessories', amt: 50 },
+    ]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        {
+          id: 'p1',
+          name: 'Page 1',
+          visuals: [
+            { id: 's1', type: 'slicer', fields: { field: 'Sales[cat]' } },
+            { id: 't1', type: 'table', fields: { values: 'Sales[amt]' } },
+          ],
+        },
+        {
+          id: 'p2',
+          name: 'Page 2',
+          visuals: [
+            { id: 't2', type: 'table', fields: { values: 'Sales[amt]' } },
+          ],
+        },
+      ],
+    });
+    r.flush();
+
+    // Configure sync to Page 2
+    r.syncSlicers('s1', ['p2']);
+    const syncs = r.getSyncSlicers();
+    expect(syncs.length).toBe(1);
+    expect(syncs[0].visualId).toBe('s1');
+    expect(syncs[0].syncPages).toEqual(['p2']);
+
+    // Set filter on slicer
+    r.setSlicerFilter('s1', [{ target: 'Sales[cat]', op: 'in', values: ['Bikes'] }]);
+    r.flush();
+
+    // Check filters for t2 on Page 2
+    const p2Filters = r.filtersFor('t2');
+    expect(p2Filters.some((f) => (f as any).target === 'Sales[cat]' && (f as any).values?.includes('Bikes'))).toBe(true);
+
+    // Reset page 1 filters
+    r.reset();
+    r.flush();
+    const p2FiltersAfterReset = r.filtersFor('t2');
+    expect(p2FiltersAfterReset.some((f) => (f as any).target === 'Sales[cat]')).toBe(false);
+
+    r.destroy();
+  });
+
+  it('renders visual header info tooltip and title divider', () => {
+    const m = new DataModel().addTable('Sales', [{ a: 1 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        {
+          id: 'p1',
+          name: 'Page 1',
+          visuals: [
+            {
+              id: 'v1',
+              type: 'card',
+              title: 'Revenue Card',
+              fields: { value: 'Sales[a]' },
+              format: {
+                title: { divider: { color: 'rgb(255, 0, 0)', width: 2 } },
+                header: { tooltip: 'Custom methodology details' },
+              } as any,
+            },
+          ],
+        },
+      ],
+    });
+    r.flush();
+
+    const v1El = el.querySelector('[data-visual-id="v1"]') as HTMLElement;
+    expect(v1El).toBeTruthy();
+    // Check divider
+    const divider = v1El.querySelector('.pbi-title-divider') as HTMLElement;
+    expect(divider).toBeTruthy();
+    expect(divider.style.borderColor).toBe('rgb(255, 0, 0)');
+    expect(divider.style.borderWidth).toBe('2px');
+
+    // Check header info button
+    const infoBtn = v1El.querySelector('.pbi-header-info') as HTMLButtonElement;
+    expect(infoBtn).toBeTruthy();
+
+    // Click info button to trigger popover
+    infoBtn.click();
+    const popover = v1El.querySelector('.pbi-header-popover');
+    expect(popover).toBeTruthy();
+    expect(popover?.textContent).toBe('Custom methodology details');
+
+    r.destroy();
+  });
 });

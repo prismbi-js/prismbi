@@ -45,29 +45,54 @@ export interface ReferenceBand {
   axis?: 'x' | 'y';
 }
 
+export interface DataLabelRule {
+  min?: number;
+  max?: number;
+  color: string;
+}
+
+export interface SyncSlicerConfig {
+  syncGroup?: string;
+  syncPages?: string[] | 'all';
+}
+
+export interface DataLabelsFormat {
+  show: boolean;
+  format?: string;
+  displayUnits: DisplayUnits;
+  decimals?: number;
+  fontSize?: number;
+  color?: string;
+  position: 'auto' | 'inside' | 'outside';
+  contrastColor?: boolean;
+  rules?: DataLabelRule[];
+}
+
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
 export interface VisualFormat {
-  title: { show: boolean; text?: string; subtitle?: string; fontSize?: number; color?: string; align: 'left' | 'center' | 'right'; bold: boolean };
+  title: {
+    show: boolean;
+    text?: string;
+    subtitle?: string;
+    fontSize?: number;
+    color?: string;
+    align: 'left' | 'center' | 'right';
+    bold: boolean;
+    divider?: boolean | { color?: string; width?: number; margin?: number };
+    tooltip?: string;
+  };
   background: { show: boolean; color?: string; transparency: number };
   border: { show: boolean; color?: string; width: number; radius?: number };
   shadow: { show: boolean; color?: string; blur?: number; spread?: number; x?: number; y?: number };
   padding: number;
-  header: { show: boolean; focusMode: boolean; exportData: boolean; showAsTable: boolean; drill: boolean };
+  header: { show: boolean; focusMode: boolean; exportData: boolean; showAsTable: boolean; drill: boolean; tooltip?: string };
   tooltip: {
     show: boolean;
     /** Id or name of a tooltip page (`page.tooltip`) rendered on hover, filtered to the hovered data point. */
     page?: string;
   };
   legend: { show: boolean | 'auto'; position: 'top' | 'bottom' | 'left' | 'right'; fontSize?: number };
-  dataLabels: {
-    show: boolean;
-    format?: string;
-    displayUnits: DisplayUnits;
-    decimals?: number;
-    fontSize?: number;
-    color?: string;
-    position: 'auto' | 'inside' | 'outside';
-  };
+  dataLabels: DataLabelsFormat;
   categoryAxis: {
     show: boolean;
     title?: string | boolean;

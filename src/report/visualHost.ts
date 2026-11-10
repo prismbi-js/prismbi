@@ -506,8 +506,8 @@ export class VisualHost {
     const drill = this.drillInfo();
     const hasTitle = f.title.show && f.title.text;
     const icons = h('div', { class: 'pbi-icons' });
-    const icon = (glyph: string, label: string, onClick: () => void, pressed?: boolean) => {
-      const b = h('button', { type: 'button', class: 'pbi-icon', title: label, 'aria-label': label, 'aria-pressed': pressed === undefined ? undefined : String(pressed) }, glyph);
+    const icon = (glyph: string, label: string, onClick: () => void, pressed?: boolean, cls?: string) => {
+      const b = h('button', { type: 'button', class: `pbi-icon${cls ? ` ${cls}` : ''}`, title: label, 'aria-label': label, 'aria-pressed': pressed === undefined ? undefined : String(pressed) }, glyph);
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         onClick();
@@ -526,6 +526,27 @@ export class VisualHost {
       if (f.header.exportData && !this.def.static && !this.def.isSlicer)
         icons.append(this.exportButton());
       if (this.def.isSlicer && this.rt.slicerFilter(this.id)) icon('⌫', 'Clear selections', () => this.setFilter(null));
+      const tooltipText = f.header.tooltip ?? f.title.tooltip;
+      if (tooltipText) {
+        let popover: HTMLElement | null = null;
+        icon('ℹ', 'Visual details', () => {
+          if (popover) {
+            popover.remove();
+            popover = null;
+          } else {
+            popover = h('div', { class: 'pbi-header-popover', role: 'tooltip' }, tooltipText);
+            this.el.append(popover);
+            const onDocClick = (e: MouseEvent) => {
+              if (popover && !popover.contains(e.target as Node)) {
+                popover.remove();
+                popover = null;
+                document.removeEventListener('click', onDocClick);
+              }
+            };
+            setTimeout(() => document.addEventListener('click', onDocClick), 0);
+          }
+        }, undefined, 'pbi-header-info');
+      }
       if (f.header.focusMode) icon(this.rt.focused === this.id ? '✕' : '⤢', this.rt.focused === this.id ? 'Exit focus mode' : 'Focus mode', () => this.rt.toggleFocus(this.id));
     }
     if (!hasTitle && !icons.childElementCount) {
@@ -549,6 +570,14 @@ export class VisualHost {
       text.append(h('div', { class: 'pbi-drill-crumb' }, names.map((n, i) => `${fieldRef(n).replace(/^.*\[|\]$/g, '')}: ${formatValue(drill.path[i] ?? null)}`).join(' › ')));
     }
     this.header.append(text, icons);
+    if (f.title.divider) {
+      const divider = h('hr', { class: 'pbi-title-divider' });
+      const cfg = typeof f.title.divider === 'object' ? f.title.divider : null;
+      if (cfg?.color) divider.style.borderColor = cfg.color;
+      if (cfg?.width) divider.style.borderWidth = `${cfg.width}px`;
+      if (cfg?.margin !== undefined) divider.style.margin = `${cfg.margin}px 0`;
+      this.header.append(divider);
+    }
   }
 
   private renderDataTable(root: HTMLElement, data: QueryResult): void {

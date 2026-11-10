@@ -44,7 +44,7 @@ export const CSS = /* css */ `
 @container (max-width:640px){.pbi-page:not(.is-mobile) .pbi-visual{grid-column:1/-1;grid-row:auto/span var(--h)}}
 .pbi-visual.is-phone-hidden,.pbi-visual.is-conditional-hidden{display:none}
 .pbi-sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-.pbi-vh{display:flex;align-items:flex-start;gap:8px;min-height:0;margin-bottom:6px}
+.pbi-vh{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;min-height:0;margin-bottom:6px}
 .pbi-vh-text{flex:1;min-width:0}
 .pbi-title{font-size:var(--pbi-title-size);font-weight:600;line-height:1.25;color:var(--pbi-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pbi-subtitle{font-size:12px;color:var(--pbi-fg-3);margin-top:2px}
@@ -305,6 +305,10 @@ svg.pbi-sparkline{vertical-align:middle;margin-right:6px;display:inline-block}
 .pbi-refband{transition:fill-opacity .15s ease}
 .pbi-refband:hover{fill-opacity:0.25}
 .pbi-refband-label{font-size:11px;font-weight:600}
+.pbi-sort-rank{font-size:9px;opacity:.75;margin-left:2px;vertical-align:super}
+.pbi-title-divider{border:none;border-top:1px solid var(--pbi-axis);margin:6px 0 2px 0;width:100%}
+.pbi-header-info{cursor:pointer}
+.pbi-header-popover{position:absolute;top:38px;right:10px;z-index:20;background:var(--pbi-surface);color:var(--pbi-fg);padding:8px 12px;border:1px solid var(--pbi-axis);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);font-size:12px;max-width:240px;line-height:1.4;white-space:pre-wrap}
 .pbi-network-node{cursor:pointer}
 .pbi-network-node:hover .pbi-network-circle{stroke:var(--pbi-fg);stroke-width:2.5px}
 .pbi-network-edge{transition:stroke .15s ease,stroke-opacity .15s ease}

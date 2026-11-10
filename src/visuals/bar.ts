@@ -16,6 +16,7 @@ import {
   mergeIdentity,
   pivot,
   renderLegend,
+  resolveDataLabelColor,
   tooltipItems,
   valueAxisFormatter,
   withLegend,
@@ -184,8 +185,10 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
             const tw = measureText(text, fs, t.fontFamily);
             const ty = v >= 0 ? y1 - 5 : y1 + fs + 3;
             const cx = x + thick / 2;
+            const cFill = colorOf(se, v);
+            const lColor = resolveDataLabelColor(v, f.dataLabels.position === 'inside' ? cFill : undefined, f.dataLabels, f.dataLabels.color ?? t.foregroundSecondary);
             if (tryPlace(cx - tw / 2 - 2, cx + tw / 2 + 2, ty - fs, ty + 2))
-              marks.append(s('text', { x: cx, y: ty, 'text-anchor': 'middle', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary, opacity: op }, text));
+              marks.append(s('text', { x: cx, y: ty, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor, opacity: op }, text));
           }
         });
       } else {
@@ -229,8 +232,9 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           }
           if (showLabels) {
             const text = fmtOf(se)(mode === 'percent' ? v : se.values[ci]);
+            const lColor = resolveDataLabelColor(v, se.color, f.dataLabels, textOn(se.color, t.foreground));
             if (hgt >= fs + 4 && measureText(text, fs, t.fontFamily) + 6 <= thick)
-              marks.append(s('text', { x: x + thick / 2, y: yTop + hgt / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(se.color, t.foreground), opacity: op }, text));
+              marks.append(s('text', { x: x + thick / 2, y: yTop + hgt / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor, opacity: op }, text));
           }
         });
       }
@@ -289,8 +293,10 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           const tw = measureText(text, fs, t.fontFamily);
           const tx = v >= 0 ? xb + 5 : xb - 5;
           const cy = y + thick / 2;
+          const cFill = colorOf(se, v);
+          const lColor = resolveDataLabelColor(v, f.dataLabels.position === 'inside' ? cFill : undefined, f.dataLabels, f.dataLabels.color ?? t.foregroundSecondary);
           if (tryPlace(v >= 0 ? tx : tx - tw, v >= 0 ? tx + tw : tx, cy - fs / 2, cy + fs / 2))
-            marks.append(s('text', { x: tx, y: cy + fs / 3, 'text-anchor': v >= 0 ? 'start' : 'end', class: 'pbi-label', fill: f.dataLabels.color ?? t.foregroundSecondary, opacity: op }, text));
+            marks.append(s('text', { x: tx, y: cy + fs / 3, 'text-anchor': v >= 0 ? 'start' : 'end', class: 'pbi-label', fill: lColor, opacity: op }, text));
         }
       });
     } else {
@@ -326,8 +332,9 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         markMap.push({ identity, rect: { x, y, w, h: thick } });
         if (showLabels) {
           const text = fmtOf(se)(mode === 'percent' ? v : se.values[ci]);
+          const lColor = resolveDataLabelColor(v, se.color, f.dataLabels, textOn(se.color, t.foreground));
           if (thick >= fs + 2 && measureText(text, fs, t.fontFamily) + 8 <= w)
-            marks.append(s('text', { x: x + w / 2, y: y + thick / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(se.color, t.foreground), opacity: op }, text));
+            marks.append(s('text', { x: x + w / 2, y: y + thick / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor, opacity: op }, text));
         }
       });
     }

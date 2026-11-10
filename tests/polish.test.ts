@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DataModel } from '@prismbi/prismbi/core';
-import { createVisual, renderSparkline } from '../src/index';
+import { createVisual, renderSparkline, resolveDataLabelColor } from '../src/index';
 import { makeModel } from './fixtures';
 
 const mount = () => {
@@ -751,6 +751,116 @@ describe('Small multiples trellis and grid layouts', () => {
     const label = el.querySelector<SVGTextElement>('.pbi-refband-label');
     expect(label).toBeTruthy();
     expect(label?.textContent).toBe('Target SLA Zone');
+
+    v.destroy();
+    el.remove();
+  });
+
+  it('resolves data label colors via contrast and rule thresholds', () => {
+    // 1. Contrast color test
+    const whiteOnDark = resolveDataLabelColor(100, '#000000', { contrastColor: true }, '#999999');
+    expect(whiteOnDark).toBe('#ffffff');
+
+    const darkOnLight = resolveDataLabelColor(100, '#ffffff', { contrastColor: true }, '#999999');
+    expect(darkOnLight).toBe('#0b0b0b');
+
+    // 2. Rules threshold test
+    const rules = [
+      { max: 0, color: '#e74c3c' },
+      { min: 1, color: '#2ecc71' },
+    ];
+    const red = resolveDataLabelColor(-50, '#ffffff', { rules }, '#999999');
+    expect(red).toBe('#e74c3c');
+
+    const green = resolveDataLabelColor(50, '#ffffff', { rules }, '#999999');
+    expect(green).toBe('#2ecc71');
+
+    // 3. Fallback format color
+    const fallback = resolveDataLabelColor(50, '#ffffff', { color: '#3498db' }, '#999999');
+    expect(fallback).toBe('#3498db');
+
+    // 4. In-visual integration test
+    const el = mount();
+    const m = new DataModel().addTable('Metrics', [
+      { name: 'A', val: -25 },
+      { name: 'B', val: 75 },
+    ]);
+    const v = createVisual(el, {
+      model: m,
+      type: 'bar',
+      fields: {
+        category: 'Metrics[name]',
+        values: 'Metrics[val]',
+      },
+      format: {
+        dataLabels: {
+          show: true,
+          rules: [
+            { max: 0, color: 'rgb(255, 0, 0)' },
+            { min: 1, color: 'rgb(0, 255, 0)' },
+          ],
+        },
+      } as any,
+    });
+    v.flush();
+
+    const labels = el.querySelectorAll<SVGTextElement>('.pbi-label');
+    expect(labels.length).toBeGreaterThanOrEqual(2);
+    expect(Array.from(labels).some((l) => l.getAttribute('fill') === 'rgb(255, 0, 0)')).toBe(true);
+    expect(Array.from(labels).some((l) => l.getAttribute('fill') === 'rgb(0, 255, 0)')).toBe(true);
+
+    v.destroy();
+    el.remove();
+  });
+
+  it('supports table tri-state sort cycle and shift-click multi-column sorting', () => {
+    const el = mount();
+    const m = new DataModel().addTable('People', [
+      { dept: 'Eng', name: 'Bob', age: 30 },
+      { dept: 'Eng', name: 'Alice', age: 25 },
+      { dept: 'Sales', name: 'Charlie', age: 35 },
+    ]);
+    const v = createVisual(el, {
+      model: m,
+      type: 'table',
+      fields: {
+        columns: ['People[dept]', 'People[name]', 'People[age]'],
+      },
+    });
+    v.flush();
+
+    const ths = el.querySelectorAll<HTMLTableCellElement>('thead th');
+    expect(ths.length).toBe(3);
+
+    // 1. Single click on column 0 (text dimension): sorts asc first
+    el.querySelectorAll<HTMLTableCellElement>('thead th')[0].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: false }));
+    v.flush();
+    expect(el.querySelectorAll<HTMLTableCellElement>('thead th')[0].getAttribute('aria-sort')).toBe('ascending');
+
+    // Click again: toggles to desc
+    el.querySelectorAll<HTMLTableCellElement>('thead th')[0].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: false }));
+    v.flush();
+    expect(el.querySelectorAll<HTMLTableCellElement>('thead th')[0].getAttribute('aria-sort')).toBe('descending');
+
+    // Click 3rd time: tri-state clears sort
+    el.querySelectorAll<HTMLTableCellElement>('thead th')[0].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: false }));
+    v.flush();
+    expect(el.querySelectorAll<HTMLTableCellElement>('thead th')[0].getAttribute('aria-sort')).toBeNull();
+
+    // 2. Multi-column sort with shift key
+    // Click column 0 (primary sort)
+    el.querySelectorAll<HTMLTableCellElement>('thead th')[0].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: false }));
+    v.flush();
+
+    // Shift-click column 1 (secondary sort)
+    el.querySelectorAll<HTMLTableCellElement>('thead th')[1].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+    v.flush();
+
+    const updatedThs = el.querySelectorAll<HTMLTableCellElement>('thead th');
+    const rank0 = updatedThs[0].querySelector('.pbi-sort-rank');
+    const rank1 = updatedThs[1].querySelector('.pbi-sort-rank');
+    expect(rank0?.textContent).toBe('1');
+    expect(rank1?.textContent).toBe('2');
 
     v.destroy();
     el.remove();

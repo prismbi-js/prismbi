@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.23.0 (2026-11-10 / Phase 22: Sync Slicers Across Pages, Data Label Rules & Contrast, Tri-State Multi-Sort & Visual Container Polish)
+
+- **Sync Slicers System Across Multi-Page Reports (`syncSlicers`, `getSyncSlicers`, `SyncSlicerConfig`):**
+  - Added enterprise sync slicers system allowing slicers to synchronize selection state across target pages or report-wide (`report.syncSlicers(slicerVisualId, targetPages, options)`, `report.getSyncSlicers()`, `src/report/report.ts`).
+  - Added `SyncSlicerConfig` support (`spec.format.slicer.syncPages: string[] | 'all'`, `syncGroup?: string`) automatically synchronizing filter context across pages even without duplicate slicer visuals.
+  - Slicer resets and bookmark restorations seamlessly propagate across synchronized pages.
+
+- **Visual Conditional Formatting for Data Labels (`contrastColor`, `rules`, `resolveDataLabelColor`):**
+  - Added automatic contrast color adaptation (`DataLabelsFormat.contrastColor: boolean`) computing relative luminance via WCAG algorithms to guarantee label legibility on dark or light mark fills (`src/visuals/format.ts`, `src/visuals/common.ts`).
+  - Added value-based threshold font color rules (`DataLabelsFormat.rules: DataLabelRule[]`) across bar, column, line, and waterfall charts.
+  - Exported pure helper `resolveDataLabelColor()` from core and visuals packages for custom visual authoring.
+
+- **Table & Matrix Tri-State Interactive Sorting & Multi-Column Sorting (`TableSortCriterion`):**
+  - Added tri-state column sorting on tables and matrices: single-column clicking cycles through ascending → descending → none (clearing sort back to original query order) with type-aware initial sort directions (`src/visuals/table.ts`).
+  - Added multi-column sorting via Shift+click on table headers, supporting secondary and tertiary sort priorities.
+  - Added header sort priority rank badges (`1`, `2`, `.pbi-sort-rank`, `src/report/styles.ts`) alongside directional arrows (`↑` / `↓`).
+
+- **Visual Container Header Tooltips & Title Dividers (`header.tooltip`, `title.divider`):**
+  - Added visual header information tooltips (`f.header.tooltip?: string` or `f.title.tooltip?: string`) displaying an info icon (`ℹ`, `.pbi-header-info`) and interactive description popover card (`.pbi-header-popover`, `src/report/visualHost.ts`, `src/report/styles.ts`).
+  - Added visual title dividers (`f.title.divider?: boolean | { color?: string; width?: number; margin?: number }`) rendering a customizable horizontal separator rule (`.pbi-title-divider`) between header and plot body.
+
 ## 0.22.0 (2026-11-10 / Phase 21: Analytics Reference Bands, Canvas Wallpaper & Watermark, Page Reordering & Visual Size Matching)
 
 - **Analytics Reference Bands & Target Ranges (`referenceBands`, `drawReferenceBands`):**

@@ -47,7 +47,8 @@ export type { PowerBIThemeJson, Theme } from './theme/theme';
 // visuals
 export { defineVisual, getVisual, hasVisual, listVisuals, registerVisual } from './visuals/registry';
 export { baseFormat } from './visuals/format';
-export type { ReferenceBand, ReferenceLine, VisualFormat } from './visuals/format';
+export { resolveDataLabelColor } from './visuals/common';
+export type { DataLabelRule, ReferenceBand, ReferenceLine, SyncSlicerConfig, VisualFormat } from './visuals/format';
 export { detectAnomalies } from './visuals/anomaly';
 export type { AnomalyOptions, AnomalyPoint } from './visuals/anomaly';
 export type {

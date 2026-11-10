@@ -691,22 +691,86 @@ export class Report implements ReportRuntime {
   }
 
   setSlicerFilter(visualId: string, filters: FilterSpec[] | null): void {
-    const page = this.findVisual(visualId)?.page;
-    if (!page) throw new Error(`Visual "${visualId}" not found`);
+    const found = this.findVisual(visualId);
+    if (!found) throw new Error(`Visual "${visualId}" not found`);
+    const { page, spec } = found;
     const apply = (pg: PageState, id: string) => {
       if (filters && filters.length) pg.slicers.set(id, filters);
       else pg.slicers.delete(id);
     };
     apply(page, visualId);
-    // slicers in the same sync group (on any page) share one selection
-    const group = (this.findVisual(visualId)!.spec.format?.slicer as { syncGroup?: string } | undefined)?.syncGroup;
-    if (group)
-      for (const pg of this.pages)
-        for (const v of pg.def.visuals)
-          if (v.id !== visualId && (v.format?.slicer as { syncGroup?: string } | undefined)?.syncGroup === group) apply(pg, v.id!);
+
+    const slicerFmt = spec.format?.slicer as { syncGroup?: string; syncPages?: string[] | 'all' } | undefined;
+    const group = slicerFmt?.syncGroup;
+    const syncPages = slicerFmt?.syncPages;
+
+    if (group) {
+      for (const pg of this.pages) {
+        for (const v of pg.def.visuals) {
+          if (v.id !== visualId && (v.format?.slicer as { syncGroup?: string } | undefined)?.syncGroup === group) {
+            apply(pg, v.id!);
+          }
+        }
+      }
+    }
+
+    if (syncPages) {
+      const isTarget = (pg: PageState) => {
+        if (pg === page) return false;
+        if (syncPages === 'all') return true;
+        return syncPages.includes(pg.def.id!) || (pg.def.name && syncPages.includes(pg.def.name));
+      };
+      for (const pg of this.pages) {
+        if (isTarget(pg)) {
+          const matching = pg.def.visuals.find((v) => v.id === visualId || (v.type === 'slicer' && JSON.stringify(v.fields) === JSON.stringify(spec.fields)));
+          if (matching) apply(pg, matching.id!);
+          else apply(pg, `sync:${visualId}`);
+        }
+      }
+    }
+
     this.schedule();
     this.renderPane();
     this.emit('filtersChanged', { pageId: page.def.id!, scope: 'slicer', visualId, filters: filters ?? [] });
+  }
+
+  /** Synchronize a slicer across target pages (or 'all' other pages in the report). */
+  syncSlicers(slicerVisualId: string, targetPages: string[] | 'all' = 'all', options: { syncFilters?: boolean } = {}): void {
+    const found = this.findVisual(slicerVisualId);
+    if (!found) throw new Error(`Visual "${slicerVisualId}" not found`);
+    const { spec, page } = found;
+    if (!spec.format) spec.format = {} as never;
+    const fmt = spec.format as Record<string, unknown>;
+    const slicerFmt = ((fmt.slicer ?? {}) as { syncGroup?: string; syncPages?: string[] | 'all' });
+    slicerFmt.syncPages = targetPages;
+    fmt.slicer = slicerFmt;
+
+    if (options.syncFilters !== false) {
+      const cur = page.slicers.get(slicerVisualId) ?? null;
+      if (cur && cur.length) {
+        this.setSlicerFilter(slicerVisualId, cur);
+      }
+    }
+  }
+
+  /** Returns all slicers configured with sync settings (syncGroup or syncPages) across the report. */
+  getSyncSlicers(): Array<{ visualId: string; pageId: string; syncGroup?: string; syncPages?: string[] | 'all'; filters: FilterSpec[] }> {
+    const list: Array<{ visualId: string; pageId: string; syncGroup?: string; syncPages?: string[] | 'all'; filters: FilterSpec[] }> = [];
+    for (const pg of this.pages) {
+      for (const v of pg.def.visuals) {
+        const slicerFmt = (v.format as Record<string, unknown> | undefined)?.slicer as { syncGroup?: string; syncPages?: string[] | 'all' } | undefined;
+        if (slicerFmt && (slicerFmt.syncGroup || slicerFmt.syncPages)) {
+          list.push({
+            visualId: v.id!,
+            pageId: pg.def.id!,
+            syncGroup: slicerFmt.syncGroup,
+            syncPages: slicerFmt.syncPages,
+            filters: pg.slicers.get(v.id!) ?? [],
+          });
+        }
+      }
+    }
+    return list;
   }
 
   slicerDomain(visualId: string, column: string): CellValue[] {
@@ -2071,6 +2135,20 @@ export class Report implements ReportRuntime {
   /** Clear slicers, selection, drill state and pane filters on the current page. */
   reset(): void {
     const p = this.page;
+    for (const v of p.def.visuals) {
+      const sfmt = (v.format as Record<string, unknown> | undefined)?.slicer as { syncGroup?: string; syncPages?: string[] | 'all' } | undefined;
+      if (sfmt?.syncGroup || sfmt?.syncPages) {
+        for (const other of this.pages) {
+          if (other === p) continue;
+          other.slicers.delete(`sync:${v.id}`);
+          if (sfmt.syncGroup) {
+            for (const ov of other.def.visuals) {
+              if (((ov.format as Record<string, unknown> | undefined)?.slicer as { syncGroup?: string } | undefined)?.syncGroup === sfmt.syncGroup) other.slicers.delete(ov.id!);
+            }
+          }
+        }
+      }
+    }
     p.slicers.clear();
     p.selection = null;
     for (const v of p.def.visuals) {

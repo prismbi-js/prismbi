@@ -3,7 +3,9 @@ import type { CellValue, ColumnRef } from '../data/types';
 import { valueKey } from '../data/types';
 import type { QueryField } from '../data/query';
 import { h, s, fitText, measureText } from '../render/svg';
+import { textOn } from '../render/color';
 import type { LinearScale } from '../render/scales';
+import type { DataLabelsFormat } from './format';
 import type { DataPointIdentity, RenderContext, TooltipItem } from './types';
 
 export interface Category {
@@ -344,4 +346,31 @@ export function animateIn(ctx: RenderContext, el: SVGElement | HTMLElement, orig
   el.style.transformBox = 'fill-box';
   el.classList.add(origin === 'left' || origin === 'right' ? 'pbi-grow-x' : origin === 'center' ? 'pbi-pop' : 'pbi-grow');
   el.style.animationDuration = `${ctx.format.animation.duration}ms`;
+}
+
+/**
+ * Resolves font color for data labels based on value rules, background luminance contrast, or format default.
+ */
+export function resolveDataLabelColor(
+  value: number | null | undefined,
+  bgColor: string | undefined,
+  format: Partial<DataLabelsFormat> | undefined,
+  fallbackColor: string,
+): string {
+  if (!format) return fallbackColor;
+  if (format.rules && format.rules.length && value !== null && value !== undefined && !Number.isNaN(value)) {
+    for (const r of format.rules) {
+      const minOk = r.min === undefined || value >= r.min;
+      const maxOk = r.max === undefined || value <= r.max;
+      if (minOk && maxOk) return r.color;
+    }
+  }
+  if (format.contrastColor && bgColor) {
+    try {
+      return textOn(bgColor);
+    } catch {
+      // ignore parse failure and fall back
+    }
+  }
+  return format.color ?? fallbackColor;
 }
