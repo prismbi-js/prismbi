@@ -421,4 +421,60 @@ describe('studio', () => {
     expect(st.model.table('MonthlyOrders').column('amount').values).toEqual([45.5, 99.0]);
     st.destroy();
   });
+
+  it('supports visual locking, grouping and ungrouping', () => {
+    const st = open();
+    const ids = st.report.visualIds();
+    expect(ids.length).toBeGreaterThanOrEqual(2);
+
+    // Locking
+    const locked = st.report.toggleLock(ids[0]);
+    expect(locked).toBe(true);
+    expect(st.report.visual(ids[0]).spec.locked).toBe(true);
+    const visEl = q<HTMLElement>(`[data-visual-id="${ids[0]}"]`)!;
+    expect(visEl.classList.contains('is-locked')).toBe(true);
+    expect(visEl.querySelectorAll('.pbi-handle').length).toBe(0);
+
+    // Unlock
+    expect(st.report.toggleLock(ids[0])).toBe(false);
+    expect(st.report.visual(ids[0]).spec.locked).toBeUndefined();
+
+    // Grouping
+    const gid = st.report.groupVisuals([ids[0], ids[1]]);
+    expect(gid).toMatch(/^group-/);
+    expect(st.report.visual(ids[0]).spec.group).toBe(gid);
+    expect(st.report.visual(ids[1]).spec.group).toBe(gid);
+
+    // Selecting one selects the whole group
+    st.select(ids[0]);
+    expect(st.report.selectedVisuals).toContain(ids[0]);
+    expect(st.report.selectedVisuals).toContain(ids[1]);
+
+    // Ungrouping
+    st.report.ungroupVisuals([ids[0], ids[1]]);
+    expect(st.report.visual(ids[0]).spec.group).toBeUndefined();
+    expect(st.report.visual(ids[1]).spec.group).toBeUndefined();
+
+    st.destroy();
+  });
+
+  it('supports studio canvas zoom scaling and controls', () => {
+    const st = open();
+    const canvas = q<HTMLElement>('.pbs-canvas')!;
+    expect(canvas).toBeTruthy();
+
+    st.setZoom(0.75);
+    expect(st.zoom).toBe(0.75);
+    expect(st.report.zoom).toBe(0.75);
+    expect(canvas.style.transform).toBe('scale(0.75)');
+    expect(q<HTMLElement>('.pbs-zoom-val')?.textContent).toBe('75%');
+
+    // Reset zoom
+    q<HTMLElement>('.pbs-zoom-val')?.click();
+    expect(st.zoom).toBe(1);
+    expect(canvas.style.transform).toBe('');
+    expect(q<HTMLElement>('.pbs-zoom-val')?.textContent).toBe('100%');
+
+    st.destroy();
+  });
 });

@@ -455,6 +455,7 @@ export class Studio implements StudioContext {
     else if (kind === 'group') {
       if (!this.report.groupVisuals(ids)) return this.toast('Select two or more visuals to group them');
     } else if (kind === 'ungroup') this.report.ungroupVisuals(ids);
+    else if (kind === 'lock') for (const id of ids) this.report.toggleLock(id);
     else if (kind === 'order') for (const id of ids) this.report.arrange(id, arg as never);
     else return;
     this.commit();
@@ -477,6 +478,31 @@ export class Studio implements StudioContext {
       }
     }
     if (this.layersOpen) this.renderLayers();
+  }
+
+  zoom = 1;
+
+  setZoom(level: number | 'fit' | 'fit-width'): void {
+    if (level === 'fit') {
+      const w = (this.els.canvasWrap?.clientWidth ?? 1280) - 32;
+      const h = (this.els.canvasWrap?.clientHeight ?? 720) - 32;
+      const pageEl = this.els.canvas?.querySelector('.pbi-page:not([hidden])') as HTMLElement | null;
+      const pw = pageEl?.scrollWidth || 1280;
+      const ph = pageEl?.scrollHeight || 720;
+      level = Math.max(0.25, Math.min(1.5, Math.min(w / pw, h / ph)));
+    } else if (level === 'fit-width') {
+      const w = (this.els.canvasWrap?.clientWidth ?? 1280) - 32;
+      const pageEl = this.els.canvas?.querySelector('.pbi-page:not([hidden])') as HTMLElement | null;
+      const pw = pageEl?.scrollWidth || 1280;
+      level = Math.max(0.25, Math.min(2.0, w / pw));
+    }
+    this.zoom = Math.round(Math.max(0.25, Math.min(3.0, level)) * 100) / 100;
+    if (this.els.canvas) {
+      this.els.canvas.style.transform = this.zoom === 1 ? '' : `scale(${this.zoom})`;
+      this.els.canvas.style.transformOrigin = 'top left';
+    }
+    this.report?.setZoom(this.zoom);
+    this.renderPages();
   }
 
   private layersOpen = false;
@@ -799,6 +825,9 @@ export class Studio implements StudioContext {
       { id: 'align:bottom', icon: '⤋', title: 'Align bottom', min: 2 },
       { id: 'distribute:horizontal', icon: '⬌', title: 'Distribute horizontally', min: 3 },
       { id: 'distribute:vertical', icon: '⬍', title: 'Distribute vertically', min: 3 },
+      { id: 'group', icon: '⧉', title: 'Group visuals (Ctrl+G)', min: 2 },
+      { id: 'ungroup', icon: '⧈', title: 'Ungroup visuals (Ctrl+Shift+G)', min: 1 },
+      { id: 'lock', icon: '🔒', title: 'Lock / unlock visual (Ctrl+L)', min: 1 },
     ];
     const alignBtns = alignActions.map((a) => {
       const b = btn(a.icon, () => this.arrangeSelection(a.id), {
@@ -1038,6 +1067,18 @@ export class Studio implements StudioContext {
       this.flushCommit();
     });
     bar.append(add);
+
+    const zoomBar = h('div', { class: 'pbs-zoom-bar', role: 'group', 'aria-label': 'Canvas zoom' });
+    const zoomOut = h('button', { type: 'button', class: 'pbs-zoom-btn', title: 'Zoom out (Ctrl+-)', 'aria-label': 'Zoom out' }, '−');
+    zoomOut.addEventListener('click', () => this.setZoom(this.zoom - 0.1));
+    const zoomVal = h('button', { type: 'button', class: 'pbs-zoom-val', title: 'Reset zoom (Ctrl+0)', 'aria-label': 'Reset zoom' }, `${Math.round(this.zoom * 100)}%`);
+    zoomVal.addEventListener('click', () => this.setZoom(1));
+    const zoomIn = h('button', { type: 'button', class: 'pbs-zoom-btn', title: 'Zoom in (Ctrl++)', 'aria-label': 'Zoom in' }, '+');
+    zoomIn.addEventListener('click', () => this.setZoom(this.zoom + 0.1));
+    const zoomFit = h('button', { type: 'button', class: 'pbs-zoom-fit', title: 'Fit to screen', 'aria-label': 'Fit to screen' }, 'Fit');
+    zoomFit.addEventListener('click', () => this.setZoom('fit'));
+    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit);
+    bar.append(zoomBar);
   }
 
   private renamePage(tab: HTMLElement, id: string, name: string): void {
@@ -1165,6 +1206,26 @@ export class Studio implements StudioContext {
     if (mod && e.key.toLowerCase() === 'g' && !typing && !this.preview) {
       e.preventDefault();
       this.arrangeSelection(e.shiftKey ? 'ungroup' : 'group');
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'l' && !typing && !this.preview) {
+      e.preventDefault();
+      this.arrangeSelection('lock');
+      return;
+    }
+    if (mod && (e.key === '=' || e.key === '+') && !typing) {
+      e.preventDefault();
+      this.setZoom(this.zoom + 0.1);
+      return;
+    }
+    if (mod && (e.key === '-' || e.key === '_') && !typing) {
+      e.preventDefault();
+      this.setZoom(this.zoom - 0.1);
+      return;
+    }
+    if (mod && e.key === '0' && !typing) {
+      e.preventDefault();
+      this.setZoom(1);
       return;
     }
     if (mod && e.key.toLowerCase() === 'a' && !typing && !this.preview && this.report.editMode) {

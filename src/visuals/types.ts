@@ -19,6 +19,8 @@ export interface VisualLayout {
 export interface VisualSpec {
   /** Visuals sharing a group id are selected and moved together in edit mode. */
   group?: string;
+  /** When true, the visual is locked and cannot be moved or resized on canvas in edit mode. */
+  locked?: boolean;
   id?: string;
   type: string;
   /** Shorthand for `format.title.text`. */

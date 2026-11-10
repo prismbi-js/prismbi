@@ -24,6 +24,8 @@ export interface EditHost {
   toggle?(id: string): void;
   /** Select an explicit set of visuals (e.g. from marquee lasso selection). */
   selectVisuals?(ids: string[]): void;
+  /** Canvas zoom scale factor (1 by default). */
+  scale?(): number;
 }
 
 type Mode = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -43,9 +45,10 @@ export class EditController {
 
   /** Grid step in px for columns and rows. */
   steps(p: EditPageInfo): { col: number; row: number } {
+    const s = this.host.scale?.() ?? 1;
     const inner = Math.max(0, (p.el.clientWidth || 0) - p.gap * 2);
-    const col = inner > 0 ? (inner + p.gap) / p.cols : 80;
-    return { col, row: p.rowHeight + p.gap };
+    const col = (inner > 0 ? (inner + p.gap) / p.cols : 80) * s;
+    return { col, row: (p.rowHeight + p.gap) * s };
   }
 
   /** Bind marquee lasso selection to the canvas background of a page. */
@@ -63,11 +66,16 @@ export class EditController {
   /** Add (or refresh) the edit overlay on a visual element. */
   decorate(id: string, el: HTMLElement): void {
     el.querySelector(':scope > .pbi-edit')?.remove();
+    const spec = this.host.page()?.specs.find((s) => s.id === id);
+    el.toggleAttribute('data-group', !!spec?.group);
+    el.classList.toggle('is-locked', !!spec?.locked);
     const overlay = h('div', { class: 'pbi-edit', 'data-edit-for': id, tabindex: 0, role: 'button', 'aria-label': 'Select visual (drag, or arrow keys, to move; Shift+arrows to resize)' });
     overlay.addEventListener('keydown', (e) => this.key(id, e as KeyboardEvent));
-    for (const m of HANDLES) {
-      const handle = h('i', { class: `pbi-handle pbi-handle-${m}`, 'data-mode': m, 'aria-hidden': 'true' });
-      overlay.append(handle);
+    if (!spec?.locked) {
+      for (const m of HANDLES) {
+        const handle = h('i', { class: `pbi-handle pbi-handle-${m}`, 'data-mode': m, 'aria-hidden': 'true' });
+        overlay.append(handle);
+      }
     }
     overlay.addEventListener('pointerdown', (e) => this.start(id, (e.target as HTMLElement).dataset.mode as Mode | undefined, e as PointerEvent));
     overlay.addEventListener('pointermove', (e) => this.move(e as PointerEvent));
@@ -82,6 +90,8 @@ export class EditController {
   undecorate(el: HTMLElement): void {
     el.querySelector(':scope > .pbi-edit')?.remove();
     el.removeAttribute('data-selected');
+    el.removeAttribute('data-group');
+    el.classList.remove('is-locked');
   }
 
   /** Reflect the current selection on the overlays. */
@@ -90,16 +100,22 @@ export class EditController {
     if (!p) return;
     const sel = this.host.selected();
     const many = this.host.selection?.() ?? [];
-    for (const [id, el] of p.visuals) el.toggleAttribute('data-selected', id === sel || many.includes(id));
+    for (const [id, el] of p.visuals) {
+      el.toggleAttribute('data-selected', id === sel || many.includes(id));
+      const spec = p.specs.find((s) => s.id === id);
+      el.toggleAttribute('data-group', !!spec?.group);
+      el.classList.toggle('is-locked', !!spec?.locked);
+    }
   }
 
   /** Draw the snapping grid on the page background. */
   paintGrid(): void {
     const p = this.host.page();
     if (!p) return;
+    const s = this.host.scale?.() ?? 1;
     const { col, row } = this.steps(p);
-    p.el.style.setProperty('--pbi-grid-col', `${col}px`);
-    p.el.style.setProperty('--pbi-grid-row', `${row}px`);
+    p.el.style.setProperty('--pbi-grid-col', `${col / s}px`);
+    p.el.style.setProperty('--pbi-grid-row', `${row / s}px`);
   }
 
   /** Keyboard editing: arrows move one grid cell (with the rest of the selection), Shift+arrows resize. */
@@ -109,6 +125,7 @@ export class EditController {
     if (!dx && !dy) return;
     const p = this.host.page();
     if (!p) return;
+    if (p.specs.find((s) => s.id === id)?.locked) return;
     e.preventDefault();
     e.stopPropagation();
     const selection = this.host.selection?.() ?? [];
@@ -144,7 +161,7 @@ export class EditController {
     if (!selection.includes(id)) this.host.select(id);
     const p = this.host.page();
     const spec = p?.specs.find((s) => s.id === id);
-    if (!p || !spec) return;
+    if (!p || !spec || spec.locked) return;
     const start = { ...(spec.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
     // moving one of several selected visuals moves them all
     const group = (this.host.selection?.() ?? []).filter((x) => x !== id);
@@ -314,16 +331,17 @@ export class EditController {
       m.moved = true;
       m.pageEl.append(m.el);
     }
+    const s = this.host.scale?.() ?? 1;
     const r = m.pageEl.getBoundingClientRect();
     const minX = Math.min(m.startX, e.clientX);
     const maxX = Math.max(m.startX, e.clientX);
     const minY = Math.min(m.startY, e.clientY);
     const maxY = Math.max(m.startY, e.clientY);
 
-    m.el.style.left = `${minX - r.left + m.pageEl.scrollLeft}px`;
-    m.el.style.top = `${minY - r.top + m.pageEl.scrollTop}px`;
-    m.el.style.width = `${maxX - minX}px`;
-    m.el.style.height = `${maxY - minY}px`;
+    m.el.style.left = `${(minX - r.left + m.pageEl.scrollLeft) / s}px`;
+    m.el.style.top = `${(minY - r.top + m.pageEl.scrollTop) / s}px`;
+    m.el.style.width = `${(maxX - minX) / s}px`;
+    m.el.style.height = `${(maxY - minY) / s}px`;
 
     const p = this.host.page();
     if (!p) return;

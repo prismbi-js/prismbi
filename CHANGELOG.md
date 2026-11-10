@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.18.0 (2026-11-10 / Phase 17: Visual Locking & Grouping, Cartesian Range Brushing & Canvas Zoom)
+
+- **Studio Visual Locking & Grouping:**
+  - Added visual locking (`spec.locked: boolean`) preventing accidental moves or resizing of locked background cards, banners, or finalized KPI tiles.
+  - Automatically suppresses resize handles (`.pbi-handle`) and drag movements for locked visuals, with `.is-locked` CSS indicator styling (`src/report/styles.ts`).
+  - Added `report.toggleLock(id)` and quick alignment toolbar lock button (`.pbs-btn-lock`) with `Ctrl+L` keyboard shortcut.
+  - Added visual grouping (`report.groupVisuals` and `report.ungroupVisuals`) with automatic shared group selection, coordinated group drag moving, and top alignment bar buttons (`.pbs-btn-group`, `.pbs-btn-ungroup`) with `Ctrl+G` and `Ctrl+Shift+G` shortcuts.
+
+- **Cartesian Line & Area Chart Range / Brush Multi-Selection (`.pbi-brush`):**
+  - Added interactive horizontal drag range brush overlay on line and area charts (`src/visuals/line.ts`).
+  - Allows report viewers to drag across time spans or category intervals to batch multi-select all enclosed categories (`ctx.host.select(hitIds, { multi: e.ctrlKey || e.shiftKey || e.metaKey })`).
+  - Seamlessly integrates with existing single-point clicks and tooltips.
+
+- **Table & Matrix Cell Font Color Scales & Custom Range Bounds:**
+  - Added text/font color scales in `ConditionalFormat` (`fontColor?: boolean | { min?: string; mid?: string; max?: string; minValue?: number; maxValue?: number }`).
+  - Added support for explicit threshold bounds (`minValue`, `maxValue`) on both `background` and `fontColor` continuous gradients across tables and matrices.
+  - Enabled conditional formatting across all numeric columns (both measure values and unaggregated table columns).
+
+- **Studio Canvas Zoom & Viewport Controls:**
+  - Added canvas zoom toolbar in the Studio page footer (`.pbs-zoom-bar`) with Zoom In (`+`), Zoom Out (`−`), Reset (`100%`), and Fit to Screen (`Fit`).
+  - Added keyboard shortcuts `Ctrl++`, `Ctrl+-`, and `Ctrl+0` for instant viewport zooming.
+  - Synchronized canvas zoom with `EditController` and `Report`, ensuring pixel-perfect drag moving, resizing, magnetic snapping, and marquee selection at any zoom magnification level.
+
 ## 0.17.0 (2026-11-10 / Phase 16: Exploratory Analytics, Smart Alignment & Studio Ingestion)
 
 - **Scatter & Cartesian Box/Brush Multi-Selection (`.pbi-brush`):**

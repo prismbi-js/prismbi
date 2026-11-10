@@ -285,6 +285,45 @@ describe('virtualized matrix', () => {
     v.destroy();
     el.remove();
   });
+
+  it('supports font color scales and custom bounds in table conditional formatting', () => {
+    const el = document.createElement('div');
+    document.body.append(el);
+    const m = new DataModel().addTable('Scores', [
+      { student: 'Alice', score: 85 },
+      { student: 'Bob', score: 45 },
+      { student: 'Charlie', score: 95 },
+    ]);
+    const v = createVisual(el, {
+      model: m,
+      type: 'table',
+      fields: { columns: ['Scores[student]', 'Scores[score]'] },
+      format: {
+        table: {
+          conditional: {
+            'Scores[score]': {
+              fontColor: {
+                min: '#ff0000',
+                max: '#00ff00',
+                minValue: 0,
+                maxValue: 100,
+              },
+            },
+          },
+        },
+      } as never,
+    });
+    v.flush();
+
+    const scoreCells = el.querySelectorAll('tbody tr td:last-child');
+    expect(scoreCells.length).toBe(3);
+    const firstColor = (scoreCells[0] as HTMLElement).style.color;
+    expect(firstColor).toBeTruthy();
+    expect(firstColor).not.toBe('');
+
+    v.destroy();
+    el.remove();
+  });
 });
 
 describe('Studio undo history', () => {

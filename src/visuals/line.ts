@@ -509,7 +509,76 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     dots.replaceChildren();
     ctx.host.hideTooltip();
   });
+  let dragStart: { clientX: number; pX: number } | null = null;
+  let brushEl: SVGElement | null = null;
+  let didBrush = false;
+
+  const plotX = (clientX: number): number => {
+    const r = svg.getBoundingClientRect();
+    if (r.width > 0) return Math.max(left, Math.min(width - right, ((clientX - r.left) * width) / r.width));
+    const attrW = parseFloat(svg.getAttribute('width') || String(width)) || width;
+    return Math.max(left, Math.min(width - right, (clientX * width) / attrW));
+  };
+
+  const onWindowPointerMove = (e: PointerEvent) => {
+    if (!dragStart) return;
+    const currentPX = plotX(e.clientX);
+    const dx = Math.abs(e.clientX - dragStart.clientX);
+    if (!didBrush && dx < 4) return;
+    didBrush = true;
+    cross.setAttribute('visibility', 'hidden');
+    dots.replaceChildren();
+    ctx.host.hideTooltip();
+    const bx = Math.min(dragStart.pX, currentPX);
+    const bw = Math.abs(currentPX - dragStart.pX);
+    if (!brushEl) {
+      brushEl = s('rect', { class: 'pbi-brush', y: top, height: Math.max(0, bottom - top) });
+      g.append(brushEl);
+    }
+    brushEl.setAttribute('x', String(bx));
+    brushEl.setAttribute('width', String(bw));
+  };
+
+  const onWindowPointerUp = (e: PointerEvent) => {
+    if (!dragStart) return;
+    const start = dragStart;
+    dragStart = null;
+    window.removeEventListener('pointermove', onWindowPointerMove);
+    window.removeEventListener('pointerup', onWindowPointerUp);
+    window.removeEventListener('pointercancel', onWindowPointerUp);
+    if (brushEl) {
+      brushEl.remove();
+      brushEl = null;
+    }
+    if (didBrush) {
+      const currentPX = plotX(e.clientX);
+      const minX = Math.min(start.pX, currentPX);
+      const maxX = Math.max(start.pX, currentPX);
+      const hitCategories = categories.filter((_, idx) => {
+        const cx = xAt(idx);
+        return cx >= minX && cx <= maxX;
+      });
+      const hitIds = hitCategories.map((c) => c.identity).filter(Boolean);
+      if (hitIds.length) {
+        ctx.host.select(hitIds, { multi: e.ctrlKey || e.shiftKey || e.metaKey });
+      }
+    }
+  };
+
+  hit.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    dragStart = { clientX: e.clientX, pX: plotX(e.clientX) };
+    didBrush = false;
+    window.addEventListener('pointermove', onWindowPointerMove);
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerUp);
+  });
+
   hit.addEventListener('click', (e) => {
+    if (didBrush) {
+      didBrush = false;
+      return;
+    }
     e.stopPropagation();
     const i = indexAt(e);
     ctx.host.select(categories[i].identity, { multi: e.ctrlKey || e.metaKey });

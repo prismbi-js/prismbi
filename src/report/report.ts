@@ -770,6 +770,7 @@ export class Report implements ReportRuntime {
         selection: () => this.selectedVisuals,
         toggle: (id) => this.toggleVisualSelection(id),
         selectVisuals: (ids) => this.selectVisuals(ids),
+        scale: () => this._zoom,
       });
       this.root.classList.add('is-editing');
       for (const p of this.pages) {
@@ -929,6 +930,28 @@ export class Report implements ReportRuntime {
       this.suppressChanges--;
     }
     this.changedDefinition('ungroup');
+  }
+
+  /** Lock or unlock a visual (or the active visual). Locked visuals cannot be dragged or resized on canvas. */
+  toggleLock(id = this.active): boolean {
+    if (!id) return false;
+    const v = this.findVisual(id);
+    if (!v) return false;
+    const locked = !v.spec.locked;
+    this.updateVisual(id, { locked: locked || undefined });
+    return locked;
+  }
+
+  private _zoom = 1;
+
+  get zoom(): number {
+    return this._zoom;
+  }
+
+  /** Set canvas zoom scale (e.g. 1.0 for 100%, 0.75 for 75%). */
+  setZoom(scale: number): void {
+    this._zoom = Math.max(0.2, Math.min(4, scale));
+    this.editor?.paintGrid();
   }
 
   toggleFocus(visualId: string): void {

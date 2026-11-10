@@ -389,4 +389,45 @@ describe('Report', () => {
     expect(r.selectionSource()).toBe('sc1');
     r.destroy();
   });
+
+  it('supports horizontal range brush multi-selection on line charts', () => {
+    const m = new DataModel().addTable('LineData', [
+      { date: '2026-01-01', val: 100 },
+      { date: '2026-01-02', val: 120 },
+      { date: '2026-01-03', val: 150 },
+      { date: '2026-01-04', val: 90 },
+      { date: '2026-01-05', val: 110 },
+    ]);
+    const r = new Report(el, {
+      model: m,
+      pages: [{
+        id: 'p1',
+        name: 'P1',
+        visuals: [{
+          id: 'ln1',
+          type: 'line',
+          fields: { axis: 'LineData[date]', values: 'LineData[val]' },
+        }],
+      }],
+    });
+    r.flush();
+
+    const hit = el.querySelector<SVGRectElement>('[data-visual-id="ln1"] .pbi-hit')!;
+    expect(hit).toBeTruthy();
+
+    const pointer = (type: string, clientX = 0, clientY = 0) =>
+      Object.assign(new MouseEvent(type, { bubbles: true, clientX, clientY, button: 0 }), { pointerId: 1 });
+
+    // Drag horizontally across hit layer
+    hit.dispatchEvent(pointer('pointerdown', 50, 50));
+    window.dispatchEvent(pointer('pointermove', 250, 50));
+    const svg = el.querySelector<SVGSVGElement>('[data-visual-id="ln1"] svg')!;
+    expect(svg.querySelector('.pbi-brush')).toBeTruthy();
+    window.dispatchEvent(pointer('pointerup', 250, 50));
+    expect(svg.querySelector('.pbi-brush')).toBeNull();
+
+    // Selection should be registered
+    expect(r.selectionSource()).toBe('ln1');
+    r.destroy();
+  });
 });

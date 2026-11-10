@@ -38,7 +38,9 @@ export interface DataBarOptions {
 export interface ConditionalFormat {
   dataBars?: boolean | DataBarOptions;
   /** Colour scale on cell background: `true` uses the theme sequential ramp. */
-  background?: boolean | { min?: string; mid?: string; max?: string };
+  background?: boolean | { min?: string; mid?: string; max?: string; minValue?: number; midValue?: number; maxValue?: number };
+  /** Colour scale on cell text/font: `true` uses the theme sequential ramp. */
+  fontColor?: boolean | { min?: string; mid?: string; max?: string; minValue?: number; midValue?: number; maxValue?: number };
   rules?: ConditionalRule[];
   /** ▲ ▼ ● icons by sign. */
   icons?: boolean;
@@ -308,13 +310,24 @@ export function decorateCell(
   }
   const t = ctx.theme;
   if (cf.background) {
+    const minVal = typeof cf.background === 'object' && cf.background.minValue !== undefined ? cf.background.minValue : stats.min;
+    const maxVal = typeof cf.background === 'object' && cf.background.maxValue !== undefined ? cf.background.maxValue : stats.max;
     const stops = typeof cf.background === 'object'
       ? [cf.background.min ?? t.sequential[0], ...(cf.background.mid ? [cf.background.mid] : []), cf.background.max ?? t.sequential[t.sequential.length - 2]]
       : [t.sequential[0], t.sequential[Math.floor(t.sequential.length * 0.7)]];
-    const tt = stats.max === stats.min ? 1 : (v - stats.min) / (stats.max - stats.min);
+    const tt = maxVal === minVal ? 1 : Math.max(0, Math.min(1, (v - minVal) / (maxVal - minVal)));
     const bg = ramp(stops, tt);
     td.style.background = bg;
     td.style.color = textOn(bg, t.foreground);
+  }
+  if (cf.fontColor) {
+    const minVal = typeof cf.fontColor === 'object' && cf.fontColor.minValue !== undefined ? cf.fontColor.minValue : stats.min;
+    const maxVal = typeof cf.fontColor === 'object' && cf.fontColor.maxValue !== undefined ? cf.fontColor.maxValue : stats.max;
+    const stops = typeof cf.fontColor === 'object'
+      ? [cf.fontColor.min ?? t.bad, ...(cf.fontColor.mid ? [cf.fontColor.mid] : []), cf.fontColor.max ?? t.good]
+      : [t.bad, t.good];
+    const tt = maxVal === minVal ? 1 : Math.max(0, Math.min(1, (v - minVal) / (maxVal - minVal)));
+    td.style.color = ramp(stops, tt);
   }
   for (const r of cf.rules ?? [])
     if (ruleMatch(r, v)) {
@@ -434,7 +447,11 @@ export const table = /* @__PURE__ */ defineVisual({
     }
     const pageSize = tf.pageSize ?? 200;
     const shown = Math.min(rows.length, state._shown ?? pageSize);
-    const stats = cols.map((c) => (c.kind === 'value' ? columnStats(data.rows, c.i) : { min: 0, max: 0 }));
+    const stats = cols.map((c) => {
+      if (c.kind === 'value') return columnStats(data.rows, c.i);
+      const nums = data.rows.map((r) => r.keys[c.i]).filter((x): x is number => typeof x === 'number');
+      return nums.length ? { min: Math.min(...nums), max: Math.max(...nums) } : { min: 0, max: 0 };
+    });
     const groupFields = data.groups as QueryField[];
 
     const tableEl = h('table', { class: `pbi-table pbi-density-${tf.density ?? 'normal'}${tf.rowBanding === false ? '' : ' pbi-banded'}${tf.wrap ? ' pbi-wrap' : ''}` });
@@ -468,10 +485,13 @@ export const table = /* @__PURE__ */ defineVisual({
         // a calculation item in this row may bring its own format (e.g. YoY % as a percentage)
         const rf = c.kind === 'value' ? r.formats?.[c.i] : undefined;
         const text = ctx.fmt(rf ? { ...c.field, format: rf } : c.field, v);
-        if (c.kind === 'value') {
-          const sl = tf.sparklines?.[c.field.name] ?? tf.sparklines?.[c.field.ref];
-          const sparkOpts = sl && typeof v === 'number' ? { ...sl, values: sl.values ?? [v * 0.85, v * 0.95, v * 1.05, v] } : undefined;
-          decorateCell(ctx, td, tf.conditional?.[c.field.name] ?? tf.conditional?.[c.field.ref], v, stats[ci], text, sparkOpts);
+        const cf = tf.conditional?.[c.field.name] ?? tf.conditional?.[c.field.ref];
+        const sl = tf.sparklines?.[c.field.name] ?? tf.sparklines?.[c.field.ref];
+        const sparkOpts = sl && typeof v === 'number' ? { ...sl, values: sl.values ?? [v * 0.85, v * 0.95, v * 1.05, v] } : undefined;
+        if (cf || sparkOpts) {
+          decorateCell(ctx, td, cf, v, stats[ci], text, sparkOpts);
+        } else if (c.kind === 'value') {
+          decorateCell(ctx, td, undefined, v, stats[ci], text, undefined);
         } else {
           td.textContent = text;
         }
