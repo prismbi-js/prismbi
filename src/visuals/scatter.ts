@@ -310,5 +310,81 @@ export const scatter = /* @__PURE__ */ defineVisual({
       interactive(ctx, c, identity, tooltipFor(i, keys, color), keys);
       marks.append(c);
     }
+
+    // Box brush selection on plot area
+    let brushRect: SVGRectElement | null = null;
+    let startPt: { x: number; y: number } | null = null;
+    let didDrag = false;
+
+    const plotCoords = (e: MouseEvent) => {
+      const b = svg.getBoundingClientRect();
+      const bw = b.width || width;
+      const bh = b.height || height;
+      return {
+        x: ((e.clientX - (b.left || 0)) * width) / bw,
+        y: ((e.clientY - (b.top || 0)) * height) / bh,
+      };
+    };
+
+    svg.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const pt = plotCoords(e);
+      if (pt.x < left || pt.x > width || pt.y > bottom) return;
+      startPt = pt;
+      didDrag = false;
+    });
+
+    svg.addEventListener('pointermove', (e) => {
+      if (!startPt) return;
+      const pt = plotCoords(e);
+      const dx = Math.abs(pt.x - startPt.x);
+      const dy = Math.abs(pt.y - startPt.y);
+      if (!didDrag && (dx > 4 || dy > 4)) {
+        didDrag = true;
+        brushRect = s('rect', { class: 'pbi-brush' });
+        svg.append(brushRect);
+      }
+      if (brushRect && didDrag) {
+        const bx = Math.min(startPt.x, pt.x);
+        const by = Math.min(startPt.y, pt.y);
+        const bw = Math.abs(pt.x - startPt.x);
+        const bh = Math.abs(pt.y - startPt.y);
+        brushRect.setAttribute('x', String(bx));
+        brushRect.setAttribute('y', String(by));
+        brushRect.setAttribute('width', String(bw));
+        brushRect.setAttribute('height', String(bh));
+      }
+    });
+
+    const finishBrush = (e: MouseEvent) => {
+      if (!startPt) return;
+      if (brushRect && didDrag) {
+        const pt = plotCoords(e);
+        const bx0 = Math.min(startPt.x, pt.x);
+        const bx1 = Math.max(startPt.x, pt.x);
+        const by0 = Math.min(startPt.y, pt.y);
+        const by1 = Math.max(startPt.y, pt.y);
+        brushRect.remove();
+        brushRect = null;
+
+        const hitIds: DataPointIdentity[] = [];
+        for (const i of order) {
+          const px = x(xs[i]);
+          const py = y(ys[i]);
+          if (px >= bx0 && px <= bx1 && py >= by0 && py <= by1) {
+            const keys = d.indices.map((k) => rows[i].keys[k]);
+            hitIds.push(identityOf(dFields, keys));
+          }
+        }
+        if (hitIds.length) {
+          ctx.host.select(hitIds, { multi: e.ctrlKey || e.shiftKey || e.metaKey });
+        }
+      }
+      startPt = null;
+      didDrag = false;
+    };
+
+    svg.addEventListener('pointerup', finishBrush);
+    svg.addEventListener('pointercancel', finishBrush);
   },
 });

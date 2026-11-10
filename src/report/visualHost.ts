@@ -566,7 +566,7 @@ export class VisualHost {
 
   // ------------------------------------------------------------ interactions
 
-  select(identity: DataPointIdentity | null, opts: { multi?: boolean } = {}): void {
+  select(identity: DataPointIdentity | DataPointIdentity[] | null, opts: { multi?: boolean } = {}): void {
     this.rt.setSelection(this.id, identity, !!opts.multi);
   }
 

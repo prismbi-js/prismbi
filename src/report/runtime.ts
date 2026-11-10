@@ -39,7 +39,7 @@ export interface ReportRuntime {
   highlightFor(visualId: string): FilterSpec[] | undefined;
   selectionFor(visualId: string): DataPointIdentity[];
   selectionSource(): string | null;
-  setSelection(visualId: string, identity: DataPointIdentity | null, multi: boolean): void;
+  setSelection(visualId: string, identity: DataPointIdentity | DataPointIdentity[] | null, multi: boolean): void;
   clearSelectionFrom(visualId: string): void;
   slicerFilter(visualId: string): FilterSpec[] | null;
   setSlicerFilter(visualId: string, filters: FilterSpec[] | null): void;

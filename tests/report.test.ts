@@ -351,4 +351,42 @@ describe('Report', () => {
     expect(v2El).toBeTruthy();
     r.destroy();
   });
+
+  it('supports box brush multi-selection on scatter charts', () => {
+    const m = new DataModel().addTable('ScatterData', [
+      { id: 'P1', x: 10, y: 20 },
+      { id: 'P2', x: 30, y: 40 },
+      { id: 'P3', x: 50, y: 60 },
+    ]);
+    const r = new Report(el, {
+      model: m,
+      pages: [{
+        id: 'p1',
+        name: 'P1',
+        visuals: [{
+          id: 'sc1',
+          type: 'scatter',
+          fields: { details: 'ScatterData[id]', x: 'ScatterData[x]', y: 'ScatterData[y]' },
+        }],
+      }],
+    });
+    r.flush();
+
+    const svg = el.querySelector<SVGSVGElement>('[data-visual-id="sc1"] svg')!;
+    expect(svg).toBeTruthy();
+
+    const pointer = (type: string, clientX = 0, clientY = 0) =>
+      Object.assign(new MouseEvent(type, { bubbles: true, clientX, clientY, button: 0 }), { pointerId: 1 });
+
+    // Drag over plot area (left is ~40px, so start at 100, 50)
+    svg.dispatchEvent(pointer('pointerdown', 100, 50));
+    svg.dispatchEvent(pointer('pointermove', 300, 200));
+    expect(svg.querySelector('.pbi-brush')).toBeTruthy();
+    svg.dispatchEvent(pointer('pointerup', 300, 200));
+    expect(svg.querySelector('.pbi-brush')).toBeNull();
+
+    // Selection on report page should be active
+    expect(r.selectionSource()).toBe('sc1');
+    r.destroy();
+  });
 });

@@ -226,6 +226,10 @@ export class EditController {
         p.el.append(h('div', { class: 'pbi-guide pbi-guide-v', style: `left:${(cur.x + cur.w) * colPx + p.gap}px` }));
         break;
       }
+      if (Math.abs(cur.x + cur.w / 2 - (ol.x + ol.w / 2)) < 0.1) {
+        p.el.append(h('div', { class: 'pbi-guide pbi-guide-v pbi-guide-center', style: `left:${(cur.x + cur.w / 2) * colPx + p.gap}px` }));
+        break;
+      }
     }
     for (const o of others) {
       const ol = o.layout!;
@@ -235,6 +239,10 @@ export class EditController {
       }
       if (cur.y + cur.h === ol.y + ol.h || cur.y + cur.h === ol.y) {
         p.el.append(h('div', { class: 'pbi-guide pbi-guide-h', style: `top:${(cur.y + cur.h) * rowPx + p.gap}px` }));
+        break;
+      }
+      if (Math.abs(cur.y + cur.h / 2 - (ol.y + ol.h / 2)) < 0.1) {
+        p.el.append(h('div', { class: 'pbi-guide pbi-guide-h pbi-guide-center', style: `top:${(cur.y + cur.h / 2) * rowPx + p.gap}px` }));
         break;
       }
     }

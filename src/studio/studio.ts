@@ -1068,7 +1068,9 @@ export class Studio implements StudioContext {
 
   private wireCanvasDrop(canvas: HTMLElement): void {
     canvas.addEventListener('dragover', (e) => {
-      if (!e.dataTransfer?.types.includes(FIELD_MIME) || this.preview) return;
+      const isField = e.dataTransfer?.types.includes(FIELD_MIME);
+      const isFile = e.dataTransfer?.types.includes('Files');
+      if ((!isField && !isFile) || this.preview) return;
       e.preventDefault();
       canvas.classList.add('is-drop');
     });
@@ -1077,6 +1079,39 @@ export class Studio implements StudioContext {
     });
     canvas.addEventListener('drop', (e) => {
       canvas.classList.remove('is-drop');
+      if (e.dataTransfer?.files?.length) {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        const tableName = file.name.replace(/\.[^/.]+$/, '') || 'Data';
+        if (ext === 'csv') {
+          file.text().then(async (text) => {
+            const { parseCsvColumns } = await import('../connectors/csv');
+            const parsed = parseCsvColumns(text);
+            this.model.addColumns(tableName, parsed.columns, parsed.schema);
+            this.scheduleCommit();
+            this.refreshPanes(false);
+            const firstCol = Object.keys(parsed.columns)[0];
+            if (firstCol) {
+              const ref = `${tableName}[${firstCol}]`;
+              const auto = autoVisualFor(this.model, ref);
+              const pos = this.report.findFreeSpot(auto.w, auto.h);
+              const id = this.report.addVisual({ type: auto.type, fields: auto.fields, layout: { ...pos, w: auto.w, h: auto.h } });
+              this.select(id);
+            }
+          });
+          return;
+        } else if (ext === 'json') {
+          file.text().then((text) => {
+            const json = JSON.parse(text);
+            const rows = Array.isArray(json) ? json : json.rows ?? [json];
+            this.model.addTable(tableName, rows);
+            this.scheduleCommit();
+            this.refreshPanes(false);
+          });
+          return;
+        }
+      }
       const ref = e.dataTransfer?.getData(FIELD_MIME);
       if (!ref) return;
       e.preventDefault();

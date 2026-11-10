@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.17.0 (2026-11-10 / Phase 16: Exploratory Analytics, Smart Alignment & Studio Ingestion)
+
+- **Scatter & Cartesian Box/Brush Multi-Selection (`.pbi-brush`):**
+  - Added interactive 2D drag-to-select box/brush selection overlay on scatter charts (`src/visuals/scatter.ts`) with `.pbi-brush` SVG rectangle, semi-transparent accent fill, and dashed border (`src/report/styles.ts`).
+  - Calculates viewport plot coordinates with automated zero-dimension fallbacks for headless/jsdom testing, hit-tests all points inside the drawn bounding box, and dispatches batch selections to the report runtime.
+  - Upgraded `VisualHost.select()` and `ReportRuntime.setSelection()` across `src/visuals/types.ts`, `src/report/visualHost.ts`, `src/report/runtime.ts`, and `src/report/report.ts` to accept `DataPointIdentity | DataPointIdentity[] | null`.
+  - Added additive union selection mode when dragging while holding `Shift` or `Ctrl`/`Cmd`.
+
+- **Studio Smart Center Alignment Magnetic Guides (`.pbi-guide.pbi-guide-center`):**
+  - Upgraded Studio magnetic alignment engine (`src/report/editing.ts`) with smart center-to-center alignment guides (`.pbi-guide.pbi-guide-center`, `.pbi-guide-center-v`, `.pbi-guide-center-h`).
+  - Snaps moving visual midpoints to target visual midpoints (`cur.x + cur.w/2 === ol.x + ol.w/2` and `cur.y + cur.h/2 === ol.y + ol.h/2`) with high-contrast dotted guidelines (`src/report/styles.ts`), simplifying symmetric and balanced dashboard grid authoring.
+
+- **Studio External File Drag-and-Drop Ingestion:**
+  - Added direct file drag-and-drop ingestion (`src/studio/studio.ts`) onto the Studio canvas for external `.csv` and `.json` data files.
+  - Employs zero-bundle dynamic module loading (`import('../connectors/csv')`) to parse CSV tables on demand without increasing the initial Studio bundle size.
+  - Automatically registers new tables into `DataModel` (`this.model.addColumns` / `this.model.addTable`), refreshes sidebar panes, commits to undo/redo history, and auto-spawns a default chart visual on the canvas for instant exploratory analysis.
+
+- **Advanced Visual Calculations (`RUNNINGMIN`, `RUNNINGMAX`, `EMA`):**
+  - Added `RUNNINGMIN`, `RUNNINGMAX`, and `EXPONENTIALMOVINGAVERAGE` (alias `EMA`) visual calculations in `src/data/visualCalc.ts`.
+  - Supports configurable smoothing period parameter `EMA(period)` with exponential weighting factor \(\alpha = 2 / (period + 1)\), providing out-of-the-box financial and signal-processing analytics directly on chart visual queries.
+
 ## 0.16.0 (2026-11-10 / Phase 15: Streaming Columnar IPC, Memory Diagnostics & Visual Polish)
 
 - **Streaming Arrow IPC Ingestion (`streamArrow`):**

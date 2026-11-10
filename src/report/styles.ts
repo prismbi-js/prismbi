@@ -270,7 +270,9 @@ svg.pbi-sparkline{vertical-align:middle;margin-right:6px;display:inline-block}
 .pbi-guide{position:absolute;pointer-events:none;z-index:45}
 .pbi-guide-v{top:0;bottom:0;width:0;border-left:1px dashed var(--pbi-accent)}
 .pbi-guide-h{left:0;right:0;height:0;border-top:1px dashed var(--pbi-accent)}
+.pbi-guide.pbi-guide-center{opacity:.8;border-style:dotted}
 .pbi-marquee{position:absolute;pointer-events:none;z-index:50;border:1px dashed var(--pbi-accent);background:color-mix(in srgb,var(--pbi-accent) 15%,transparent);border-radius:2px}
+.pbi-brush{fill:color-mix(in srgb,var(--pbi-accent) 15%,transparent);stroke:var(--pbi-accent);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
 .pbi-datatable-wrap{overflow:auto;height:100%}
 .pbi-network-node{cursor:pointer}
 .pbi-network-node:hover .pbi-network-circle{stroke:var(--pbi-fg);stroke-width:2.5px}

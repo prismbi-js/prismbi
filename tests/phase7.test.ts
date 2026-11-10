@@ -69,6 +69,31 @@ describe('visual calculations', () => {
     expect(win[1]).toBe(sales[0] + sales[1] + sales[2]);
   });
 
+  it('supports RUNNINGMIN, RUNNINGMAX, and EMA in visual calculations', () => {
+    const q = model.query({
+      groupBy: ['Date[MonthNumber]'],
+      values: [
+        'Total Sales',
+        { name: 'RunMin', visualCalc: 'RUNNINGMIN([Total Sales])' },
+        { name: 'RunMax', visualCalc: 'RUNNINGMAX([Total Sales])' },
+        { name: 'Ema3', visualCalc: 'EMA([Total Sales], 3)' },
+      ],
+      filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
+    });
+    const sales = by(q, 0) as number[];
+    const rMin = by(q, 1) as number[];
+    const rMax = by(q, 2) as number[];
+    const ema = by(q, 3) as number[];
+
+    expect(rMin[0]).toBe(sales[0]);
+    expect(rMin[1]).toBe(Math.min(sales[0], sales[1]));
+    expect(rMax[0]).toBe(sales[0]);
+    expect(rMax[1]).toBe(Math.max(sales[0], sales[1]));
+    expect(ema[0]).toBe(sales[0]);
+    // EMA with period 3: k = 2 / (3 + 1) = 0.5
+    expect(ema[1]).toBeCloseTo(sales[1] * 0.5 + sales[0] * 0.5, 4);
+  });
+
   it('follows sorting and Top N, and restarts per parent group', () => {
     const q = model.query({ groupBy: ['Product[Category]'], values: ['Total Sales', { name: 'Running', visualCalc: 'RUNNINGSUM([Total Sales])' }], orderBy: [{ field: 'Total Sales', direction: 'desc' }], top: 2 });
     expect(q.rows).toHaveLength(2);

@@ -102,6 +102,35 @@ function evalVec(ast: Expr, n: number, column: (name: string) => Vec): Vec {
             return seen ? acc : null;
           });
         }
+        case 'RUNNINGMIN': {
+          const v = arg(0);
+          let minVal: number | null = null;
+          return v.map((x) => {
+            if (x !== null) minVal = minVal === null ? x : Math.min(minVal, x);
+            return minVal;
+          });
+        }
+        case 'RUNNINGMAX': {
+          const v = arg(0);
+          let maxVal: number | null = null;
+          return v.map((x) => {
+            if (x !== null) maxVal = maxVal === null ? x : Math.max(maxVal, x);
+            return maxVal;
+          });
+        }
+        case 'EMA':
+        case 'EXPONENTIALMOVINGAVERAGE': {
+          const v = arg(0);
+          const period = Math.max(1, Math.round(lit(1, 10)));
+          const k = 2 / (period + 1);
+          let ema: number | null = null;
+          return v.map((x) => {
+            if (x === null) return ema;
+            if (ema === null) ema = x;
+            else ema = x * k + ema * (1 - k);
+            return Math.round(ema * 1e8) / 1e8;
+          });
+        }
         case 'MOVINGAVERAGE': {
           const v = arg(0);
           const w = Math.max(1, Math.round(lit(1, 3)));

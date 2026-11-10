@@ -26,7 +26,12 @@ Last updated 2026-10-30. Work happens on branch `phase-5`; `master` is fast-forw
   - Delivered Zero-Copy Arrow & Parquet Direct Ingestion (`src/connectors/arrow.ts`, `src/data/model.ts`): `addArrowTable` columnar streaming, `DataModel.refreshColumns`, `DataTable.appendColumns`, `loadDuckDbTable`, and `loadDuckDbTables`.
   - Delivered DuckDB-Wasm Pushdown Bridge (`src/sql.ts`): `duckdbEngine` and direct `read_parquet(...)` query translation via `parquetTables`.
   - Delivered Studio Canvas Marquee Selection & Quick Alignment Toolbar (`src/report/editing.ts`, `src/studio/studio.ts`): Canvas marquee lasso drag (`.pbi-marquee`) with additive Shift/Ctrl selection and top bar quick alignment toolbar (`.pbs-align-bar`).
-- **Tests:** 603 tests pass across 53 test suites (`npm test`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` (all 11 bundle scenarios) are clean.
+- **Phase 16 (Delivered - v0.17.0):**
+  - Delivered Scatter & Cartesian Box/Brush Multi-Selection (`src/visuals/scatter.ts`, `src/report/visualHost.ts`, `src/report/runtime.ts`): Interactive 2D drag-to-select box/brush tool (`.pbi-brush`), batch multi-identity selection dispatch, coordinate mapping with headless fallbacks, and additive Shift/Ctrl selection.
+  - Delivered Studio Smart Center Alignment Magnetic Guides (`src/report/editing.ts`, `src/report/styles.ts`): Center-to-center magnetic guide lines (`.pbi-guide.pbi-guide-center`, `.pbi-guide-center-v`, `.pbi-guide-center-h`) for visual alignment along X/Y midpoints.
+  - Delivered Studio External File Drag-and-Drop Ingestion (`src/studio/studio.ts`): Direct drag-and-drop of `.csv` and `.json` data files onto the Studio canvas with dynamic CSV module loading (`import('../connectors/csv')`), instant table registration into `DataModel`, pane refresh, history commits, and auto-visual spawning.
+  - Delivered Advanced Visual Calculations (`src/data/visualCalc.ts`): `RUNNINGMIN`, `RUNNINGMAX`, and `EMA` / `EXPONENTIALMOVINGAVERAGE` with configurable smoothing periods.
+- **Tests:** 607 tests pass across 53 test suites (`npm test`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` (all 11 bundle scenarios) are clean.
 - **Entries:**
   - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (26 visual entries, 40 built-in visuals).
   - UI and frameworks: `/studio`, `/react`, `/elements`.

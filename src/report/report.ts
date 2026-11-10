@@ -622,16 +622,32 @@ export class Report implements ReportRuntime {
     return this.page.selection?.visualId ?? null;
   }
 
-  setSelection(visualId: string, identity: DataPointIdentity | null, multi: boolean): void {
+  setSelection(visualId: string, identity: DataPointIdentity | DataPointIdentity[] | null, multi: boolean): void {
     const page = this.findVisual(visualId)?.page ?? this.page;
     const key = (i: DataPointIdentity) => JSON.stringify([i.columns, i.values.map(valueKey)]);
     let ids: DataPointIdentity[] = [];
     if (identity) {
       const cur = page.selection?.visualId === visualId ? page.selection.identities : [];
-      const k = key(identity);
-      const has = cur.some((c) => key(c) === k);
-      if (multi) ids = has ? cur.filter((c) => key(c) !== k) : [...cur, identity];
-      else ids = has && cur.length === 1 ? [] : [identity];
+      const incoming = Array.isArray(identity) ? identity : [identity];
+      if (multi) {
+        const curKeys = new Set(cur.map(key));
+        ids = [...cur];
+        for (const item of incoming) {
+          const k = key(item);
+          if (curKeys.has(k)) {
+            if (incoming.length === 1) ids = ids.filter((c) => key(c) !== k);
+          } else {
+            ids.push(item);
+            curKeys.add(k);
+          }
+        }
+      } else {
+        if (!Array.isArray(identity) && cur.length === 1 && key(cur[0]) === key(identity)) {
+          ids = [];
+        } else {
+          ids = incoming;
+        }
+      }
     }
     page.selection = ids.length ? { visualId, identities: ids } : null;
     this.schedule();

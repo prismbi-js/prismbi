@@ -370,4 +370,55 @@ describe('studio', () => {
       expect(VISUAL_ICONS[type]).toContain('<svg');
     }
   });
+
+  it('renders smart center alignment guides and cleans up on pointerup', () => {
+    const st = open({ starter: 'blank' });
+    const id1 = st.addVisual('card', { value: 'Total Sales' });
+    const id2 = st.addVisual('card', { value: 'Orders' });
+    st.report.updateVisual(id1, { layout: { x: 0, y: 0, w: 4, h: 4 } });
+    st.report.updateVisual(id2, { layout: { x: 5, y: 5, w: 4, h: 4 } });
+
+    const editEl = q<HTMLElement>(`[data-edit-for="${id2}"]`);
+    expect(editEl).toBeTruthy();
+
+    const pointer = (type: string, clientX = 0, clientY = 0) =>
+      Object.assign(new MouseEvent(type, { bubbles: true, clientX, clientY, button: 0 }), { pointerId: 1 });
+
+    editEl!.dispatchEvent(pointer('pointerdown', 100, 100));
+    window.dispatchEvent(pointer('pointermove', 0, 100));
+    const pageEl = q<HTMLElement>('.pbi-page')!;
+    window.dispatchEvent(pointer('pointerup', 0, 100));
+    expect(pageEl.querySelector('.pbi-guide')).toBeNull();
+    st.destroy();
+  });
+
+  it('ingests external CSV file dragged and dropped onto canvas', async () => {
+    const st = open({ starter: 'blank' });
+    const canvas = q<HTMLElement>('.pbs-canvas')!;
+    expect(canvas).toBeTruthy();
+
+    const fakeFile = {
+      name: 'MonthlyOrders.csv',
+      text: async () => 'order_id,amount,status\n101,45.5,shipped\n102,99.0,delivered\n',
+    } as unknown as File;
+
+    const dragEvent = new CustomEvent('drop', { bubbles: true, cancelable: true });
+    Object.assign(dragEvent, {
+      clientX: 50,
+      clientY: 50,
+      dataTransfer: {
+        types: ['Files'],
+        files: [fakeFile],
+        getData: () => '',
+      },
+    });
+
+    canvas.dispatchEvent(dragEvent);
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(st.model.hasTable('MonthlyOrders')).toBe(true);
+    expect(st.model.table('MonthlyOrders').rowCount).toBe(2);
+    expect(st.model.table('MonthlyOrders').column('amount').values).toEqual([45.5, 99.0]);
+    st.destroy();
+  });
 });
