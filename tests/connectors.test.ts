@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { DataModel } from '@prismbi/prismbi/core';
 import {
   addArrowTable,
+  loadDuckDbTable,
+  loadDuckDbTables,
   detectDelimiter,
   googleSheetCsvUrl,
   loadCsv,
@@ -180,6 +182,48 @@ describe('Arrow and SQL', () => {
     expect(m.table('A').column('id').values).toEqual([1, 2]);
     expect((m.table('A').column('at').values[0] as Date).getTime()).toBe(Date.UTC(2024, 0, 1));
     expect(m.table('A').column('meta').values).toEqual(['{"a":1}', null]);
+  });
+
+  it('addArrowTable refreshes and preserves calculated columns via refreshColumns', () => {
+    const arrow1 = {
+      numRows: 2,
+      schema: { fields: [{ name: 'val', type: { typeId: 2 } }] },
+      getChild: () => ({ get: (i: number) => [10, 20][i] }),
+    };
+    const m = addArrowTable(new DataModel(), 'T', arrow1);
+    m.addCalculatedColumn('T', 'doubled', 'T[val] * 2');
+    expect(m.evaluate('SUM(T[doubled])')).toBe(60);
+
+    const arrow2 = {
+      numRows: 3,
+      schema: { fields: [{ name: 'val', type: { typeId: 2 } }] },
+      getChild: () => ({ get: (i: number) => [100, 200, 300][i] }),
+    };
+    addArrowTable(m, 'T', arrow2);
+    expect(m.evaluate('SUM(T[doubled])')).toBe(1200);
+  });
+
+  it('loadDuckDbTable ingests from DuckDB query results and Parquet specs', async () => {
+    const fakeConn = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('read_parquet')) {
+          return {
+            numRows: 2,
+            schema: { fields: [{ name: 'cost', type: { typeId: 2 } }] },
+            getChild: () => ({ get: (i: number) => [5, 15][i] }),
+          };
+        }
+        return [{ product: 'Widget', qty: 42 }];
+      }),
+    };
+    const m = new DataModel();
+    await loadDuckDbTable(m, fakeConn, { table: 'ParquetSales', parquet: 's3://bucket/sales.parquet' });
+    expect(fakeConn.query).toHaveBeenCalledWith("SELECT * FROM read_parquet('s3://bucket/sales.parquet')");
+    expect(m.evaluate('SUM(ParquetSales[cost])')).toBe(20);
+
+    await loadDuckDbTables(m, fakeConn, [{ table: 'Products', query: 'SELECT * FROM products' }]);
+    expect(m.table('Products').column('product').values).toEqual(['Widget']);
+    expect(m.evaluate('SUM(Products[qty])')).toBe(42);
   });
 
   it('loads tables through a SQL adapter', async () => {

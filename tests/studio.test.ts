@@ -301,4 +301,63 @@ describe('studio', () => {
     expect(q('.pbi-spacer', grid!)).toBeTruthy();
     st.destroy();
   });
+
+  it('quick alignment toolbar activates on multi-selection and aligns visuals', () => {
+    const st = open({ starter: 'blank' });
+    const id1 = st.addVisual('card', { value: 'Total Sales' });
+    const id2 = st.addVisual('card', { value: 'Orders' });
+    st.report.updateVisual(id1, { layout: { x: 0, y: 0, w: 4, h: 4 } });
+    st.report.updateVisual(id2, { layout: { x: 5, y: 2, w: 4, h: 4 } });
+
+    // Initially with 1 selected
+    st.select(id1);
+    const alignBar = q('.pbs-align-bar');
+    expect(alignBar).toBeTruthy();
+    const alignLeftBtn = qa<HTMLButtonElement>('.pbs-align-btn', alignBar!).find((b) => b.title === 'Align left')!;
+    expect(alignLeftBtn.disabled).toBe(true);
+
+    // Select both visuals
+    st.report.selectVisuals([id1, id2]);
+    expect(st.report.selectedVisuals).toHaveLength(2);
+    expect(alignLeftBtn.disabled).toBe(false);
+
+    // Click Align Left
+    alignLeftBtn.click();
+    expect(st.report.visual(id1).spec.layout?.x).toBe(0);
+    expect(st.report.visual(id2).spec.layout?.x).toBe(0);
+    st.destroy();
+  });
+
+  it('marquee lasso selection selects enclosed visuals on canvas drag', () => {
+    const st = open({ starter: 'blank' });
+    const id1 = st.addVisual('card', { value: 'Total Sales' });
+    const id2 = st.addVisual('card', { value: 'Orders' });
+    st.report.updateVisual(id1, { layout: { x: 0, y: 0, w: 2, h: 2 } });
+    st.report.updateVisual(id2, { layout: { x: 3, y: 0, w: 2, h: 2 } });
+    st.report.selectVisuals([]);
+    expect(st.report.selectedVisuals).toHaveLength(0);
+
+    const pageEl = q<HTMLElement>('.pbi-page')!;
+    expect(pageEl).toBeTruthy();
+
+    const pointer = (type: string, clientX = 0, clientY = 0) =>
+      Object.assign(new MouseEvent(type, { bubbles: true, clientX, clientY, button: 0 }), { pointerId: 1 });
+
+    // Start marquee drag on canvas background
+    pageEl.dispatchEvent(pointer('pointerdown', 0, 0));
+    window.dispatchEvent(pointer('pointermove', 600, 400));
+    expect(q('.pbi-marquee', pageEl)).toBeTruthy();
+    window.dispatchEvent(pointer('pointerup', 600, 400));
+    expect(q('.pbi-marquee', pageEl)).toBeNull();
+
+    // Both visuals fell within grid range
+    expect(st.report.selectedVisuals.length).toBeGreaterThanOrEqual(1);
+
+    // Clicking canvas without drag clears selection
+    pageEl.dispatchEvent(pointer('pointerdown', 10, 10));
+    window.dispatchEvent(pointer('pointerup', 10, 10));
+    expect(st.report.selectedVisuals).toHaveLength(0);
+
+    st.destroy();
+  });
 });

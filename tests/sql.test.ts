@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SqlUnsupportedError, sqlEngine, toSql } from '@prismbi/prismbi/sql';
+import { SqlUnsupportedError, sqlEngine, toSql, duckdbEngine } from '@prismbi/prismbi/sql';
 import type { SqlRunner } from '@prismbi/prismbi/sql';
 import { DataModel } from '@prismbi/prismbi';
 import type { CellValue, QueryResult, QuerySpec } from '@prismbi/prismbi';
@@ -447,5 +447,30 @@ describe('dialects: mysql and snowflake', () => {
     await e.query(q);
     expect(runs).toBe(2);
     e.dispose();
+  });
+
+  it('translates queries to read_parquet(...) when parquetTables is configured', () => {
+    const m = buildModel();
+    const plan = toSql(m, { groupBy: ['Product[Category]'], values: ['Total Sales'] }, {
+      dialect: 'duckdb',
+      parquetTables: { Sales: 'https://data.example.com/sales.parquet' },
+    });
+    expect(plan.sql).toContain("FROM read_parquet('https://data.example.com/sales.parquet') AS t0");
+  });
+
+  it('duckdbEngine creates a pre-configured engine for DuckDB with automatic model fallback', async () => {
+    const m = buildModel();
+    const mockConn = {
+      query: async (sql: string) => {
+        expect(sql).toContain("read_parquet('sales.parquet')");
+        return [{ g0: 'Bikes', v0: 9500 }];
+      },
+    };
+    const engine = duckdbEngine(m, mockConn, {
+      parquetTables: { Sales: 'sales.parquet' },
+    });
+    const res = await engine.query({ groupBy: ['Product[Category]'], values: ['Total Sales'] });
+    expect(res.rows).toEqual([{ keys: ['Bikes'], values: [9500] }]);
+    engine.dispose();
   });
 });

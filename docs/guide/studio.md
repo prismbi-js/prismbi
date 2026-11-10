@@ -121,13 +121,15 @@ Visuals not listed in `mobile.visuals` are hidden on phones. Pages without a pho
 
 ## Selecting and arranging several visuals
 
-- **Selecting several:** Ctrl-, Shift- or Cmd-click visuals on the canvas or in **Layers**. Ctrl+A selects every visual on the page.
+- **Selecting several:** Ctrl-, Shift- or Cmd-click visuals on the canvas or in **Layers**. Ctrl+A selects every visual on the page. Drag on the canvas background to draw a **lasso marquee** enclosing multiple visuals; hold Shift/Ctrl while dragging to union with the existing selection. Click empty canvas space to deselect.
 - **Moving together:** dragging any selected visual moves the whole selection, kept on the grid, and undoes as one step.
-- **Arrange menu:**
-  - align left, center, right, top, middle or bottom (two or more selected)
-  - distribute horizontally or vertically (three or more)
-  - group (Ctrl+G) and ungroup (Ctrl+Shift+G); grouped visuals select and move together and are marked ⧉ in Layers
-  - bring to front, bring forward, send backward, send to back
+- **Quick alignment toolbar & Arrange menu:**
+  - **1-Click Alignment Toolbar:** dedicated top bar button group (`.pbs-align-bar`) for instant alignment (Align left `⇤`, center `⇥⇤`, right `⇥`, top `⤊`, middle `⤋⤊`, bottom `⤋`) and distribution (horizontally `⬌`, vertically `⬍`), activated whenever multiple visuals are selected.
+  - **Arrange Menu:**
+    - align left, center, right, top, middle or bottom (two or more selected)
+    - distribute horizontally or vertically (three or more)
+    - group (Ctrl+G) and ungroup (Ctrl+Shift+G); grouped visuals select and move together and are marked ⧉ in Layers
+    - bring to front, bring forward, send backward, send to back
 - **Layers:** lists the page front to back. Click to select, use the arrows to reorder.
 
 ![The Layers pane in Studio showing visual z-order, lock and visibility](../images/studio-layers.png)

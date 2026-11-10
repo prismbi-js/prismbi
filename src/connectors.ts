@@ -6,8 +6,8 @@ export { parseCsv, parseCsvRecords, parseCsvColumns, streamCsv, detectDelimiter,
 export type { CsvOptions, CsvColumnsResult, StreamCsvOptions, StreamCsvResult } from './connectors/csv';
 export { fetchText, loadJson, loadRest, loadGraphQL, pick, toRows } from './connectors/http';
 export type { FetchOptions, JsonOptions, RestOptions, Pagination, GraphQLOptions } from './connectors/http';
-export { arrowColumns, addArrowTable } from './connectors/arrow';
-export type { ArrowTableLike } from './connectors/arrow';
+export { arrowColumns, addArrowTable, loadDuckDbTable, loadDuckDbTables } from './connectors/arrow';
+export type { ArrowTableLike, ArrowVectorLike, DuckDbConnectionLike, DuckDbTableSpec } from './connectors/arrow';
 export { loadSqlTables } from './connectors/sql';
 export type { SqlAdapter, SqlTableSpec } from './connectors/sql';
 export { streamInto, scheduleRefresh } from './connectors/stream';

@@ -23,6 +23,9 @@ export const STUDIO_CSS = /* css */ `
 .pbs-icon{width:30px;height:30px;padding:0;justify-content:center}
 .pbs-spacer{flex:1}
 .pbs-status{font-size:12px;color:var(--pbi-fg-3);white-space:nowrap}
+.pbs-align-bar{display:inline-flex;align-items:center;gap:2px;padding:1px;border-radius:6px;background:color-mix(in srgb,var(--pbi-fg) 4%,transparent)}
+.pbs-align-btn{width:26px;height:26px;font-size:12px;border:0;background:transparent;border-radius:4px}
+.pbs-align-btn:not(:disabled):hover{background:color-mix(in srgb,var(--pbi-fg) 10%,transparent)}
 
 .pbs-rail{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;border-right:1px solid var(--pbs-line);background:var(--pbs-pane)}
 .pbs-rail button{width:34px;height:34px;border:0;border-radius:8px;background:transparent;cursor:pointer;display:grid;place-items:center;color:var(--pbi-fg-2)}

@@ -19,7 +19,10 @@ Last updated 2026-10-30. Work happens on branch `phase-5`; `master` is fast-forw
   - Delivered PDF Document Outlines & Bookmarks (`src/report/pdf.ts`): Structured PDF 1.4 vector document outlines (bookmarks) generator indexing report pages and visuals with `/PageMode /UseOutlines` auto-sidebar expansion and direct `/XYZ` page coordinate navigation.
   - Delivered Clipboard Exports & Encrypted Dashboards (`src/report/visualHost.ts`, `src/report/html.ts`): `copyData()` (TSV for Excel), `copySvg()` for Figma/Illustrator, and client-side AES-GCM encrypted standalone offline dashboards (`exportHtml({ password, hint })`).
   - Delivered Modern Window Calculations (`src/data/visualCalc.ts`): Visual calculation support for `OFFSET`, `INDEX`, and `WINDOW`.
-- **Tests:** 591 pass across 52 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
+  - Delivered Zero-Copy Arrow & Parquet Direct Ingestion (`src/connectors/arrow.ts`, `src/data/model.ts`): `addArrowTable` columnar streaming, `DataModel.refreshColumns`, `loadDuckDbTable`, and `loadDuckDbTables`.
+  - Delivered DuckDB-Wasm Pushdown Bridge (`src/sql.ts`): `duckdbEngine` and direct `read_parquet(...)` query translation via `parquetTables`.
+  - Delivered Studio Canvas Marquee Selection & Quick Alignment Toolbar (`src/report/editing.ts`, `src/studio/studio.ts`): Canvas marquee lasso drag (`.pbi-marquee`) with additive Shift/Ctrl selection and top bar quick alignment toolbar (`.pbs-align-bar`).
+- **Tests:** 597 pass across 52 test suites (`npm test`; the SQLite cases need Node 22, e.g. `C:/Users/santh/AppData/Local/nvm/v22.10.0/node.exe node_modules/vitest/vitest.mjs run`). `npm run test:visual` covers 98 screenshot baselines (0 failures). `npm run bench` has per-query time budgets. `npm run typecheck`, `npm run build` and `npm run size` are clean.
 - **Entries:**
   - Main: `@prismbi/prismbi`, `/core`, `/visuals`, `/visuals/<family>` (26 visual entries, 40 built-in visuals).
   - UI and frameworks: `/studio`, `/react`, `/elements`.

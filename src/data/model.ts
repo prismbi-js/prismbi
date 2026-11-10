@@ -190,6 +190,18 @@ export class DataModel {
     return this.addTable(name, DataTable.fromColumns(name, columns, schema));
   }
 
+  /** Replace a table's columns (e.g. from an Arrow or Parquet batch), keeping calculated columns. */
+  refreshColumns(name: string, columns: Record<string, unknown[]>, schema?: Record<string, ColumnSchema>): this {
+    const old = this.tables.get(name);
+    const calc = old ? [...old.columns.values()].filter((c) => c.expression) : [];
+    const table = DataTable.fromColumns(name, columns, schema);
+    this.tables.set(name, table);
+    this.changed();
+    for (const c of calc) this.addCalculatedColumn(name, c.name, c.expression!, { format: c.format, type: c.type, hidden: c.hidden });
+    this.recalculateTables();
+    return this;
+  }
+
   refreshTable(name: string, rows: Row[], schema?: Record<string, ColumnSchema>): this {
     // a transformed table treats new rows as its source and replays its steps
     const tf = this.transforms.get(name);

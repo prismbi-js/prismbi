@@ -26,14 +26,14 @@ const PACKAGE_ALIASES = Object.fromEntries(
 
 /** [name, source, budget in KB min+gzip, optional base scenario: report only the increment over it] */
 const SCENARIOS = [
-  ['core (api)', `export * from '${dist}/core.js';`, 118],
+  ['core (api)', `export * from '${dist}/core.js';`, 119],
   ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 106],
-  ['full (api)', `export * from '${dist}/index.js';`, 168],
+  ['full (api)', `export * from '${dist}/index.js';`, 169],
   ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 162],
-  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 140],
+  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 142],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 114],
   ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 128],
-  ['connectors', `export * from '${dist}/connectors.js';`, 6],
+  ['connectors', `export * from '${dist}/connectors.js';`, 7],
   ['worker', `export * from '${dist}/worker.js';`, 3],
   ['ai (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/ai.js';`, 28, 'full (api)'],
   ['sql (on top of full)', `export * from '${dist}/index.js'; export * from '${dist}/sql.js';`, 15, 'full (api)'],

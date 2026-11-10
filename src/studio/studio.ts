@@ -466,9 +466,16 @@ export class Studio implements StudioContext {
   private syncArrange(): void {
     const sel = this.report.selectedVisuals.length;
     const menu = this.els.arrange as HTMLSelectElement | undefined;
-    if (!menu) return;
-    menu.disabled = sel === 0;
-    for (const o of menu.querySelectorAll('option[data-min]')) (o as HTMLOptionElement).disabled = sel < Number((o as HTMLOptionElement).dataset.min);
+    if (menu) {
+      menu.disabled = sel === 0;
+      for (const o of menu.querySelectorAll('option[data-min]')) (o as HTMLOptionElement).disabled = sel < Number((o as HTMLOptionElement).dataset.min);
+    }
+    const bar = this.els.alignBar as HTMLElement | undefined;
+    if (bar) {
+      for (const b of bar.querySelectorAll('button[data-min]')) {
+        (b as HTMLButtonElement).disabled = sel < Number((b as HTMLElement).dataset.min);
+      }
+    }
     if (this.layersOpen) this.renderLayers();
   }
 
@@ -783,6 +790,27 @@ export class Studio implements StudioContext {
       arrange.value = '';
       if (v) this.arrangeSelection(v);
     });
+    const alignActions = [
+      { id: 'align:left', icon: '⇤', title: 'Align left', min: 2 },
+      { id: 'align:center', icon: '⇥⇤', title: 'Align center', min: 2 },
+      { id: 'align:right', icon: '⇥', title: 'Align right', min: 2 },
+      { id: 'align:top', icon: '⤊', title: 'Align top', min: 2 },
+      { id: 'align:middle', icon: '⤋⤊', title: 'Align middle', min: 2 },
+      { id: 'align:bottom', icon: '⤋', title: 'Align bottom', min: 2 },
+      { id: 'distribute:horizontal', icon: '⬌', title: 'Distribute horizontally', min: 3 },
+      { id: 'distribute:vertical', icon: '⬍', title: 'Distribute vertically', min: 3 },
+    ];
+    const alignBtns = alignActions.map((a) => {
+      const b = btn(a.icon, () => this.arrangeSelection(a.id), {
+        title: a.title,
+        'aria-label': a.title,
+        class: 'pbs-btn pbs-icon pbs-align-btn',
+        'data-min': String(a.min),
+      });
+      b.disabled = true;
+      return b;
+    });
+    const alignBar = h('div', { class: 'pbs-align-bar', role: 'group', 'aria-label': 'Visual alignment' }, ...alignBtns);
     const schedBtn = btn('⏰ Schedules', () => this.editSchedules(), { title: 'Scheduled sends and measure alerts' });
     const layersBtn = btn('Layers', () => this.toggleLayers(), { title: 'All visuals on this page, front to back', 'aria-expanded': 'false' });
     const phoneBtn = btn('📱 Phone', () => this.setPhoneLayout(!this.phone), { 'aria-pressed': 'false', title: 'Edit the phone layout of this page' });
@@ -816,6 +844,7 @@ export class Studio implements StudioContext {
     this.els.previewBtn = previewBtn;
     this.els.phoneBtn = phoneBtn;
     this.els.arrange = arrange;
+    this.els.alignBar = alignBar;
     this.els.layersBtn = layersBtn;
     this.els.phoneReset = phoneReset;
     const top = h(
@@ -839,6 +868,7 @@ export class Studio implements StudioContext {
       fileInput,
       h('span', { class: 'pbs-spacer' }),
       status,
+      alignBar,
       schedBtn,
       arrange,
       layersBtn,

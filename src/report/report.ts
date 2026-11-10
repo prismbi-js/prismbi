@@ -753,12 +753,19 @@ export class Report implements ReportRuntime {
         commitLayouts: (updates) => this.commitLayouts(updates),
         selection: () => this.selectedVisuals,
         toggle: (id) => this.toggleVisualSelection(id),
+        selectVisuals: (ids) => this.selectVisuals(ids),
       });
       this.root.classList.add('is-editing');
-      for (const p of this.pages) for (const host of p.hosts.values()) this.editor.decorate(host.id, host.el);
+      for (const p of this.pages) {
+        if (p.el) this.editor.decoratePage(p.el);
+        for (const host of p.hosts.values()) this.editor.decorate(host.id, host.el);
+      }
       this.editor.paintGrid();
     } else {
-      for (const p of this.pages) for (const host of p.hosts.values()) this.editor!.undecorate(host.el);
+      for (const p of this.pages) {
+        if (p.el) this.editor!.undecoratePage(p.el);
+        for (const host of p.hosts.values()) this.editor!.undecorate(host.el);
+      }
       this.editor = null;
       this.root.classList.remove('is-editing');
     }
@@ -1560,9 +1567,7 @@ export class Report implements ReportRuntime {
 
   private mountPage(p: PageState, parent: HTMLElement): void {
     p.el = h('div', { class: 'pbi-page', role: 'tabpanel', 'aria-label': this.translate('page', p.def.id!, p.def.name) });
-    p.el.addEventListener('pointerdown', (e) => {
-      if (this.editor && e.target === p.el) this.setActiveVisual(null);
-    });
+    if (this.editor) this.editor.decoratePage(p.el);
     parent.append(p.el);
     for (const spec of p.def.visuals) this.mountVisual(p, spec);
   }

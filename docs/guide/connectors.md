@@ -71,13 +71,23 @@ GraphQL `errors` reject the promise with their messages joined.
 
 ## Apache Arrow, Parquet and DuckDB
 
-`addArrowTable(model, name, arrowTable, schema?)` adds a table from anything shaped like an Apache Arrow `Table` (`numRows`, `schema.fields`, `getChild(name).get(i)`). PrismBI doesn't depend on `apache-arrow`. BigInts become numbers, `Date` and `Timestamp` columns become `Date`s, and structs and lists become JSON text. Existing tables are refreshed in place, so calculated columns are kept.
+`addArrowTable(model, name, arrowTable, schema?)` adds a table from anything shaped like an Apache Arrow `Table` (`numRows`, `schema.fields`, `getChild(name).get(i)`). PrismBI doesn't depend on `apache-arrow`. BigInts become numbers, `Date` and `Timestamp` columns become `Date`s, and structs and lists become JSON text. Existing tables are refreshed in place using columnar data (`DataModel.refreshColumns`), so calculated columns are preserved with zero row-object allocation overhead.
 
-Parquet files load through anything that produces Arrow, for example DuckDB-Wasm:
+Parquet files load directly through DuckDB-Wasm with `loadDuckDbTable` or `loadDuckDbTables`:
 
 ```ts
+import { loadDuckDbTable, loadDuckDbTables } from '@prismbi/prismbi/connectors';
+
 const conn = await db.connect();
-addArrowTable(model, 'Trips', await conn.query(`SELECT * FROM 'trips.parquet' WHERE year = 2025`));
+
+// Direct Parquet ingestion (executes read_parquet)
+await loadDuckDbTable(model, conn, { table: 'Trips', parquet: 'trips.parquet' });
+
+// Or ingest query results across multiple tables in parallel
+await loadDuckDbTables(model, conn, [
+  { table: 'Sales', query: 'SELECT * FROM sales WHERE year = 2025' },
+  { table: 'Products', parquet: 's3://bucket/products.parquet' },
+]);
 ```
 
 ## SQL

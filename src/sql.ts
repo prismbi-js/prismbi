@@ -22,6 +22,8 @@ export interface SqlOptions {
   dialect?: SqlDialect;
   /** When true, queries emit parameters into `SqlPlan.params` instead of inlining literals into SQL. */
   parameterized?: boolean;
+  /** Model table → Parquet file path or URL for DuckDB pushdown (e.g. `{ Sales: 's3://bucket/sales.parquet' }`). */
+  parquetTables?: Record<string, string>;
 }
 
 /** The query (or a measure in it) can't be expressed in SQL. */
@@ -111,6 +113,9 @@ class Scope {
   }
 
   table(name: string): string {
+    if (this.opts.parquetTables?.[name] && (this.opts.dialect === 'duckdb' || !this.opts.dialect)) {
+      return `read_parquet('${this.opts.parquetTables[name].replace(/'/g, "''")}')`;
+    }
     return quoteIdent(this.opts.tables?.[name] ?? name, this.opts.dialect);
   }
 
@@ -1530,4 +1535,25 @@ export function duckdbRunner(conn: { query(sql: string): Promise<unknown> }): Sq
     const rows = Array.isArray(res) ? res : (res.toArray?.() ?? []);
     return rows.map((r) => (r && typeof r === 'object' && 'toJSON' in r && typeof (r as { toJSON: unknown }).toJSON === 'function' ? (r as { toJSON: () => Record<string, unknown> }).toJSON() : (r as Record<string, unknown>)));
   };
+}
+
+export interface DuckDbEngineOptions extends Omit<SqlEngineOptions, 'dialect' | 'run'> {
+  /** Map model table name directly to Parquet file paths or URLs, e.g. `{ Sales: 's3://bucket/sales.parquet' }`. */
+  parquetTables?: Record<string, string>;
+  /** Optional runner override. Defaults to `duckdbRunner(conn)`. */
+  run?: SqlRunner;
+}
+
+/**
+ * Pre-configured SQL pushdown query engine for DuckDB (DuckDB-Wasm in browser or DuckDB on server).
+ * Automatically sets dialect to `'duckdb'`, attaches `duckdbRunner(conn)`, defaults `fallback: 'model'`,
+ * and supports querying Parquet files directly via `parquetTables`.
+ */
+export function duckdbEngine(model: DataModel, conn: { query(sql: string): Promise<unknown> }, opts: DuckDbEngineOptions = {}) {
+  return sqlEngine(model, {
+    dialect: 'duckdb',
+    run: opts.run ?? duckdbRunner(conn),
+    fallback: opts.fallback ?? 'model',
+    ...opts,
+  });
 }

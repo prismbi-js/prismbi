@@ -46,6 +46,19 @@
   - Added `OFFSET(delta, [target])`, `INDEX(position, [target])`, and `WINDOW(from, to, [target])` functions to visual calculations engine (`src/data/visualCalc.ts`).
   - Added comprehensive evaluation tests across sorted groups and partitioned dimensions in `tests/dax.test.ts` and `tests/phase7.test.ts`.
 
+- **Zero-Copy Arrow & Parquet Direct Ingestion:**
+  - Streamlined `addArrowTable` to load Arrow columnar vectors directly into `DataModel` columnar memory (`DataTable.fromColumns`) with zero row-object allocation overhead.
+  - Added `DataModel.refreshColumns(name, columns, schema)` to refresh columnar datasets in place while preserving calculated columns and relationships.
+  - Added `loadDuckDbTable` and `loadDuckDbTables` in `@prismbi/prismbi/connectors` to ingest DuckDB-Wasm queries or remote/local Parquet files (`parquet: 'data.parquet'`) directly into the model.
+
+- **DuckDB-Wasm Pushdown Bridge & Parquet Pushdown:**
+  - Added `parquetTables` in `SqlOptions` to push queries down directly to DuckDB `read_parquet('...')` table views without loading raw rows.
+  - Added `duckdbEngine(model, conn, opts)` in `@prismbi/prismbi/sql` providing a turn-key pushdown engine for DuckDB-Wasm with automatic model fallback.
+
+- **Studio Canvas Marquee (Lasso) Selection & Quick Alignment Toolbar:**
+  - Added canvas marquee drag selection (`.pbi-marquee`) in `EditController` (`src/report/editing.ts`) with interactive hit preview, additive Shift/Ctrl union selection, and background click deselection.
+  - Added Studio quick alignment toolbar (`.pbs-align-bar`) with 1-click alignment buttons (`Align Left`, `Align Center`, `Align Right`, `Align Top`, `Align Middle`, `Align Bottom`, `Distribute Horizontal`, `Distribute Vertical`) dynamically activated on multi-visual selection.
+
 ## 0.14.0 (2026-11-09 / Phase 13: Enterprise Fabric & Advanced Charting)
 
 - **Network graph conditional formatting & metric-driven styling:**

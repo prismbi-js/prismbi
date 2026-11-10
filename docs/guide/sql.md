@@ -18,10 +18,13 @@ const model = new DataModel()
   .addMeasure('Orders', 'DISTINCTCOUNT(Sales[OrderNumber])');
 
 const conn = await db.connect(); // an AsyncDuckDB with the tables loaded (Parquet, CSV, Arrow…)
-const engine = sqlEngine(model, { run: duckdbRunner(conn) });
+const engine = duckdbEngine(model, conn, {
+  parquetTables: { Sales: 's3://bucket/fact_sales.parquet' }, // direct pushdown into Parquet files
+});
 new Report(el, { model, engine, pages });
 ```
 
+- **DuckDB & Parquet Direct Pushdown:** `duckdbEngine(model, conn, opts)` pre-configures SQL pushdown for DuckDB-Wasm with automatic model fallback. The `parquetTables` option (`{ Sales: 's3://bucket/sales.parquet' }`) translates queries into DuckDB `read_parquet(...)` views so fact tables never need to be registered or loaded in memory.
 - **Other databases:** `run` is any `(sql, signal) => Promise<rows>`, so you can send the SQL to your own server for DuckDB, Postgres, SQLite, MySQL, Snowflake, SQL Server (T-SQL) or Google BigQuery. Set `dialect: 'duckdb' | 'postgres' | 'sqlite' | 'mysql' | 'snowflake' | 'mssql' | 'bigquery'` (default `'duckdb'`). Set `parameterized: true` to generate parameterized statements (`?`) with values extracted to `SqlPlan.params`.
 - **Different names:** `tables` maps model tables to SQL tables or views (`{ Sales: 'analytics.fact_sales' }`). `columns` maps column names per table (`{ Sales: { SalesAmount: 'amount' } }`).
 - **Aggregation tables:** with an [aggregation table](advanced-modeling.md#aggregation-tables) in memory, `sqlEngine` answers the queries it covers locally and sends only the rest to the database.

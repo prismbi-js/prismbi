@@ -441,9 +441,12 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **PDF Document Outlines & Bookmarks:** Structured PDF 1.4 outline bookmarks tree indexing report pages and visuals with `/PageMode /UseOutlines` auto-sidebar expansion and direct `/XYZ` coordinate page jump navigation.
 - [x] **Clipboard Exports & Encrypted Dashboards:** Direct clipboard copy of tabular data (TSV) and standalone vector SVG; AES-256 client-side encrypted offline HTML dashboards (`exportHtml({ password, hint })`) with in-browser WebCrypto password unlock dialog.
 - [x] **Modern Window Calculations:** Visual calculation support for `OFFSET`, `INDEX`, and `WINDOW` relative and absolute navigation.
+- [x] **Zero-Copy Arrow & Parquet Direct Ingestion:** Columnar Arrow ingestion with zero row object allocation overhead, `DataModel.refreshColumns`, and DuckDB-Wasm / Parquet file loader (`loadDuckDbTable`, `loadDuckDbTables`).
+- [x] **DuckDB-Wasm Pushdown Bridge:** Turn-key `duckdbEngine` and direct `read_parquet(...)` query translation via `parquetTables`.
+- [x] **Studio Marquee Selection & Quick Alignment Toolbar:** Drag-to-select marquee box (`.pbi-marquee`) on canvas with additive Shift/Ctrl selection, and 1-click Studio alignment toolbar (`.pbs-align-bar`).
 
 **Acceptance:**
-- 591 passing tests across 52 test suites (100% pass rate).
+- 597 passing tests across 52 test suites (100% pass rate).
 - 98 visual regression screenshots with 0 failures across light and dark themes.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

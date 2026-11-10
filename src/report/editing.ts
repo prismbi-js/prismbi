@@ -22,6 +22,8 @@ export interface EditHost {
   selection?(): string[];
   /** Ctrl/Shift-click: add or remove from the selection. */
   toggle?(id: string): void;
+  /** Select an explicit set of visuals (e.g. from marquee lasso selection). */
+  selectVisuals?(ids: string[]): void;
 }
 
 type Mode = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -34,6 +36,8 @@ const HANDLES: Mode[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
  */
 export class EditController {
   private drag: { id: string; mode: Mode; x: number; y: number; start: VisualLayout; current: VisualLayout; pointer: number; others?: Map<string, { start: VisualLayout; current: VisualLayout }> } | null = null;
+  private marquee: { pageEl: HTMLElement; startX: number; startY: number; el: HTMLElement; pointer: number; additive: boolean; moved: boolean } | null = null;
+  private boundPages = new WeakSet<HTMLElement>();
 
   constructor(private host: EditHost) {}
 
@@ -42,6 +46,18 @@ export class EditController {
     const inner = Math.max(0, (p.el.clientWidth || 0) - p.gap * 2);
     const col = inner > 0 ? (inner + p.gap) / p.cols : 80;
     return { col, row: p.rowHeight + p.gap };
+  }
+
+  /** Bind marquee lasso selection to the canvas background of a page. */
+  decoratePage(el: HTMLElement): void {
+    if (this.boundPages.has(el)) return;
+    this.boundPages.add(el);
+    el.addEventListener('pointerdown', (e) => this.onPagePointerDown(el, e as PointerEvent));
+  }
+
+  undecoratePage(el: HTMLElement): void {
+    this.boundPages.delete(el);
+    el.querySelector(':scope > .pbi-marquee')?.remove();
   }
 
   /** Add (or refresh) the edit overlay on a visual element. */
@@ -240,6 +256,102 @@ export class EditController {
       return;
     }
     if (changed(c, s)) this.host.commitLayout(d.id, c);
+  }
+
+  private onPagePointerDown(pageEl: HTMLElement, e: PointerEvent): void {
+    if (e.button !== undefined && e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('.pbi-edit') || target?.closest('.pbi-visual')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const additive = e.ctrlKey || e.shiftKey || e.metaKey;
+    const marqueeEl = h('div', { class: 'pbi-marquee' });
+    this.marquee = { pageEl, startX: e.clientX, startY: e.clientY, el: marqueeEl, pointer: e.pointerId, additive, moved: false };
+    const onMove = (ev: PointerEvent) => this.marqueeMove(ev);
+    const onEnd = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+      this.marqueeEnd(ev);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+  }
+
+  private visualIntersects(p: EditPageInfo, id: string, el: HTMLElement, minX: number, maxX: number, minY: number, maxY: number): boolean {
+    const br = el.getBoundingClientRect();
+    if (br.width > 0 || br.height > 0) {
+      return br.right >= minX && br.left <= maxX && br.bottom >= minY && br.top <= maxY;
+    }
+    const spec = p.specs.find((s) => s.id === id);
+    if (!spec) return false;
+    const pr = p.el.getBoundingClientRect();
+    const { col, row } = this.steps(p);
+    const l = spec.layout ?? { x: 0, y: 0, w: 4, h: 6 };
+    const vx0 = pr.left + l.x * col + p.gap;
+    const vx1 = vx0 + l.w * col;
+    const vy0 = pr.top + l.y * row + p.gap;
+    const vy1 = vy0 + l.h * row;
+    return vx1 >= minX && vx0 <= maxX && vy1 >= minY && vy0 <= maxY;
+  }
+
+  private marqueeMove(e: PointerEvent): void {
+    const m = this.marquee;
+    if (!m) return;
+    const dx = e.clientX - m.startX;
+    const dy = e.clientY - m.startY;
+    if (!m.moved) {
+      if (Math.hypot(dx, dy) < 4) return;
+      m.moved = true;
+      m.pageEl.append(m.el);
+    }
+    const r = m.pageEl.getBoundingClientRect();
+    const minX = Math.min(m.startX, e.clientX);
+    const maxX = Math.max(m.startX, e.clientX);
+    const minY = Math.min(m.startY, e.clientY);
+    const maxY = Math.max(m.startY, e.clientY);
+
+    m.el.style.left = `${minX - r.left + m.pageEl.scrollLeft}px`;
+    m.el.style.top = `${minY - r.top + m.pageEl.scrollTop}px`;
+    m.el.style.width = `${maxX - minX}px`;
+    m.el.style.height = `${maxY - minY}px`;
+
+    const p = this.host.page();
+    if (!p) return;
+    const existing = new Set(m.additive ? (this.host.selection?.() ?? []) : []);
+    for (const [id, el] of p.visuals) {
+      const hit = this.visualIntersects(p, id, el, minX, maxX, minY, maxY);
+      el.toggleAttribute('data-selected', existing.has(id) || hit);
+    }
+  }
+
+  private marqueeEnd(e: PointerEvent): void {
+    const m = this.marquee;
+    if (!m) return;
+    this.marquee = null;
+    m.el.remove();
+    if (m.moved) {
+      const minX = Math.min(m.startX, e.clientX);
+      const maxX = Math.max(m.startX, e.clientX);
+      const minY = Math.min(m.startY, e.clientY);
+      const maxY = Math.max(m.startY, e.clientY);
+      const p = this.host.page();
+      if (!p) return;
+      const hitIds: string[] = [];
+      for (const [id, el] of p.visuals) {
+        if (this.visualIntersects(p, id, el, minX, maxX, minY, maxY)) {
+          hitIds.push(id);
+        }
+      }
+      const existing = m.additive ? (this.host.selection?.() ?? []) : [];
+      const finalIds = [...new Set([...existing, ...hitIds])];
+      if (this.host.selectVisuals) this.host.selectVisuals(finalIds);
+      else if (finalIds.length > 0) this.host.select(finalIds[0]);
+      else this.host.select(null);
+    } else {
+      if (!m.additive) this.host.select(null);
+    }
   }
 }
 
