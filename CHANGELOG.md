@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.21.0 (2026-11-10 / Phase 20: Presentation Auto-Play Carousel, Visual Annotations, Direct Data Export & Canvas Grid)
+
+- **Report Presentation Mode & Auto-Play Slideshow Carousel (`startAutoPlay`, `enterFullscreen`, `.pbi-presentation-bar`):**
+  - Added kiosk and executive presentation mode with automated page rotation (`report.startAutoPlay({ intervalMs, loop, showControls })`, `report.stopAutoPlay()`, `report.isAutoPlaying()`, `src/report/report.ts`).
+  - Added full browser fullscreen controls (`report.enterFullscreen()`, `report.exitFullscreen()`, `report.toggleFullscreen()`, `report.isFullscreen()`).
+  - Sleek floating presentation HUD (`.pbi-presentation-bar`, `src/report/styles.ts`) featuring Play/Pause toggle, Previous/Next page buttons, page progress counter (`Page X of Y`), dynamic countdown progress bar (`.pbi-pres-progress`), fullscreen toggle, and auto-hiding after 3 seconds of cursor inactivity.
+  - Studio top/footer integration with quick Present button (`.pbs-present-btn`, `▶`) and `F5` keyboard shortcut.
+
+- **Visual Data Annotations & Callout Pins (`VisualAnnotation`, `VisualSpec.annotations`):**
+  - Added rich data annotations and milestone callout pins attached to visual coordinates or category marks (`src/visuals/types.ts`, `src/report/visualHost.ts`).
+  - Programmatic annotation management APIs on `Report` (`report.addAnnotation()`, `report.removeAnnotation()`, `report.getAnnotations()`).
+  - Interactive callout badges and pins (`.pbi-annotation-pin`, `.pbi-annotation-badge`, `src/report/styles.ts`) rendered on the visual overlay with customizable badge icons, labels, and themes.
+  - Interactive popover cards (`.pbi-annotation-popover`) displaying annotation titles, descriptions, and notes on click/hover.
+
+- **Direct Visual Raw Data File Export (`getVisualData`, `exportVisualData`):**
+  - Added programmatic visual data retrieval in multiple text formats (`report.getVisualData(visualId, 'csv' | 'tsv' | 'json')`, `src/report/report.ts`).
+  - Added direct browser file export downloads across CSV, TSV, JSON, and Excel XLSX (`report.exportVisualData(visualId, format, filename)`).
+  - Added JSON serialization and export support (`toJson()`, `exportJson()`) in `VisualHost` (`src/report/visualHost.ts`) alongside CSV, TSV, and XLSX.
+  - Expanded visual header export context menu with direct 1-click "Export data (JSON)" action.
+
+- **Studio Canvas Snap-to-Grid & Visual Grid Lines Toggle (`showGrid`, `setSnapToGrid`):**
+  - Added precision canvas gridlines rendering (`report.showGrid(visible)`, `report.isGridVisible()`, `.pbi-grid-visible`, `src/report/styles.ts`).
+  - Added configurable snap-to-grid toggle during visual drag-and-drop and resize (`report.setSnapToGrid(snap)`, `report.isSnapToGrid()`, `src/report/editing.ts`).
+  - Added Studio zoom bar toggles for Gridlines (`#`, `.pbs-grid-btn`) and Snap-to-Grid (`🧲`, `.pbs-snap-btn`) with keyboard shortcuts `Ctrl+'` and `Ctrl+Shift+'`.
+
 ## 0.20.0 (2026-11-10 / Phase 19: Global Search Visual Finder, Radial Slice Elevation, Column Reordering & Bookmark Bar)
 
 - **Report-Level Global Search & Studio Visual Finder (`report.find`, `openFinder`, `Ctrl+F`):**

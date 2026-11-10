@@ -69,6 +69,7 @@ export async function svgToCanvas(svg: string, background: string, scale = 2): P
 }
 
 export function download(blob: Blob, filename: string): void {
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function' || typeof document === 'undefined') return;
   const href = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = href;
@@ -76,5 +77,5 @@ export function download(blob: Blob, filename: string): void {
   document.body.append(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(href), 1000);
+  setTimeout(() => URL.revokeObjectURL?.(href), 1000);
 }

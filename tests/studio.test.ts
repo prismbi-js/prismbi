@@ -529,4 +529,43 @@ describe('studio', () => {
 
     st.destroy();
   });
+
+  it('supports gridlines, snap-to-grid, and presentation toolbar controls in Studio', () => {
+    const st = open();
+
+    const gridBtn = q<HTMLButtonElement>('.pbs-grid-btn')!;
+    expect(gridBtn).toBeTruthy();
+    expect(st.report.isGridVisible()).toBe(false);
+
+    gridBtn.click();
+    expect(st.report.isGridVisible()).toBe(true);
+    expect(gridBtn.getAttribute('aria-pressed')).toBe('true');
+
+    gridBtn.click();
+    expect(st.report.isGridVisible()).toBe(false);
+    expect(gridBtn.getAttribute('aria-pressed')).toBe('false');
+
+    const snapBtn = q<HTMLButtonElement>('.pbs-snap-btn')!;
+    expect(snapBtn).toBeTruthy();
+    expect(st.report.isSnapToGrid()).toBe(true);
+
+    snapBtn.click();
+    expect(st.report.isSnapToGrid()).toBe(false);
+    expect(snapBtn.getAttribute('aria-pressed')).toBe('false');
+
+    snapBtn.click();
+    expect(st.report.isSnapToGrid()).toBe(true);
+    expect(snapBtn.getAttribute('aria-pressed')).toBe('true');
+
+    // Present button launches auto-play slideshow
+    const presBtn = q<HTMLButtonElement>('.pbs-present-btn')!;
+    expect(presBtn).toBeTruthy();
+    expect(st.report.isAutoPlaying()).toBe(false);
+
+    presBtn.click();
+    expect(st.report.isAutoPlaying()).toBe(true);
+
+    st.report.stopAutoPlay();
+    st.destroy();
+  });
 });

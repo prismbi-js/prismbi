@@ -15,12 +15,27 @@ export interface VisualLayout {
   z?: number;
 }
 
+/** Visual data annotation / callout pin attached to a mark or coordinate. */
+export interface VisualAnnotation {
+  id?: string;
+  text: string;
+  title?: string;
+  category?: string | number | Date;
+  series?: string;
+  x?: number;
+  y?: number;
+  badge?: string;
+  color?: string;
+}
+
 /** Serialisable description of one visual on a page. */
 export interface VisualSpec {
   /** Visuals sharing a group id are selected and moved together in edit mode. */
   group?: string;
   /** When true, the visual is locked and cannot be moved or resized on canvas in edit mode. */
   locked?: boolean;
+  /** Visual annotations / callout pins attached to marks or positions. */
+  annotations?: VisualAnnotation[];
   id?: string;
   type: string;
   /** Shorthand for `format.title.text`. */

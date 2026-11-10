@@ -720,6 +720,28 @@ export class Studio implements StudioContext {
     this.root.querySelector('.pbs-finder-backdrop')?.remove();
   }
 
+  toggleGrid(): void {
+    if (!this.report) return;
+    const v = !this.report.isGridVisible();
+    this.report.showGrid(v);
+    const btn = this.els.pages?.querySelector('.pbs-grid-btn');
+    btn?.setAttribute('aria-pressed', String(v));
+  }
+
+  toggleSnap(): void {
+    if (!this.report) return;
+    const s = !this.report.isSnapToGrid();
+    this.report.setSnapToGrid(s);
+    const btn = this.els.pages?.querySelector('.pbs-snap-btn');
+    btn?.setAttribute('aria-pressed', String(s));
+  }
+
+  present(): void {
+    if (!this.report) return;
+    this.report.startAutoPlay();
+    void this.report.enterFullscreen();
+  }
+
   private layersOpen = false;
 
   private toggleLayers(): void {
@@ -1308,7 +1330,30 @@ export class Studio implements StudioContext {
       'aria-label': 'Find visual',
     }, '🔍');
     findBtn.addEventListener('click', () => this.openFinder());
-    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit, mapBtn, findBtn);
+    const gridBtn = h('button', {
+      type: 'button',
+      class: 'pbs-zoom-btn pbs-grid-btn',
+      title: 'Toggle canvas gridlines (Ctrl+\')',
+      'aria-label': 'Canvas gridlines',
+      'aria-pressed': String(this.report?.isGridVisible() ?? false),
+    }, '#');
+    gridBtn.addEventListener('click', () => this.toggleGrid());
+    const snapBtn = h('button', {
+      type: 'button',
+      class: 'pbs-zoom-btn pbs-snap-btn',
+      title: 'Toggle snap to grid (Ctrl+Shift+\')',
+      'aria-label': 'Snap to grid',
+      'aria-pressed': String(this.report?.isSnapToGrid() ?? true),
+    }, '🧲');
+    snapBtn.addEventListener('click', () => this.toggleSnap());
+    const presBtn = h('button', {
+      type: 'button',
+      class: 'pbs-zoom-btn pbs-present-btn',
+      title: 'Present report (F5)',
+      'aria-label': 'Present report',
+    }, '▶');
+    presBtn.addEventListener('click', () => this.present());
+    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit, mapBtn, findBtn, gridBtn, snapBtn, presBtn);
     bar.append(zoomBar);
   }
 
@@ -1447,6 +1492,20 @@ export class Studio implements StudioContext {
     if (mod && e.key.toLowerCase() === 'f' && !typing) {
       e.preventDefault();
       this.openFinder();
+      return;
+    }
+    if (e.key === 'F5' && !typing) {
+      e.preventDefault();
+      this.present();
+      return;
+    }
+    if (mod && (e.key === "'" || e.key === '"') && !typing) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        this.toggleSnap();
+      } else {
+        this.toggleGrid();
+      }
       return;
     }
     if (mod && (e.key === '=' || e.key === '+') && !typing) {

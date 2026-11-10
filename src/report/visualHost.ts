@@ -358,6 +358,7 @@ export class VisualHost {
       this.stopTween = tweenMarks(root, prev, tweenMs);
       this.tweenEnd = performance.now() + tweenMs;
     }
+    this.renderAnnotations();
     this.rt.emit('rendered', { visualId: this.id, ms: performance.now() - t0 });
   }
 
@@ -391,6 +392,62 @@ export class VisualHost {
     // also as visually hidden text, for screen readers without aria-description support
     const p = h('p', { class: 'pbi-sr-only' }, text);
     this.body.append(p);
+  }
+
+  private renderAnnotations(): void {
+    this.body.querySelector('.pbi-annotations-layer')?.remove();
+    const annotations = this.spec.annotations;
+    if (!annotations || !annotations.length) return;
+    const layer = h('div', { class: 'pbi-annotations-layer' });
+    const rect = this.body.getBoundingClientRect();
+
+    for (let i = 0; i < annotations.length; i++) {
+      const ann = annotations[i];
+      let leftPct = ann.x ?? 50;
+      let topPct = ann.y ?? 50;
+
+      if (ann.category !== undefined) {
+        const catStr = String(ann.category).toLowerCase();
+        const mark = this.body.querySelector(`[data-point-id*="${catStr}" i], [aria-label*="${catStr}" i], text`);
+        if (mark) {
+          const mrect = mark.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0 && mrect.width > 0) {
+            leftPct = Math.max(5, Math.min(95, ((mrect.left + mrect.width / 2 - rect.left) / rect.width) * 100));
+            topPct = Math.max(5, Math.min(95, ((mrect.top - rect.top) / rect.height) * 100));
+          }
+        }
+      }
+
+      const pin = h(
+        'button',
+        {
+          type: 'button',
+          class: 'pbi-annotation-pin',
+          style: `left:${leftPct}%;top:${topPct}%;${ann.color ? `background:${ann.color};border-color:${ann.color};` : ''}`,
+          title: ann.title || ann.text,
+          'aria-label': `Annotation: ${ann.title ? `${ann.title} - ` : ''}${ann.text}`,
+        },
+        h('span', { class: 'pbi-annotation-badge' }, ann.badge || String(i + 1)),
+      );
+
+      const popover = h(
+        'div',
+        { class: 'pbi-annotation-popover', role: 'tooltip', hidden: 'true' },
+        ann.title ? h('div', { class: 'pbi-annotation-title' }, ann.title) : null,
+        h('div', { class: 'pbi-annotation-text' }, ann.text),
+      );
+
+      pin.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = !popover.hidden;
+        layer.querySelectorAll('.pbi-annotation-popover').forEach((p) => ((p as HTMLElement).hidden = true));
+        popover.hidden = isOpen;
+      });
+
+      pin.append(popover);
+      layer.append(pin);
+    }
+    this.body.append(layer);
   }
 
   private request(engine: QueryEngine, spec: QuerySpec, key: string): void {
@@ -529,6 +586,29 @@ export class VisualHost {
     return [head, ...d.rows.map((r) => [...r.keys, ...r.values].map(esc).join('\t'))].join('\n');
   }
 
+  /** JSON array of objects representing the data currently shown by the visual. */
+  toJson(): string {
+    const d = this.data;
+    if (!d) return '[]';
+    const cols = [...d.groups, ...d.values].map((f) => f.name);
+    const rows = d.rows.map((r) => {
+      const obj: Record<string, CellValue> = {};
+      const allVals = [...r.keys, ...r.values];
+      for (let i = 0; i < cols.length; i++) {
+        obj[cols[i]] = allVals[i];
+      }
+      return obj;
+    });
+    return JSON.stringify(rows, null, 2);
+  }
+
+  /** Get the raw data in the specified text format. */
+  getData(format: 'csv' | 'tsv' | 'json' = 'csv'): string {
+    if (format === 'json') return this.toJson();
+    if (format === 'tsv') return this.toTsv();
+    return this.toCsv();
+  }
+
   /** Sheet name for exports: the visual's title, else its type. */
   get exportName(): string {
     return this.format().title.text || this.def.displayName || this.spec.type;
@@ -556,12 +636,12 @@ export class VisualHost {
 
   exportCsv(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.csv`): void {
     const blob = new Blob([this.toCsv()], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: filename });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    download(blob, filename);
+  }
+
+  exportJson(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.json`): void {
+    const blob = new Blob([this.toJson()], { type: 'application/json;charset=utf-8' });
+    download(blob, filename);
   }
 
   // ------------------------------------------------------------ interactions
@@ -619,6 +699,7 @@ export class VisualHost {
       const r = b.getBoundingClientRect();
       this.rt.menu(r.left, r.bottom + 4, [
         { label: 'Export data', hint: 'CSV', onClick: () => this.exportCsv() },
+        { label: 'Export data', hint: 'JSON', onClick: () => this.exportJson() },
         { label: 'Export data', hint: 'Excel', onClick: () => void this.exportXlsx() },
         { label: 'Copy data', hint: 'Clipboard', onClick: () => void this.copyData() },
         { label: 'Copy image', hint: 'Clipboard', onClick: () => void this.copyImage() },

@@ -57,6 +57,7 @@ export type {
   RoleBinding,
   RoleDef,
   TooltipItem,
+  VisualAnnotation,
   VisualDefinition,
   VisualHostApi,
   VisualLayout,

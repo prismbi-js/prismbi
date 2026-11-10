@@ -580,4 +580,183 @@ describe('Report', () => {
 
     r.destroy();
   });
+
+  it('exports visual raw data to CSV, TSV, and JSON via getVisualData and exportVisualData', async () => {
+    const m = new DataModel().addTable('Products', [
+      { Category: 'Bikes', Revenue: 1500 },
+      { Category: 'Accessories', Revenue: 450 },
+    ]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        {
+          id: 'p1',
+          name: 'Sales Page',
+          visuals: [
+            { id: 'v1', type: 'table', title: 'Product Table', fields: { columns: ['Products[Category]', 'Products[Revenue]'] } },
+          ],
+        },
+      ],
+    });
+    r.flush();
+
+    // getVisualData in CSV
+    const csv = r.getVisualData('v1', 'csv');
+    expect(csv).toContain('Category,Revenue');
+    expect(csv).toContain('Bikes,1500');
+    expect(csv).toContain('Accessories,450');
+
+    // getVisualData in TSV
+    const tsv = r.getVisualData('v1', 'tsv');
+    expect(tsv).toContain('Category\tRevenue');
+    expect(tsv).toContain('Bikes\t1500');
+
+    // getVisualData in JSON
+    const jsonStr = r.getVisualData('v1', 'json');
+    const parsed = JSON.parse(jsonStr);
+    expect(parsed.length).toBe(2);
+    expect(parsed.find((p: any) => p.Category === 'Bikes')?.Revenue).toBe(1500);
+    expect(parsed.find((p: any) => p.Category === 'Accessories')?.Revenue).toBe(450);
+
+    // exportVisualData returns a Blob
+    const csvBlob = await r.exportVisualData('v1', 'csv');
+    expect(csvBlob.type).toContain('text/csv');
+    expect(csvBlob.size).toBeGreaterThan(0);
+
+    const jsonBlob = await r.exportVisualData('v1', 'json');
+    expect(jsonBlob.type).toContain('application/json');
+    expect(jsonBlob.size).toBeGreaterThan(0);
+
+    r.destroy();
+  });
+
+  it('supports visual annotations with callout pins and popovers', () => {
+    const m = new DataModel().addTable('Sales', [{ cat: 'A', val: 100 }, { cat: 'B', val: 200 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        {
+          id: 'p1',
+          name: 'Page 1',
+          visuals: [
+            { id: 'v1', type: 'bar', title: 'Sales Bar', fields: { category: 'Sales[cat]', values: 'Sales[val]' } },
+          ],
+        },
+      ],
+    });
+    r.flush();
+
+    expect(r.getAnnotations('v1')).toEqual([]);
+
+    // Add annotation
+    r.addAnnotation('v1', {
+      text: 'Peak seasonal spike detected',
+      title: 'Outlier Note',
+      category: 'B',
+      badge: '★',
+      color: '#e74c3c',
+    });
+    r.flush();
+
+    const anns = r.getAnnotations('v1');
+    expect(anns.length).toBe(1);
+    expect(anns[0].text).toBe('Peak seasonal spike detected');
+    expect(anns[0].badge).toBe('★');
+
+    const vHost = el.querySelector('[data-visual-id="v1"]')!;
+    expect(vHost).toBeTruthy();
+
+    const pin = vHost.querySelector<HTMLButtonElement>('.pbi-annotation-pin')!;
+    expect(pin).toBeTruthy();
+    expect(pin.querySelector('.pbi-annotation-badge')?.textContent).toBe('★');
+
+    const popover = pin.querySelector<HTMLElement>('.pbi-annotation-popover')!;
+    expect(popover).toBeTruthy();
+    expect(popover.hidden).toBe(true);
+
+    // Click pin to toggle popover
+    pin.click();
+    expect(popover.hidden).toBe(false);
+    expect(popover.querySelector('.pbi-annotation-title')?.textContent).toBe('Outlier Note');
+    expect(popover.querySelector('.pbi-annotation-text')?.textContent).toBe('Peak seasonal spike detected');
+
+    // Remove annotation
+    r.removeAnnotation('v1', anns[0].id!);
+    r.flush();
+    expect(r.getAnnotations('v1').length).toBe(0);
+    expect(vHost.querySelector('.pbi-annotation-pin')).toBeNull();
+
+    r.destroy();
+  });
+
+  it('supports grid visibility and snap-to-grid controls', () => {
+    const m = new DataModel().addTable('Sales', [{ a: 1 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [{ id: 'p1', name: 'Page 1', visuals: [] }],
+    });
+    r.flush();
+
+    expect(r.isGridVisible()).toBe(false);
+    expect(r.isSnapToGrid()).toBe(true);
+
+    r.showGrid(true);
+    expect(r.isGridVisible()).toBe(true);
+    expect(el.querySelector('.pbi-report')?.classList.contains('pbi-grid-visible')).toBe(true);
+
+    r.showGrid(false);
+    expect(r.isGridVisible()).toBe(false);
+    expect(el.querySelector('.pbi-report')?.classList.contains('pbi-grid-visible')).toBe(false);
+
+    r.setSnapToGrid(false);
+    expect(r.isSnapToGrid()).toBe(false);
+    r.setSnapToGrid(true);
+    expect(r.isSnapToGrid()).toBe(true);
+
+    r.destroy();
+  });
+
+  it('supports presentation mode, fullscreen toggle, and auto-play slideshow carousel', async () => {
+    const m = new DataModel().addTable('Sales', [{ a: 1 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [
+        { id: 'p1', name: 'Slide 1', visuals: [] },
+        { id: 'p2', name: 'Slide 2', visuals: [] },
+      ],
+    });
+    r.flush();
+
+    expect(r.isAutoPlaying()).toBe(false);
+    expect(r.isFullscreen()).toBe(false);
+
+    // Fullscreen enter/exit
+    await r.enterFullscreen();
+    expect(r.isFullscreen()).toBe(true);
+    expect(el.querySelector('.pbi-report')?.classList.contains('is-fullscreen')).toBe(true);
+
+    await r.exitFullscreen();
+    expect(r.isFullscreen()).toBe(false);
+    expect(el.querySelector('.pbi-report')?.classList.contains('is-fullscreen')).toBe(false);
+
+    // Start auto-play
+    const stop = r.startAutoPlay({ intervalMs: 2000, loop: true, showControls: true });
+    expect(r.isAutoPlaying()).toBe(true);
+
+    const presBar = el.querySelector<HTMLElement>('.pbi-presentation-bar');
+    expect(presBar).toBeTruthy();
+    expect(presBar?.querySelector('.pbi-pres-label')?.textContent).toBe('1 / 2');
+
+    // Next button advances page
+    const nextBtn = presBar?.querySelectorAll<HTMLButtonElement>('.pbi-pres-btn')[2];
+    expect(nextBtn).toBeTruthy();
+    nextBtn?.click();
+    expect(presBar?.querySelector('.pbi-pres-label')?.textContent).toBe('2 / 2');
+
+    stop();
+    expect(r.isAutoPlaying()).toBe(false);
+    expect(el.querySelector('.pbi-presentation-bar')).toBeNull();
+
+    r.destroy();
+  });
 });

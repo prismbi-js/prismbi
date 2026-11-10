@@ -25,6 +25,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 17 | Visual Locking & Grouping, Cartesian Range Brushing & Canvas Zoom | `0.18.0` | ✅ Implemented |
 | 18 | Cartesian Bar Brush Selection, Sticky Frozen Columns, Image Export & Studio Minimap | `0.19.0` | ✅ Implemented |
 | 19 | Global Search Visual Finder, Radial Slice Elevation, Column Reordering & Bookmark Bar | `0.20.0` | ✅ Implemented |
+| 20 | Presentation Auto-Play Carousel, Visual Annotations, Direct Data Export & Canvas Grid | `0.21.0` | ✅ Implemented |
 
 ## Guiding principles
 
@@ -467,6 +468,21 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 
 **Acceptance:**
 - 620 tests passing across 53 test suites (584 passed, 36 skipped, 100% pass rate).
+- 98 visual regression screenshots with 0 failures.
+- Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
+
+## Phase 20: Presentation Auto-Play Carousel, Visual Annotations, Direct Data Export & Canvas Grid ✅
+
+**Goal:** kiosk auto-play slideshow & presentation mode, visual data annotations & callout pins, direct visual raw data file export, and canvas snap-to-grid & gridlines.
+
+**Delivered:**
+- [x] **Report Presentation Mode & Auto-Play Slideshow Carousel:** Automated page cycling (`report.startAutoPlay()`, `report.stopAutoPlay()`, `report.isAutoPlaying()`), full browser fullscreen controls (`report.enterFullscreen()`, `report.exitFullscreen()`, `report.toggleFullscreen()`), floating presentation controls bar (`.pbi-presentation-bar`) with Play/Pause, Prev/Next, countdown progress bar (`.pbi-pres-progress`), auto-hide after 3 seconds of inactivity, and Studio Present shortcut (`F5`).
+- [x] **Visual Data Annotations & Callout Pins:** Mark-aligned or coordinate-aligned annotations (`VisualAnnotation`, `VisualSpec.annotations`), interactive callout pin badges (`.pbi-annotation-pin`, `.pbi-annotation-badge`), click-to-view popover notes (`.pbi-annotation-popover`), and programmatic APIs (`report.addAnnotation()`, `report.removeAnnotation()`, `report.getAnnotations()`).
+- [x] **Direct Visual Raw Data File Export:** Multi-format visual data access (`report.getVisualData()`, `report.exportVisualData()`) across CSV, TSV, JSON, and XLSX with automatic browser download and visual header context menu integration.
+- [x] **Studio Canvas Snap-to-Grid & Visual Grid Lines Toggle:** Precise canvas gridlines toggle (`report.showGrid()`, `report.isGridVisible()`, `.pbi-grid-visible`), snap-to-grid alignment during dragging and resizing (`report.setSnapToGrid()`, `report.isSnapToGrid()`), and Studio zoom bar buttons with shortcuts `Ctrl+'` and `Ctrl+Shift+'`.
+
+**Acceptance:**
+- 625 tests passing across 53 test suites (589 passed, 36 skipped, 100% pass rate).
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

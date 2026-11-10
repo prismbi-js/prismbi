@@ -26,6 +26,8 @@ export interface EditHost {
   selectVisuals?(ids: string[]): void;
   /** Canvas zoom scale factor (1 by default). */
   scale?(): number;
+  /** Whether snap-to-grid is active (defaults to true). */
+  snapToGrid?(): boolean;
 }
 
 type Mode = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -232,6 +234,7 @@ export class EditController {
 
   private updateGuides(p: EditPageInfo, id: string, cur: VisualLayout, colPx: number, rowPx: number): void {
     p.el.querySelectorAll('.pbi-guide').forEach((g) => g.remove());
+    if (this.host.snapToGrid && !this.host.snapToGrid()) return;
     const others = p.specs.filter((s) => s.id !== id && s.layout);
     for (const o of others) {
       const ol = o.layout!;

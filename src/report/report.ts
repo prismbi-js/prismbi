@@ -11,7 +11,7 @@ import { h } from '../render/svg';
 import type { DeepPartial } from '../utils';
 import { Emitter, uid } from '../utils';
 import { getVisual } from '../visuals/registry';
-import type { DataPointIdentity, VisualLayout, VisualSpec } from '../visuals/types';
+import type { DataPointIdentity, VisualAnnotation, VisualLayout, VisualSpec } from '../visuals/types';
 import type { VisualFormat } from '../visuals/format';
 import type { ReportEvents } from './events';
 import { FilterPane } from './filterPane';
@@ -353,6 +353,11 @@ export class Report implements ReportRuntime {
   private onEvent?: ReportOptions['onEvent'];
   private onUsage?: ReportOptions['onUsage'];
   private destroyed = false;
+  private _gridVisible = false;
+  private _snapToGrid = true;
+  private _autoPlayTimer: any = null;
+  private _presBar: HTMLElement | null = null;
+  private _presIdleTimer: any = null;
 
   constructor(
     readonly container: HTMLElement,
@@ -780,6 +785,7 @@ export class Report implements ReportRuntime {
         toggle: (id) => this.toggleVisualSelection(id),
         selectVisuals: (ids) => this.selectVisuals(ids),
         scale: () => this._zoom,
+        snapToGrid: () => this._snapToGrid,
       });
       this.root.classList.add('is-editing');
       for (const p of this.pages) {
@@ -2157,7 +2163,255 @@ export class Report implements ReportRuntime {
     this.schedule();
   }
 
+  /** Get the raw data of a visual in CSV, TSV, or JSON format. */
+  getVisualData(visualId: string, format: 'csv' | 'tsv' | 'json' = 'csv'): string {
+    for (const p of this.pages) {
+      const host = p.hosts.get(visualId);
+      if (host) return host.getData(format);
+    }
+    throw new Error(`Visual "${visualId}" not found`);
+  }
+
+  /** Export the raw data of a visual as a file download (CSV, TSV, JSON, or Excel XLSX). */
+  async exportVisualData(visualId: string, format: 'csv' | 'tsv' | 'json' | 'xlsx' = 'csv', filename?: string): Promise<Blob> {
+    for (const p of this.pages) {
+      const host = p.hosts.get(visualId);
+      if (host) {
+        const baseName = (host.format().title.text || host.spec.type).replace(/[^\w-]+/g, '_');
+        if (format === 'xlsx') {
+          const [{ XLSX_MIME }, { download }, bytes] = await Promise.all([import('./xlsx'), import('./snapshot'), host.toXlsx()]);
+          const blob = new Blob([bytes as unknown as BlobPart], { type: XLSX_MIME });
+          if (typeof document !== 'undefined') download(blob, filename || `${baseName}.xlsx`);
+          return blob;
+        }
+        const { download } = await import('./snapshot');
+        if (format === 'json') {
+          const blob = new Blob([host.toJson()], { type: 'application/json;charset=utf-8' });
+          if (typeof document !== 'undefined') download(blob, filename || `${baseName}.json`);
+          return blob;
+        }
+        if (format === 'tsv') {
+          const blob = new Blob([host.toTsv()], { type: 'text/tab-separated-values;charset=utf-8' });
+          if (typeof document !== 'undefined') download(blob, filename || `${baseName}.tsv`);
+          return blob;
+        }
+        const blob = new Blob([host.toCsv()], { type: 'text/csv;charset=utf-8' });
+        if (typeof document !== 'undefined') download(blob, filename || `${baseName}.csv`);
+        return blob;
+      }
+    }
+    throw new Error(`Visual "${visualId}" not found`);
+  }
+
+  /** Add an annotation to a visual and trigger re-render. */
+  addAnnotation(visualId: string, annotation: VisualAnnotation): void {
+    for (const p of this.pages) {
+      const v = p.def.visuals.find((s) => s.id === visualId);
+      if (v) {
+        const id = annotation.id || `ann_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        v.annotations = [...(v.annotations ?? []), { ...annotation, id }];
+        p.hosts.get(visualId)?.invalidate();
+        this.schedule();
+        return;
+      }
+    }
+    throw new Error(`Visual "${visualId}" not found`);
+  }
+
+  /** Remove an annotation from a visual by id. */
+  removeAnnotation(visualId: string, annotationId: string): void {
+    for (const p of this.pages) {
+      const v = p.def.visuals.find((s) => s.id === visualId);
+      if (v && v.annotations) {
+        v.annotations = v.annotations.filter((a) => a.id !== annotationId);
+        p.hosts.get(visualId)?.invalidate();
+        this.schedule();
+        return;
+      }
+    }
+  }
+
+  /** Get the annotations attached to a visual. */
+  getAnnotations(visualId: string): VisualAnnotation[] {
+    for (const p of this.pages) {
+      const v = p.def.visuals.find((s) => s.id === visualId);
+      if (v) return v.annotations ? [...v.annotations] : [];
+    }
+    return [];
+  }
+
+  /** Toggle canvas gridlines visibility. */
+  showGrid(visible = true): void {
+    this._gridVisible = visible;
+    this.root.classList.toggle('pbi-grid-visible', visible);
+  }
+
+  isGridVisible(): boolean {
+    return this._gridVisible;
+  }
+
+  /** Enable or disable snapping to grid during editing. */
+  setSnapToGrid(snap = true): void {
+    this._snapToGrid = snap;
+  }
+
+  isSnapToGrid(): boolean {
+    return this._snapToGrid;
+  }
+
+  /** Enter fullscreen presentation mode. */
+  async enterFullscreen(targetEl?: HTMLElement): Promise<void> {
+    const el = targetEl ?? this.root;
+    if (el.requestFullscreen) {
+      await el.requestFullscreen();
+    } else if ((el as any).webkitRequestFullscreen) {
+      await (el as any).webkitRequestFullscreen();
+    }
+    this.root.classList.add('is-fullscreen');
+  }
+
+  /** Exit fullscreen presentation mode. */
+  async exitFullscreen(): Promise<void> {
+    if (typeof document !== 'undefined') {
+      if (document.exitFullscreen && document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen && (document as any).webkitFullscreenElement) {
+        await (document as any).webkitExitFullscreen();
+      }
+    }
+    this.root.classList.remove('is-fullscreen');
+  }
+
+  async toggleFullscreen(targetEl?: HTMLElement): Promise<void> {
+    if (this.isFullscreen()) await this.exitFullscreen();
+    else await this.enterFullscreen(targetEl);
+  }
+
+  isFullscreen(): boolean {
+    return Boolean(typeof document !== 'undefined' && document.fullscreenElement) || this.root.classList.contains('is-fullscreen');
+  }
+
+  isAutoPlaying(): boolean {
+    return this._autoPlayTimer !== null;
+  }
+
+  /**
+   * Start automatically cycling through report pages in presentation slideshow carousel mode.
+   */
+  startAutoPlay(opts?: { intervalMs?: number; loop?: boolean; showControls?: boolean }): () => void {
+    this.stopAutoPlay();
+    const intervalMs = Math.max(1000, opts?.intervalMs ?? 8000);
+    const loop = opts?.loop ?? true;
+    const showControls = opts?.showControls ?? true;
+
+    if (showControls) {
+      this.renderPresentationBar(intervalMs);
+    }
+
+    let startTime = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      if (this._presBar) {
+        const progressEl = this._presBar.querySelector('.pbi-pres-progress') as HTMLElement | null;
+        if (progressEl) {
+          const pct = Math.min(100, (elapsed / intervalMs) * 100);
+          progressEl.style.width = `${pct}%`;
+        }
+      }
+      if (elapsed >= intervalMs) {
+        startTime = Date.now();
+        const nextIdx = this.current + 1;
+        if (nextIdx < this.pages.length) {
+          this.showPage(nextIdx);
+        } else if (loop) {
+          this.showPage(0);
+        } else {
+          this.stopAutoPlay();
+          return;
+        }
+        this.updatePresentationBar();
+      }
+    };
+
+    this._autoPlayTimer = setInterval(tick, 100);
+    return () => this.stopAutoPlay();
+  }
+
+  stopAutoPlay(): void {
+    if (this._autoPlayTimer !== null) {
+      clearInterval(this._autoPlayTimer);
+      this._autoPlayTimer = null;
+    }
+    if (this._presBar) {
+      this._presBar.remove();
+      this._presBar = null;
+    }
+  }
+
+  private renderPresentationBar(intervalMs: number): void {
+    if (this._presBar) this._presBar.remove();
+    const bar = h('div', { class: 'pbi-presentation-bar', role: 'toolbar', 'aria-label': 'Presentation Controls' });
+    const prevBtn = h('button', { type: 'button', class: 'pbi-pres-btn', title: 'Previous page', 'aria-label': 'Previous page' }, '◀');
+    const playPauseBtn = h('button', { type: 'button', class: 'pbi-pres-btn', title: 'Pause slideshow', 'aria-label': 'Pause slideshow' }, '⏸');
+    const nextBtn = h('button', { type: 'button', class: 'pbi-pres-btn', title: 'Next page', 'aria-label': 'Next page' }, '▶');
+    const pageLabel = h('span', { class: 'pbi-pres-label' }, `${this.current + 1} / ${this.pages.length}`);
+    const fsBtn = h('button', { type: 'button', class: 'pbi-pres-btn', title: 'Toggle fullscreen', 'aria-label': 'Toggle fullscreen' }, '⛶');
+    const progressBar = h('div', { class: 'pbi-pres-progress-track' }, h('div', { class: 'pbi-pres-progress' }));
+
+    prevBtn.addEventListener('click', () => {
+      if (this.current > 0) this.showPage(this.current - 1);
+      else this.showPage(this.pages.length - 1);
+      this.updatePresentationBar();
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (this.current < this.pages.length - 1) this.showPage(this.current + 1);
+      else this.showPage(0);
+      this.updatePresentationBar();
+    });
+
+    let paused = false;
+    playPauseBtn.addEventListener('click', () => {
+      paused = !paused;
+      playPauseBtn.textContent = paused ? '▶' : '⏸';
+      playPauseBtn.title = paused ? 'Resume slideshow' : 'Pause slideshow';
+      if (paused) {
+        if (this._autoPlayTimer) {
+          clearInterval(this._autoPlayTimer);
+          this._autoPlayTimer = null;
+        }
+      } else {
+        this.startAutoPlay({ intervalMs, showControls: false });
+      }
+    });
+
+    fsBtn.addEventListener('click', () => {
+      void this.toggleFullscreen();
+    });
+
+    bar.append(prevBtn, playPauseBtn, nextBtn, pageLabel, fsBtn, progressBar);
+    this.root.append(bar);
+    this._presBar = bar;
+
+    const resetIdle = () => {
+      bar.classList.remove('is-idle');
+      if (this._presIdleTimer) clearTimeout(this._presIdleTimer);
+      this._presIdleTimer = setTimeout(() => bar.classList.add('is-idle'), 3000);
+    };
+    this.root.addEventListener('mousemove', resetIdle, { passive: true });
+    resetIdle();
+  }
+
+  private updatePresentationBar(): void {
+    if (!this._presBar) return;
+    const label = this._presBar.querySelector('.pbi-pres-label');
+    if (label) label.textContent = `${this.current + 1} / ${this.pages.length}`;
+    const progressEl = this._presBar.querySelector('.pbi-pres-progress') as HTMLElement | null;
+    if (progressEl) progressEl.style.width = '0%';
+  }
+
   destroy(): void {
+    this.stopAutoPlay();
     this.destroyed = true;
     this.unsubModel();
     this.offResize();
