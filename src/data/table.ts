@@ -1,4 +1,4 @@
-import type { CellValue, ColumnSchema, DataType, Row } from './types';
+import type { CellValue, ColumnMemoryStats, ColumnSchema, DataType, Row, TableMemoryStats } from './types';
 import { compareValues, valueKey } from './types';
 
 export interface Column {
@@ -249,7 +249,27 @@ export class DataTable {
     for (const col of this.columns.values()) for (const v of coerceColumn(rows.map((r) => r[col.name]), col.type, this.pool(col.name))) col.values.push(v);
     const from = this._rowCount;
     this._rowCount += rows.length;
-    const n = this._rowCount;
+    this.updateAfterAppend(from, this._rowCount);
+  }
+
+  /**
+   * Append columns directly into columnar storage with zero row-object intermediate allocations.
+   */
+  appendColumns(cols: Record<string, unknown[]>): void {
+    const names = Object.keys(cols);
+    if (!names.length) return;
+    const count = cols[names[0]]?.length ?? 0;
+    if (!count) return;
+    for (const col of this.columns.values()) {
+      const raw = cols[col.name] ?? new Array(count).fill(null);
+      for (const v of coerceColumn(raw, col.type, this.pool(col.name))) col.values.push(v);
+    }
+    const from = this._rowCount;
+    this._rowCount += count;
+    this.updateAfterAppend(from, this._rowCount);
+  }
+
+  private updateAfterAppend(from: number, n: number): void {
     for (const [name, old] of this.numericCache) {
       const vals = this.column(name).values;
       const a = new Float64Array(n);
@@ -288,6 +308,98 @@ export class DataTable {
     // views of columns that were never indexed are built on demand as usual
     for (const name of [...this.bitmaps.keys()]) if (!this.indexes.has(name)) this.bitmaps.delete(name);
     for (const name of [...this.distinctCache.keys()]) if (!this.indexes.has(name)) this.distinctCache.delete(name);
+  }
+
+  /**
+   * Prune inactive dictionary pool keys and release transient caches to reclaim memory.
+   */
+  compact(): void {
+    for (const [colName, col] of this.columns) {
+      const p = this.pools.get(colName);
+      if (p && p.size > 0) {
+        const active = new Set<unknown>(col.values);
+        for (const k of [...p.keys()]) {
+          if (!active.has(k)) p.delete(k);
+        }
+      }
+    }
+    this.distinctCache.clear();
+    this.numericCache.clear();
+    this.codesCache.clear();
+    this.bitmaps.clear();
+  }
+
+  /**
+   * Diagnostic memory breakdown reporting column-level sizes, distinct counts, dictionary overhead, and indexes.
+   */
+  memoryStats(): TableMemoryStats {
+    let totalBytes = 0;
+    let indexesCount = 0;
+    let bitmapsCount = 0;
+    const columns: Record<string, ColumnMemoryStats> = {};
+
+    for (const [colName, col] of this.columns) {
+      const rowCount = this._rowCount;
+      const valuesBytes = rowCount * 8;
+
+      let dictionaryBytes = 0;
+      const p = this.pools.get(colName);
+      if (p) {
+        dictionaryBytes = p.size * 32;
+        for (const k of p.keys()) {
+          if (typeof k === 'string') dictionaryBytes += k.length * 2;
+          else if (k instanceof Date) dictionaryBytes += 24;
+        }
+      }
+
+      let indexBytes = 0;
+      const idx = this.indexes.get(colName);
+      if (idx) {
+        indexesCount++;
+        indexBytes = idx.size * 32;
+        for (const rows of idx.values()) indexBytes += rows.length * 4;
+      }
+
+      let bitmapBytes = 0;
+      const bm = this.bitmaps.get(colName);
+      if (bm) {
+        bitmapsCount++;
+        bitmapBytes = bm.size * 32;
+        for (const arr of bm.values()) bitmapBytes += arr.byteLength;
+      }
+
+      const distinctCount =
+        this.distinctCache.get(colName)?.length ??
+        this.codesCache.get(colName)?.dict.length ??
+        idx?.size ??
+        p?.size ??
+        new Set(col.values).size;
+
+      const colTotal = valuesBytes + dictionaryBytes + indexBytes + bitmapBytes;
+      totalBytes += colTotal;
+
+      columns[colName] = {
+        name: colName,
+        type: col.type,
+        rowCount,
+        distinctCount,
+        valuesBytes,
+        dictionaryBytes,
+        indexBytes,
+        bitmapBytes,
+        totalBytes: colTotal,
+      };
+    }
+
+    return {
+      name: this.name,
+      rowCount: this._rowCount,
+      columnCount: this.columns.size,
+      columns,
+      indexesCount,
+      bitmapsCount,
+      totalBytes,
+    };
   }
 
   /** Grow a column's bitmaps after an append (`touched`: values with rows added since `from`). */

@@ -4,6 +4,7 @@ import {
   addArrowTable,
   loadDuckDbTable,
   loadDuckDbTables,
+  streamArrow,
   detectDelimiter,
   googleSheetCsvUrl,
   loadCsv,
@@ -224,6 +225,60 @@ describe('Arrow and SQL', () => {
     await loadDuckDbTables(m, fakeConn, [{ table: 'Products', query: 'SELECT * FROM products' }]);
     expect(m.table('Products').column('product').values).toEqual(['Widget']);
     expect(m.evaluate('SUM(Products[qty])')).toBe(42);
+  });
+
+  it('streams Arrow batches via AsyncIterable and MessageSource with sliding window', async () => {
+    const makeBatch = (vals: number[]) => ({
+      numRows: vals.length,
+      schema: { fields: [{ name: 'sensor', type: { typeId: 2 } }] },
+      getChild: () => ({ get: (i: number) => vals[i] }),
+    });
+
+    // 1. AsyncIterable streaming
+    async function* arrowStream() {
+      yield makeBatch([1, 2]);
+      yield makeBatch([3, 4]);
+    }
+
+    const m = new DataModel();
+    const h1 = streamArrow(m, 'Sensors', arrowStream());
+    expect(h1.state).toBe('open');
+
+    // Wait for async generator consumption
+    await new Promise((r) => setTimeout(r, 10));
+    expect(h1.state).toBe('closed');
+    expect(h1.received).toBe(4);
+    expect(m.table('Sensors').column('sensor').values).toEqual([1, 2, 3, 4]);
+
+    // 2. MessageSource with maxRows sliding window and onBatch
+    const listeners: Record<string, ((e: any) => void)[]> = {};
+    const mockSource = {
+      addEventListener: (type: string, fn: (e: any) => void) => {
+        (listeners[type] ||= []).push(fn);
+      },
+      removeEventListener: (type: string, fn: (e: any) => void) => {
+        listeners[type] = (listeners[type] || []).filter((f) => f !== fn);
+      },
+    };
+
+    const batchesReceived: number[] = [];
+    const h2 = streamArrow(m, 'Sensors', mockSource, {
+      maxRows: 3,
+      onBatch: (_cols, count) => batchesReceived.push(count),
+    });
+
+    // Deliver batch of [5, 6]
+    for (const fn of listeners['message'] || []) {
+      fn({ data: makeBatch([5, 6]) });
+    }
+
+    expect(m.table('Sensors').rowCount).toBe(3);
+    expect(m.table('Sensors').column('sensor').values).toEqual([4, 5, 6]);
+    expect(batchesReceived).toEqual([2]);
+    expect(h2.received).toBe(2);
+
+    h2.close();
+    expect(h2.state).toBe('closed');
   });
 
   it('loads tables through a SQL adapter', async () => {

@@ -1,5 +1,5 @@
 import { applyRefreshPolicy, type IncrementalRefreshResult, type RefreshPolicy } from './refreshPolicy';
-import type { CellValue, ColumnRef, ColumnSchema, DataType, MeasureDef, RelationshipDef, Row } from './types';
+import type { CellValue, ColumnMemoryStats, ColumnRef, ColumnSchema, DataType, MeasureDef, ModelMemoryStats, RelationshipDef, Row, TableMemoryStats } from './types';
 import { columnRefToString, isColumnRefString, parseColumnRef, valueKey } from './types';
 import { DataTable } from './table';
 import { generateDateTable } from './dates';
@@ -14,6 +14,8 @@ import { resolveValueField, runQuery } from './query';
 import { applySteps, rowLocalSteps } from './transform';
 import { aggregationRewrite, type AggregationDef } from './aggregations';
 import type { TransformStep } from './transform';
+
+export type { ColumnMemoryStats, TableMemoryStats, ModelMemoryStats };
 
 export interface AppendOptions {
   /** Keep at most this many rows, dropping the oldest (sliding window). */
@@ -336,6 +338,95 @@ export class DataModel {
       this.quiet--;
     }
     this.changed({ tables: [...touched] });
+    return this;
+  }
+
+  /**
+   * Append columns directly into a table (streaming / columnar ingestion).
+   */
+  appendColumns(name: string, cols: Record<string, unknown[]>, opts: AppendOptions = {}): this {
+    const tf = this.transforms.get(name);
+    if (tf) {
+      const names = Object.keys(cols);
+      const count = cols[names[0]]?.length ?? 0;
+      const rows: Row[] = new Array(count);
+      for (let i = 0; i < count; i++) {
+        const r: Row = {};
+        for (const k of names) r[k] = cols[k][i];
+        rows[i] = r;
+      }
+      return this.appendRows(name, rows, opts);
+    }
+    const t = this.table(name);
+    const calc = [...t.columns.values()].filter((c) => c.expression);
+    const before = t.rowCount;
+    const touched = new Set([name]);
+    this.quiet++;
+    try {
+      t.appendColumns(cols);
+      let firstNew = before;
+      if (opts.maxRows !== undefined && t.rowCount > opts.maxRows) {
+        const drop = t.rowCount - opts.maxRows;
+        t.removeFirst(drop);
+        firstNew = Math.max(0, before - drop);
+      }
+      this.clearCaches();
+      for (const c of calc) {
+        const ast = parseDax(c.expression!);
+        if (!this.rowLocal(ast, name)) {
+          this.addCalculatedColumn(name, c.name, c.expression!, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
+          continue;
+        }
+        const values = c.values;
+        this.evaluator.fillColumn(ast, name, values, firstNew, t.rowCount);
+        t.setColumn(c);
+      }
+      for (const other of this.tables.values()) {
+        if (other.name === name) continue;
+        for (const c of [...other.columns.values()]) {
+          if (c.expression && !this.rowLocal(parseDax(c.expression), other.name)) {
+            this.clearCaches();
+            this.addCalculatedColumn(other.name, c.name, c.expression, { format: c.format, type: c.type, hidden: c.hidden, sortBy: c.sortBy, description: c.description, folder: c.folder });
+            touched.add(other.name);
+          }
+        }
+      }
+      for (const ct of this.calcTables.keys()) touched.add(ct);
+      this.recalculateTables();
+    } finally {
+      this.quiet--;
+    }
+    this.changed({ tables: [...touched] });
+    return this;
+  }
+
+  /**
+   * Diagnostic memory breakdown reporting total bytes, table counts, and per-column breakdowns.
+   */
+  memoryStats(): ModelMemoryStats {
+    const tables: Record<string, TableMemoryStats> = {};
+    let totalBytes = 0;
+    let rowCount = 0;
+    for (const [name, t] of this.tables) {
+      const st = t.memoryStats();
+      tables[name] = st;
+      totalBytes += st.totalBytes;
+      rowCount += st.rowCount;
+    }
+    return {
+      tableCount: this.tables.size,
+      rowCount,
+      tables,
+      totalBytes,
+    };
+  }
+
+  /**
+   * Compact all tables in the model by pruning inactive dictionary pool keys and clearing transient caches.
+   */
+  compact(): this {
+    for (const t of this.tables.values()) t.compact();
+    this.clearCaches();
     return this;
   }
 

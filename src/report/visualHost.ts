@@ -149,6 +149,12 @@ export class VisualHost {
     setVar('--pbi-v-bc', f.border.color ?? null);
     setVar('--pbi-v-radius', f.border.radius !== undefined ? `${f.border.radius}px` : null);
     setVar('--pbi-v-pad', f.padding !== 12 ? `${f.padding}px` : null);
+    const sh = f.shadow;
+    if (sh.show && (sh.color !== undefined || sh.blur !== undefined || sh.x !== undefined || sh.y !== undefined || sh.spread !== undefined)) {
+      setVar('--pbi-v-shadow', `${sh.x ?? 0}px ${sh.y ?? 2}px ${sh.blur ?? 8}px ${sh.spread ?? 0}px ${sh.color ?? 'rgba(0,0,0,0.12)'}`);
+    } else {
+      setVar('--pbi-v-shadow', null);
+    }
     this.el.classList.toggle('has-shadow', f.shadow.show);
     this.el.hidden = !!this.spec.hidden;
     this.el.className = `pbi-visual${f.shadow.show ? ' has-shadow' : ''}${this.spec.className ? ` ${this.spec.className}` : ''}`;

@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.16.0 (2026-11-10 / Phase 15: Streaming Columnar IPC, Memory Diagnostics & Visual Polish)
+
+- **Streaming Arrow IPC Ingestion (`streamArrow`):**
+  - Added streaming Arrow connector (`streamArrow`, `src/connectors/arrow.ts`) consuming Apache Arrow RecordBatches and Tables from `AsyncIterable<ArrowTableLike>`, WebSockets, EventSources, or SSE/WS URL strings.
+  - Streamlines Arrow IPC vectors directly into `DataModel` columnar memory with zero row-object intermediate allocations.
+  - Supports sliding-window FIFO eviction (`maxRows`), micro-batch buffering (`intervalMs`), automatic reconnection with exponential backoff, and batch lifecycle callbacks (`onBatch`).
+  - Added `report.pushColumns(table, cols, options)` to `Report` runtime, allowing streaming pipelines to update live reports directly in columnar form.
+  - Re-exported `streamArrow`, `ArrowSourceLike`, and `StreamArrowOptions` in `@prismbi/prismbi/connectors`.
+
+- **Model Memory Diagnostics & Compaction (`model.memoryStats()` & `model.compact()`):**
+  - Added per-column and per-table memory diagnostics (`DataTable.memoryStats()` and `DataModel.memoryStats()`) tracking exact row counts, distinct counts, values array memory, string/date dictionary pool bytes, hash index bytes, and bitmap index bytes.
+  - Added compaction engine (`DataTable.compact()` and `DataModel.compact()`) that prunes orphaned dictionary pool keys (e.g. from evicted streaming rows or table splices) and clears transient numeric/codes caches to minimize memory footprint.
+  - Exported `ColumnMemoryStats`, `TableMemoryStats`, and `ModelMemoryStats` in `@prismbi/prismbi/core`.
+
+- **Visual Engine Polish & Modern Aesthetics:**
+  - Added configurable drop shadows (`format.shadow: { show: boolean, color?: string, blur?: number, spread?: number, x?: number, y?: number }`) mapped to CSS variable `--pbi-v-shadow` on `.pbi-visual.has-shadow`.
+  - Added cartesian hover crosshair guidelines (`format.analytics.crosshair: boolean`) on line and area charts with subtle dashed alignment lines (`stroke-dasharray: '3 3'`).
+  - Studio Visual Palette completeness: added custom SVG line icons for `candlestick`, `gantt`, `network`, and `chord`, and registered them in `VISUAL_ORDER` and `VISUAL_ICONS`.
+
+- **Direct Columnar Arrow & Parquet Ingestion & DuckDB-Wasm Pushdown Bridge:**
+  - Added `DataModel.refreshColumns(name, columns, schema)` and `DataTable.appendColumns(cols)` for high-throughput columnar mutations without row object overhead.
+  - Added `loadDuckDbTable` and `loadDuckDbTables` in `@prismbi/prismbi/connectors` to ingest DuckDB-Wasm query results and Parquet files directly.
+  - Added `duckdbEngine(model, conn, opts)` and `parquetTables` in `@prismbi/prismbi/sql` for turn-key SQL pushdown against DuckDB-Wasm and Parquet files with automatic model fallback.
+
+- **Studio Canvas Marquee (Lasso) Selection & Quick Alignment Toolbar:**
+  - Added canvas marquee drag selection (`.pbi-marquee`) in `EditController` (`src/report/editing.ts`) with interactive hit preview, additive Shift/Ctrl union selection, and background click deselection.
+  - Added Studio quick alignment toolbar (`.pbs-align-bar`) with 1-click alignment buttons (`Align Left`, `Align Center`, `Align Right`, `Align Top`, `Align Middle`, `Align Bottom`, `Distribute Horizontal`, `Distribute Vertical`) dynamically activated on multi-visual selection.
+
 ## 0.15.0 (2026-11-10 / Phase 14: Analytical Depth & Studio Polish)
 
 - **Small Multiples (Trellis / Grid Layouts):**

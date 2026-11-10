@@ -437,13 +437,13 @@ describe('dialects: mysql and snowflake', () => {
   it('expires cached results after ttlMs', async () => {
     const m = buildModel();
     let runs = 0;
-    const e = sqlEngine(m, { cache: { ttlMs: 20 }, run: async () => (runs++, [{ g0: 'X', v0: 1 }]) });
+    const e = sqlEngine(m, { cache: { ttlMs: 100 }, run: async () => (runs++, [{ g0: 'X', v0: 1 }]) });
     const q = { groupBy: ['Product[Category]'], values: ['Total Sales'] };
     await e.query(q);
     expect(runs).toBe(1);
     await e.query(q);
     expect(runs).toBe(1);
-    await new Promise((resolve) => setTimeout(resolve, 35));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     await e.query(q);
     expect(runs).toBe(2);
     e.dispose();

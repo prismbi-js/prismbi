@@ -39,7 +39,7 @@ export const CSS = /* css */ `
 .pbi-page-scroll{flex:1;min-width:0;overflow:auto;position:relative}
 .pbi-page{container-type:inline-size;position:relative;display:grid;grid-template-columns:repeat(var(--pbi-cols,12),minmax(0,1fr));grid-auto-rows:var(--pbi-row,44px);gap:var(--pbi-gap);padding:var(--pbi-gap);min-height:100%}
 .pbi-visual{grid-column:calc(var(--x) + 1)/span var(--w);grid-row:calc(var(--y) + 1)/span var(--h);z-index:var(--z,auto);position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--pbi-v-bg,var(--pbi-surface));border:var(--pbi-v-bw,1px) solid var(--pbi-v-bc,var(--pbi-border));border-radius:var(--pbi-v-radius,var(--pbi-radius));padding:var(--pbi-v-pad,12px);transition:box-shadow .15s}
-.pbi-visual.has-shadow{box-shadow:0 1px 2px rgb(0 0 0/.06),0 4px 14px rgb(0 0 0/.06)}
+.pbi-visual.has-shadow{box-shadow:var(--pbi-v-shadow,0 1px 2px rgb(0 0 0/.06),0 4px 14px rgb(0 0 0/.06))}
 .pbi-visual.is-active{box-shadow:0 0 0 2px color-mix(in srgb,var(--pbi-accent) 35%,transparent)}
 @container (max-width:640px){.pbi-page:not(.is-mobile) .pbi-visual{grid-column:1/-1;grid-row:auto/span var(--h)}}
 .pbi-visual.is-phone-hidden,.pbi-visual.is-conditional-hidden{display:none}

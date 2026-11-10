@@ -31,6 +31,10 @@ const MAP = svg('<path d="M3 5l4-2 6 2 4-2v12l-4 2-6-2-4 2z"/><path d="M7 3v12M1
 const SUNBURST = svg('<circle cx="10" cy="10" r="2.5"/><path d="M10 5.5a4.5 4.5 0 0 1 4.5 4.5M10 5.5a4.5 4.5 0 0 0-3.9 6.7"/><path d="M10 3a7 7 0 0 1 7 7M10 3a7 7 0 0 0-6.1 10.4M17 10a7 7 0 0 1-12.9 3.6"/>');
 const GOALS = svg('<circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r="1" fill="currentColor"/>');
 const COMBO = svg('<path d="M5 16v-5M10 16V8M15 16v-6"/><path d="M3 9l5-4 4 3 5-4"/>');
+const NETWORK = svg('<circle cx="6" cy="6" r="2.2"/><circle cx="14" cy="6" r="2.2"/><circle cx="10" cy="14" r="2.2"/><path d="M7.8 7.2l4.4 5.6M12.2 7.2L7.8 12.8M8.2 6h3.6"/>');
+const CANDLESTICK = svg('<path d="M6 3v3m0 6v5m8-14v5m0 6v3"/><rect x="4" y="6" width="4" height="6" rx=".5"/><rect x="12" y="7" width="4" height="6" rx=".5" fill="currentColor" fill-opacity=".3"/>');
+const GANTT = svg('<rect x="3" y="4" width="7" height="3" rx="1"/><rect x="7" y="9" width="8" height="3" rx="1"/><rect x="11" y="14" width="6" height="3" rx="1"/><path d="M3 2v16" stroke-dasharray="1.5 1.5"/>');
+const CHORD = svg('<circle cx="10" cy="10" r="7"/><path d="M4.5 7.5c4 2 7 2 11 0M4.5 12.5c4-2 7-2 11 0M7.5 4.5c2 4 2 7 0 11"/>');
 
 export const VISUAL_ICONS: Record<string, string> = {
   clusteredColumn: COL,
@@ -57,6 +61,10 @@ export const VISUAL_ICONS: Record<string, string> = {
   bullet: BULLET,
   radar: RADAR,
   sankey: SANKEY,
+  chord: CHORD,
+  network: NETWORK,
+  candlestick: CANDLESTICK,
+  gantt: GANTT,
   map: MAP,
   filledMap: MAP,
   decompositionTree: DECOMP,
@@ -81,7 +89,7 @@ export const RAIL_ICONS = {
 export const VISUAL_ORDER = [
   'clusteredColumn', 'stackedColumn', 'percentStackedColumn', 'clusteredBar', 'stackedBar', 'percentStackedBar',
   'line', 'area', 'stackedArea', 'lineClusteredColumn', 'ribbon', 'waterfall',
-  'pie', 'donut', 'treemap', 'sunburst', 'funnel', 'scatter', 'heatmap', 'histogram', 'boxPlot', 'bullet', 'radar', 'sankey', 'map', 'filledMap', 'decompositionTree',
+  'pie', 'donut', 'treemap', 'sunburst', 'funnel', 'scatter', 'heatmap', 'histogram', 'boxPlot', 'bullet', 'radar', 'sankey', 'chord', 'network', 'candlestick', 'gantt', 'map', 'filledMap', 'decompositionTree',
   'card', 'multiRowCard', 'kpi', 'scorecard', 'gauge', 'table', 'matrix', 'slicer', 'text',
 ];
 

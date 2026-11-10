@@ -41,7 +41,7 @@ export interface VisualFormat {
   title: { show: boolean; text?: string; subtitle?: string; fontSize?: number; color?: string; align: 'left' | 'center' | 'right'; bold: boolean };
   background: { show: boolean; color?: string; transparency: number };
   border: { show: boolean; color?: string; width: number; radius?: number };
-  shadow: { show: boolean };
+  shadow: { show: boolean; color?: string; blur?: number; spread?: number; x?: number; y?: number };
   padding: number;
   header: { show: boolean; focusMode: boolean; exportData: boolean; showAsTable: boolean; drill: boolean };
   tooltip: {
@@ -111,6 +111,8 @@ export interface VisualFormat {
     forecast?: false | { periods: number; confidence?: number; seasonality?: number | 'auto' | 'none' };
     /** Statistical anomaly detection: `{ enabled: true, sensitivity?: 1.5, method?: 'iqr' | 'zscore' }`. */
     anomalies?: false | AnomalyOptions;
+    /** Show vertical hover crosshair on cartesian line/area charts (default true). */
+    crosshair?: boolean;
   };
   bars: { maxThickness: number; radius: number; gap: number; categoryGap: number };
   lines: { width: number; markers: boolean | 'auto'; smooth: boolean; area: boolean; areaOpacity: number; endLabels: boolean };
@@ -134,7 +136,7 @@ export const baseFormat: VisualFormat = {
   valueAxis: { show: true, displayUnits: 'auto', gridlines: true, tickCount: 5 },
   secondaryValueAxis: { show: true, displayUnits: 'auto', tickCount: 5, mode: 'auto' },
   colors: {},
-  analytics: { referenceLines: [], trendLine: false, forecast: false, anomalies: false },
+  analytics: { referenceLines: [], trendLine: false, forecast: false, anomalies: false, crosshair: true },
   bars: { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },
   lines: { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true },
   animation: { enabled: true, duration: 280 },

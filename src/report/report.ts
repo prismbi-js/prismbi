@@ -1357,6 +1357,19 @@ export class Report implements ReportRuntime {
   }
 
   /**
+   * Append streaming columns directly to a table in the report's data model without row-object allocation.
+   */
+  pushColumns(table: string, cols: Record<string, unknown[]>, options?: PushDataOptions): this {
+    this.model.appendColumns(table, cols, options);
+    const count = Object.values(cols)[0]?.length ?? 0;
+    this.emit('dataPushed', { table, rowCount: count });
+    if (options?.immediate) {
+      this.flush();
+    }
+    return this;
+  }
+
+  /**
    * Render everything pending right now (useful in tests, exports and SSR snapshots). Scheduled renders pass
    * `visibleOnly`, which skips visuals scrolled well out of view until they come back.
    */

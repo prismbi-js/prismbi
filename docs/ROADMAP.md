@@ -20,6 +20,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 12 | Advanced Analytics: Chord, Live Streaming, Anomaly Detection, Network Graphs, Vector PDF | `0.13.0` | ✅ Implemented |
 | 13 | Enterprise Fabric & Advanced Charting | `0.14.0` | ✅ Implemented |
 | 14 | Analytical Depth & Studio Polish | `0.15.0` | ✅ Implemented |
+| 15 | Streaming Columnar IPC, Memory Diagnostics & Visual Polish | `0.16.0` | ✅ Implemented |
 
 ## Guiding principles
 

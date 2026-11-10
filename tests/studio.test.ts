@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Report } from '../src/index';
 import { History, Studio, assignField, autoReport, autoVisualFor, migrateReport, retargetFields } from '../src/studio';
+import { VISUAL_ORDER, VISUAL_ICONS } from '../src/studio/icons';
 import { createRelationship } from '../src/studio/views';
 import { makeModel } from './fixtures';
 
@@ -359,5 +360,14 @@ describe('studio', () => {
     expect(st.report.selectedVisuals).toHaveLength(0);
 
     st.destroy();
+  });
+
+  it('includes advanced visual types in VISUAL_ORDER and VISUAL_ICONS', () => {
+    const advancedTypes = ['candlestick', 'gantt', 'network', 'chord'];
+    for (const type of advancedTypes) {
+      expect(VISUAL_ORDER).toContain(type);
+      expect(VISUAL_ICONS[type]).toBeTruthy();
+      expect(VISUAL_ICONS[type]).toContain('<svg');
+    }
   });
 });

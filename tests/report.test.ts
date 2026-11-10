@@ -313,4 +313,42 @@ describe('Report', () => {
     expect(uniqueYs.size).toBe(ys.length);
     r.destroy();
   });
+
+  it('applies custom drop shadow and respects crosshair option', () => {
+    const m = new DataModel().addTable('T', [{ x: 'A', y: 10 }]);
+    const r = new Report(el, {
+      model: m,
+      pages: [{
+        id: 'p1',
+        name: 'P1',
+        visuals: [
+          {
+            id: 'v1',
+            type: 'card',
+            fields: { value: 'T[y]' },
+            format: {
+              shadow: { show: true, color: 'rgba(255, 0, 0, 0.5)', blur: 16, x: 2, y: 6 },
+            },
+          },
+          {
+            id: 'v2',
+            type: 'line',
+            fields: { category: 'T[x]', values: 'T[y]' },
+            format: {
+              analytics: { referenceLines: [], trendLine: false, forecast: false, anomalies: false, crosshair: false },
+            },
+          },
+        ],
+      }],
+    });
+    r.flush();
+
+    const v1El = el.querySelector<HTMLElement>('[data-visual-id="v1"]')!;
+    expect(v1El.classList.contains('has-shadow')).toBe(true);
+    expect(v1El.style.getPropertyValue('--pbi-v-shadow')).toBe('2px 6px 16px 0px rgba(255, 0, 0, 0.5)');
+
+    const v2El = el.querySelector<HTMLElement>('[data-visual-id="v2"]')!;
+    expect(v2El).toBeTruthy();
+    r.destroy();
+  });
 });

@@ -41,13 +41,26 @@ function base64ToU8(b64: string): Uint8Array {
   return u8;
 }
 
+async function getCrypto(): Promise<Crypto> {
+  if (globalThis.crypto?.subtle) return globalThis.crypto;
+  try {
+    const spec = 'node:crypto';
+    const mod = (await import(/* @vite-ignore */ spec)) as { webcrypto?: Crypto };
+    if (mod.webcrypto?.subtle) return mod.webcrypto;
+  } catch {
+    // fallback
+  }
+  if (!globalThis.crypto?.subtle) throw new Error('Web Crypto API is not available in the current environment');
+  return globalThis.crypto;
+}
+
 /** Encrypt arbitrary UTF-8 text with a password using PBKDF2 (100,000 iterations, SHA-256) + AES-GCM (256-bit). */
 export async function encryptPayload(plainText: string, password: string): Promise<EncryptedPayload> {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) throw new Error('Web Crypto API is not available in the current environment');
+  const cr = await getCrypto();
+  const subtle = cr.subtle;
 
-  const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
-  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const salt = cr.getRandomValues(new Uint8Array(16));
+  const iv = cr.getRandomValues(new Uint8Array(12));
 
   const keyMaterial = await subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
   const key = await subtle.deriveKey(
@@ -68,8 +81,8 @@ export async function encryptPayload(plainText: string, password: string): Promi
 
 /** Decrypt payload encrypted with `encryptPayload`. Throws if password is incorrect. */
 export async function decryptPayload(payload: EncryptedPayload, password: string): Promise<string> {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) throw new Error('Web Crypto API is not available in the current environment');
+  const cr = await getCrypto();
+  const subtle = cr.subtle;
 
   const salt = base64ToU8(payload.salt);
   const iv = base64ToU8(payload.iv);

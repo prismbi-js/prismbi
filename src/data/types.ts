@@ -89,3 +89,35 @@ export function compareValues(a: CellValue, b: CellValue): number {
 export function valuesEqual(a: CellValue, b: CellValue): boolean {
   return valueKey(a) === valueKey(b);
 }
+
+/** Memory diagnostic breakdown for a single column. */
+export interface ColumnMemoryStats {
+  name: string;
+  type: DataType;
+  rowCount: number;
+  distinctCount: number;
+  valuesBytes: number;
+  dictionaryBytes: number;
+  indexBytes: number;
+  bitmapBytes: number;
+  totalBytes: number;
+}
+
+/** Memory diagnostic breakdown for a table. */
+export interface TableMemoryStats {
+  name: string;
+  rowCount: number;
+  columnCount: number;
+  columns: Record<string, ColumnMemoryStats>;
+  indexesCount: number;
+  bitmapsCount: number;
+  totalBytes: number;
+}
+
+/** Memory diagnostic breakdown for an entire DataModel. */
+export interface ModelMemoryStats {
+  tableCount: number;
+  rowCount: number;
+  tables: Record<string, TableMemoryStats>;
+  totalBytes: number;
+}

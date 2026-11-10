@@ -463,7 +463,8 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     plot.append(bar);
   }
   // crosshair + hit layer
-  const cross = s('line', { y1: top, y2: bottom, stroke: t.axis, 'stroke-width': 1, visibility: 'hidden', 'pointer-events': 'none' });
+  const showCross = f.analytics?.crosshair !== false;
+  const cross = s('line', { y1: top, y2: bottom, stroke: t.axis, 'stroke-width': 1, 'stroke-dasharray': '3 3', visibility: 'hidden', 'pointer-events': 'none' });
   const dots = s('g', { 'pointer-events': 'none' });
   g.append(cross, dots);
   const hit = s('rect', { x: left, y: top, width: Math.max(0, width - right - left), height: Math.max(0, bottom - top), fill: 'transparent', class: 'pbi-hit' });
@@ -475,9 +476,11 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
   hit.addEventListener('mousemove', (e) => {
     const i = indexAt(e);
     const x = xAt(i);
-    cross.setAttribute('x1', String(x));
-    cross.setAttribute('x2', String(x));
-    cross.setAttribute('visibility', 'visible');
+    if (showCross) {
+      cross.setAttribute('x1', String(x));
+      cross.setAttribute('x2', String(x));
+      cross.setAttribute('visibility', 'visible');
+    }
     dots.replaceChildren();
     const cum = categories.map(() => 0);
     for (const se of lineSeries) {
