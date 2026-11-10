@@ -58,11 +58,13 @@ export async function svgToCanvas(svg: string, background: string, scale = 2): P
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(img.width * scale));
   canvas.height = Math.max(1, Math.round(img.height * scale));
-  const c2d = canvas.getContext('2d')!;
-  c2d.fillStyle = background;
-  c2d.fillRect(0, 0, canvas.width, canvas.height);
-  c2d.scale(scale, scale);
-  c2d.drawImage(img, 0, 0);
+  const c2d = canvas.getContext('2d');
+  if (c2d) {
+    c2d.fillStyle = background;
+    c2d.fillRect(0, 0, canvas.width, canvas.height);
+    c2d.scale(scale, scale);
+    c2d.drawImage(img, 0, 0);
+  }
   return canvas;
 }
 

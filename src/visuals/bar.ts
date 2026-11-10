@@ -1,7 +1,7 @@
 import { h, s, barPath, measureText } from '../render/svg';
 import { bandScale, linearScale } from '../render/scales';
 import { textOn } from '../render/color';
-import type { RenderContext, VisualDefinition } from './types';
+import type { DataPointIdentity, RenderContext, VisualDefinition } from './types';
 import { defineVisual } from './registry';
 import {
   animateIn,
@@ -132,6 +132,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
   svg.append(g);
   plot.append(svg);
   const labels = categories.map((c) => c.label);
+  const markMap: { identity: DataPointIdentity; rect: { x: number; y: number; w: number; h: number } }[] = [];
 
   if (!horizontal) {
     const top = showLabels && mode === 'clustered' ? fs + 8 : 8;
@@ -171,6 +172,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           interactive(ctx, path, identity, () => ({ title: cat.label, items: [...tooltipItems(ctx, cat, series, ci), ...errorItems(ci)] }), cat.keys);
           animateIn(ctx, path, v >= 0 ? 'bottom' : 'top');
           marks.append(path);
+          markMap.push({ identity, rect: { x, y: Math.min(y0, y1), w: thick, h: Math.abs(y1 - y0) } });
           if (err) whisker(x + thick / 2, thick, err.lo[ci] ?? v, err.hi[ci] ?? v, false);
           if (se.highlights && hl !== null && hl !== undefined) {
             const yh = scale(hl);
@@ -218,6 +220,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
           animateIn(ctx, path, 'bottom');
           marks.append(path);
+          markMap.push({ identity, rect: { x, y: yTop, w: thick, h: hgt } });
           const hl = se.highlights?.[ci];
           if (se.highlights && hl !== null && hl !== undefined) {
             const hv = norm(hl, ci) ?? 0;
@@ -235,6 +238,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
     drawReferenceLines(ctx, g, scale, 'y', [left, width - right], refValues, valueField);
     if (mode === 'clustered') series.forEach((se) => drawTrendLine(ctx, g, se.values, (i) => band(i) + band.bandwidth / 2, scale, se.color));
     else drawTrendLine(ctx, g, refValues, (i) => band(i) + band.bandwidth / 2, scale, t.foregroundSecondary);
+    wireBarBrush(svg, ctx, width, height, markMap);
     return;
   }
 
@@ -273,6 +277,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         interactive(ctx, path, identity, () => ({ title: cat.label, items: [...tooltipItems(ctx, cat, series, ci), ...errorItems(ci)] }), cat.keys);
         animateIn(ctx, path, v >= 0 ? 'left' : 'right');
         marks.append(path);
+        markMap.push({ identity, rect: { x: Math.min(xa, xb), y, w: Math.abs(xb - xa), h: thick } });
         if (err) whisker(y + thick / 2, thick, err.lo[ci] ?? v, err.hi[ci] ?? v, true);
         const hl = se.highlights?.[ci];
         if (se.highlights && hl !== null && hl !== undefined) {
@@ -318,6 +323,7 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         interactive(ctx, path, identity, () => ({ title: cat.label, items: tooltipItems(ctx, cat, series, ci) }), cat.keys);
         animateIn(ctx, path, 'left');
         marks.append(path);
+        markMap.push({ identity, rect: { x, y, w, h: thick } });
         if (showLabels) {
           const text = fmtOf(se)(mode === 'percent' ? v : se.values[ci]);
           if (thick >= fs + 2 && measureText(text, fs, t.fontFamily) + 8 <= w)
@@ -327,6 +333,112 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
     }
   });
   drawReferenceLines(ctx, g, scale, 'x', [4, bottom], refValues, valueField);
+  wireBarBrush(svg, ctx, width, height, markMap);
+}
+
+function wireBarBrush(
+  svg: SVGSVGElement,
+  ctx: RenderContext,
+  width: number,
+  height: number,
+  markMap: { identity: any; rect: { x: number; y: number; w: number; h: number } }[],
+): void {
+  let dragStart: { clientX: number; clientY: number; pX: number; pY: number } | null = null;
+  let brushEl: SVGElement | null = null;
+  let didBrush = false;
+
+  const plotCoords = (clientX: number, clientY: number) => {
+    const r = svg.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      return {
+        x: Math.max(0, Math.min(width, ((clientX - r.left) * width) / r.width)),
+        y: Math.max(0, Math.min(height, ((clientY - r.top) * height) / r.height)),
+      };
+    }
+    const attrW = parseFloat(svg.getAttribute('width') || String(width)) || width;
+    const attrH = parseFloat(svg.getAttribute('height') || String(height)) || height;
+    return {
+      x: Math.max(0, Math.min(width, (clientX * width) / attrW)),
+      y: Math.max(0, Math.min(height, (clientY * height) / attrH)),
+    };
+  };
+
+  const onWindowPointerMove = (e: PointerEvent) => {
+    if (!dragStart) return;
+    const cur = plotCoords(e.clientX, e.clientY);
+    const dx = Math.abs(e.clientX - dragStart.clientX);
+    const dy = Math.abs(e.clientY - dragStart.clientY);
+    if (!didBrush && Math.hypot(dx, dy) < 4) return;
+    didBrush = true;
+    ctx.host.hideTooltip();
+    const bx = Math.min(dragStart.pX, cur.x);
+    const by = Math.min(dragStart.pY, cur.y);
+    const bw = Math.abs(cur.x - dragStart.pX);
+    const bh = Math.abs(cur.y - dragStart.pY);
+    if (!brushEl) {
+      brushEl = s('rect', { class: 'pbi-brush' });
+      svg.append(brushEl);
+    }
+    brushEl.setAttribute('x', String(bx));
+    brushEl.setAttribute('y', String(by));
+    brushEl.setAttribute('width', String(bw));
+    brushEl.setAttribute('height', String(bh));
+  };
+
+  const onWindowPointerUp = (e: PointerEvent) => {
+    if (!dragStart) return;
+    const start = dragStart;
+    dragStart = null;
+    window.removeEventListener('pointermove', onWindowPointerMove);
+    window.removeEventListener('pointerup', onWindowPointerUp);
+    window.removeEventListener('pointercancel', onWindowPointerUp);
+    if (brushEl) {
+      brushEl.remove();
+      brushEl = null;
+    }
+    if (didBrush) {
+      const cur = plotCoords(e.clientX, e.clientY);
+      const bx0 = Math.min(start.pX, cur.x);
+      const bx1 = Math.max(start.pX, cur.x);
+      const by0 = Math.min(start.pY, cur.y);
+      const by1 = Math.max(start.pY, cur.y);
+      const hitIds: any[] = [];
+      const seen = new Set<string>();
+      for (const m of markMap) {
+        const mx0 = m.rect.x;
+        const mx1 = m.rect.x + m.rect.w;
+        const my0 = m.rect.y;
+        const my1 = m.rect.y + m.rect.h;
+        if (mx0 <= bx1 && mx1 >= bx0 && my0 <= by1 && my1 >= by0) {
+          const key = JSON.stringify(m.identity.values);
+          if (!seen.has(key)) {
+            seen.add(key);
+            hitIds.push(m.identity);
+          }
+        }
+      }
+      if (hitIds.length) {
+        ctx.host.select(hitIds, { multi: e.ctrlKey || e.shiftKey || e.metaKey });
+      }
+    }
+  };
+
+  svg.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const coords = plotCoords(e.clientX, e.clientY);
+    dragStart = { clientX: e.clientX, clientY: e.clientY, pX: coords.x, pY: coords.y };
+    didBrush = false;
+    window.addEventListener('pointermove', onWindowPointerMove);
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerUp);
+  });
+
+  svg.addEventListener('click', (e) => {
+    if (didBrush) {
+      e.stopPropagation();
+      didBrush = false;
+    }
+  }, true);
 }
 
 function barVisual(type: string, displayName: string, horizontal: boolean, mode: Mode): VisualDefinition {

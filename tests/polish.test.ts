@@ -613,4 +613,39 @@ describe('Small multiples trellis and grid layouts', () => {
     v.destroy();
     el.remove();
   });
+
+  it('supports sticky frozen columns with pinned offsets and edge shadow in tables', () => {
+    const el = mount();
+    const m = new DataModel().addTable('SalesData', [
+      { id: 1, region: 'East', rep: 'Alice', sales: 100 },
+      { id: 2, region: 'West', rep: 'Bob', sales: 200 },
+    ]);
+    const v = createVisual(el, {
+      model: m,
+      type: 'table',
+      fields: {
+        columns: ['SalesData[id]', 'SalesData[region]', 'SalesData[rep]', 'SalesData[sales]'],
+      },
+      format: {
+        table: {
+          freezeColumns: 2,
+        },
+      } as never,
+    });
+    v.flush();
+
+    // Check sticky frozen columns
+    const pinnedThs = el.querySelectorAll<HTMLTableCellElement>('th.pbi-col-pinned');
+    expect(pinnedThs.length).toBe(2);
+    expect(pinnedThs[0].style.position).toBe('sticky');
+    expect(pinnedThs[1].style.position).toBe('sticky');
+    expect(pinnedThs[1].classList.contains('pbi-col-pinned-edge')).toBe(true);
+
+    const pinnedTds = el.querySelectorAll<HTMLTableCellElement>('td.pbi-col-pinned');
+    expect(pinnedTds.length).toBe(4); // 2 rows x 2 frozen columns
+    expect(pinnedTds[1].classList.contains('pbi-col-pinned-edge')).toBe(true);
+
+    v.destroy();
+    el.remove();
+  });
 });

@@ -23,6 +23,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 15 | Streaming Columnar IPC, Memory Diagnostics & Visual Polish | `0.16.0` | ✅ Implemented |
 | 16 | Exploratory Analytics, Smart Alignment & Studio Ingestion | `0.17.0` | ✅ Implemented |
 | 17 | Visual Locking & Grouping, Cartesian Range Brushing & Canvas Zoom | `0.18.0` | ✅ Implemented |
+| 18 | Cartesian Bar Brush Selection, Sticky Frozen Columns, Image Export & Studio Minimap | `0.19.0` | ✅ Implemented |
 
 ## Guiding principles
 

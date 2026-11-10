@@ -414,7 +414,10 @@ describe('studio', () => {
     });
 
     canvas.dispatchEvent(dragEvent);
-    await new Promise((r) => setTimeout(r, 80));
+    for (let i = 0; i < 20; i++) {
+      if (st.model.hasTable('MonthlyOrders')) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
 
     expect(st.model.hasTable('MonthlyOrders')).toBe(true);
     expect(st.model.table('MonthlyOrders').rowCount).toBe(2);
@@ -474,6 +477,30 @@ describe('studio', () => {
     expect(st.zoom).toBe(1);
     expect(canvas.style.transform).toBe('');
     expect(q<HTMLElement>('.pbs-zoom-val')?.textContent).toBe('100%');
+
+    st.destroy();
+  });
+
+  it('supports toggling and navigating via canvas minimap', () => {
+    const st = open();
+    expect(st.minimapOpen).toBe(false);
+    expect(q<HTMLElement>('.pbs-minimap')).toBeNull();
+
+    // Toggle minimap on via button
+    const mapBtn = q<HTMLButtonElement>('.pbs-minimap-btn')!;
+    expect(mapBtn).toBeTruthy();
+    mapBtn.click();
+    expect(st.minimapOpen).toBe(true);
+
+    const minimap = q<HTMLElement>('.pbs-minimap')!;
+    expect(minimap).toBeTruthy();
+    expect(minimap.querySelectorAll('.pbs-minimap-tile').length).toBeGreaterThanOrEqual(1);
+    expect(minimap.querySelector('.pbs-minimap-viewport')).toBeTruthy();
+
+    // Toggle off
+    mapBtn.click();
+    expect(st.minimapOpen).toBe(false);
+    expect(q<HTMLElement>('.pbs-minimap')).toBeNull();
 
     st.destroy();
   });

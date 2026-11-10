@@ -1286,6 +1286,85 @@ export class Report implements ReportRuntime {
     download(new Blob([html], { type: 'text/html' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.html`);
   }
 
+  /**
+   * Export the current report page (or specified page) as a standalone SVG string.
+   */
+  async toSvg(pageIdOrIndex?: string | number): Promise<string> {
+    const { elementToSvg } = await import('./snapshot');
+    const p = pageIdOrIndex !== undefined ? this.pages[typeof pageIdOrIndex === 'number' ? pageIdOrIndex : this.pageIndex(pageIdOrIndex)] : this.page;
+    if (!p) throw new Error('Page not found');
+    const el = p.el ?? this.root;
+    const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1280);
+    const h = Math.max(1, el.scrollHeight || el.offsetHeight || 720);
+    return elementToSvg(el, this._theme, w, h);
+  }
+
+  /**
+   * Render the current page (or specified page) to a high-DPI canvas and return an image Blob.
+   */
+  async toImage(opts?: { page?: string | number; type?: 'png' | 'webp' | 'jpeg'; scale?: number }): Promise<Blob> {
+    const type = opts?.type ?? 'png';
+    const scale = opts?.scale ?? 2;
+    const { elementToSvg, svgToCanvas } = await import('./snapshot');
+    const p = opts?.page !== undefined ? this.pages[typeof opts.page === 'number' ? opts.page : this.pageIndex(opts.page)] : this.page;
+    if (!p) throw new Error('Page not found');
+    const el = p.el ?? this.root;
+    const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1280);
+    const h = Math.max(1, el.scrollHeight || el.offsetHeight || 720);
+    const svgText = elementToSvg(el, this._theme, w, h);
+    const canvas = await svgToCanvas(svgText, this._theme.background || this._theme.surface, scale);
+    return new Promise<Blob>((resolve, reject) => {
+      if (!canvas.toBlob) {
+        try {
+          const dataUrl = canvas.toDataURL(`image/${type}`);
+          const bin = atob(dataUrl.split(',')[1]);
+          const arr = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          return resolve(new Blob([arr], { type: `image/${type}` }));
+        } catch (e) {
+          return reject(e);
+        }
+      }
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Image export failed'))), `image/${type}`);
+    });
+  }
+
+  /**
+   * Download a full report page snapshot as PNG or SVG.
+   */
+  async exportImage(opts?: { page?: string | number; type?: 'png' | 'svg'; filename?: string; scale?: number }): Promise<void> {
+    const type = opts?.type ?? 'png';
+    const { download } = await import('./snapshot');
+    const pageObj = opts?.page !== undefined ? this.pages[typeof opts.page === 'number' ? opts.page : this.pageIndex(opts.page)] : this.page;
+    const name = opts?.filename ?? `${(pageObj?.def.name || 'report').replace(/[^\w-]+/g, '_')}.${type}`;
+    if (type === 'svg') {
+      const { elementToSvg } = await import('./snapshot');
+      const el = pageObj?.el ?? this.root;
+      const w = Math.max(1, el.scrollWidth || el.offsetWidth || 1280);
+      const h = Math.max(1, el.scrollHeight || el.offsetHeight || 720);
+      const svgText = elementToSvg(el, this._theme, w, h);
+      return download(new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' }), name);
+    }
+    const blob = await this.toImage({ page: opts?.page, type: 'png', scale: opts?.scale });
+    download(blob, name);
+  }
+
+  /**
+   * Copy the full report page snapshot directly to the system clipboard.
+   */
+  async copyImage(opts?: { page?: string | number; scale?: number }): Promise<boolean> {
+    try {
+      const blob = await this.toImage({ page: opts?.page, type: 'png', scale: opts?.scale });
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof (navigator.clipboard as any).write === 'function' && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+        return true;
+      }
+    } catch {
+      /* clipboard write blocked or unsupported */
+    }
+    return false;
+  }
+
   domainIndex(table: string, column: string, value: CellValue): number {
     const k = `${table}[${column}]`;
     let m = this.domainCache.get(k);

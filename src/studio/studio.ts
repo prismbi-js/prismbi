@@ -503,6 +503,123 @@ export class Studio implements StudioContext {
     }
     this.report?.setZoom(this.zoom);
     this.renderPages();
+    if (this.minimapOpen) this.renderMinimap();
+  }
+
+  minimapOpen = false;
+
+  toggleMinimap(): void {
+    this.minimapOpen = !this.minimapOpen;
+    const btn = this.els.pages?.querySelector('.pbs-minimap-btn');
+    btn?.setAttribute('aria-pressed', String(this.minimapOpen));
+    if (this.minimapOpen) {
+      this.renderMinimap();
+    } else {
+      this.root.querySelector('.pbs-minimap')?.remove();
+    }
+  }
+
+  renderMinimap(): void {
+    this.root.querySelector('.pbs-minimap')?.remove();
+    if (!this.minimapOpen || !this.report) return;
+
+    const page = this.report.pageDefinition();
+    const pageEl = this.els.canvas?.querySelector('.pbi-page:not([hidden])') as HTMLElement | null;
+    const scrollContainer = (this.els.canvas?.querySelector('.pbi-page-scroll') ?? this.els.canvasWrap) as HTMLElement | null;
+    if (!page) return;
+
+    const pw = pageEl?.scrollWidth || 1280;
+    const ph = pageEl?.scrollHeight || 720;
+    const mw = 180;
+    const mh = 110;
+    const scale = Math.min(mw / pw, mh / ph);
+
+    const minimap = h('div', { class: 'pbs-minimap', role: 'region', 'aria-label': 'Canvas minimap' });
+
+    for (const v of page.visuals) {
+      if (v.hidden) continue;
+      let vx = (v.layout?.x ?? 0) * (pw / 12);
+      let vy = (v.layout?.y ?? 0) * 56;
+      let vw = (v.layout?.w ?? 4) * (pw / 12);
+      let vh = (v.layout?.h ?? 6) * 56;
+      const vEl = v.id ? pageEl?.querySelector(`[data-visual-id="${v.id}"]`) as HTMLElement | null : null;
+      if (vEl && vEl.offsetWidth > 0 && vEl.offsetHeight > 0) {
+        vx = vEl.offsetLeft;
+        vy = vEl.offsetTop;
+        vw = vEl.offsetWidth;
+        vh = vEl.offsetHeight;
+      }
+      const tile = h('div', {
+        class: 'pbs-minimap-tile',
+        title: v.title ?? v.type,
+        style: `left:${Math.round(vx * scale)}px;top:${Math.round(vy * scale)}px;width:${Math.max(4, Math.round(vw * scale))}px;height:${Math.max(4, Math.round(vh * scale))}px;`
+      });
+      if (v.id) {
+        tile.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.report.setActiveVisual(v.id!);
+        });
+      }
+      minimap.append(tile);
+    }
+
+    const viewport = h('div', { class: 'pbs-minimap-viewport' });
+    minimap.append(viewport);
+
+    const updateViewport = () => {
+      if (!scrollContainer) return;
+      const cw = scrollContainer.clientWidth || 1280;
+      const ch = scrollContainer.clientHeight || 720;
+      const sl = scrollContainer.scrollLeft || 0;
+      const st = scrollContainer.scrollTop || 0;
+      const z = this.zoom || 1;
+      const vx = (sl / z) * scale;
+      const vy = (st / z) * scale;
+      const vw = Math.min(mw, (cw / z) * scale);
+      const vh = Math.min(mh, (ch / z) * scale);
+      viewport.style.left = `${Math.max(0, Math.round(vx))}px`;
+      viewport.style.top = `${Math.max(0, Math.round(vy))}px`;
+      viewport.style.width = `${Math.max(8, Math.round(vw))}px`;
+      viewport.style.height = `${Math.max(8, Math.round(vh))}px`;
+    };
+
+    updateViewport();
+
+    let dragging = false;
+    const panTo = (clientX: number, clientY: number) => {
+      if (!scrollContainer) return;
+      const rect = minimap.getBoundingClientRect();
+      const mx = clientX - rect.left;
+      const my = clientY - rect.top;
+      const z = this.zoom || 1;
+      const cw = scrollContainer.clientWidth || 1280;
+      const ch = scrollContainer.clientHeight || 720;
+      const targetX = (mx / scale) * z - cw / 2;
+      const targetY = (my / scale) * z - ch / 2;
+      scrollContainer.scrollLeft = targetX;
+      scrollContainer.scrollTop = targetY;
+      updateViewport();
+    };
+
+    minimap.addEventListener('mousedown', (e) => {
+      dragging = true;
+      panTo(e.clientX, e.clientY);
+      const onMove = (me: MouseEvent) => {
+        if (!dragging) return;
+        panTo(me.clientX, me.clientY);
+      };
+      const onUp = () => {
+        dragging = false;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+
+    scrollContainer?.addEventListener('scroll', updateViewport, { passive: true });
+
+    (this.els.canvasWrap ?? this.root).append(minimap);
   }
 
   private layersOpen = false;
@@ -980,6 +1097,7 @@ export class Studio implements StudioContext {
     const focusInRight = this.els.rightBody.contains(document.activeElement);
     if (selectionChanged || !focusInRight || this.rightTab === 'build') this.renderRight();
     if (this.view !== 'report') this.renderView();
+    if (this.minimapOpen) this.renderMinimap();
   }
 
   private renderFieldsPane(): void {
@@ -1077,7 +1195,15 @@ export class Studio implements StudioContext {
     zoomIn.addEventListener('click', () => this.setZoom(this.zoom + 0.1));
     const zoomFit = h('button', { type: 'button', class: 'pbs-zoom-fit', title: 'Fit to screen', 'aria-label': 'Fit to screen' }, 'Fit');
     zoomFit.addEventListener('click', () => this.setZoom('fit'));
-    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit);
+    const mapBtn = h('button', {
+      type: 'button',
+      class: 'pbs-minimap-btn',
+      title: 'Toggle canvas minimap',
+      'aria-label': 'Canvas minimap',
+      'aria-pressed': String(this.minimapOpen),
+    }, '🗺️');
+    mapBtn.addEventListener('click', () => this.toggleMinimap());
+    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit, mapBtn);
     bar.append(zoomBar);
   }
 

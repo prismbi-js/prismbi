@@ -275,6 +275,8 @@ svg.pbi-sparkline{vertical-align:middle;margin-right:6px;display:inline-block}
 .pbi-guide.pbi-guide-center{opacity:.8;border-style:dotted}
 .pbi-marquee{position:absolute;pointer-events:none;z-index:50;border:1px dashed var(--pbi-accent);background:color-mix(in srgb,var(--pbi-accent) 15%,transparent);border-radius:2px}
 .pbi-brush{fill:color-mix(in srgb,var(--pbi-accent) 15%,transparent);stroke:var(--pbi-accent);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
+.pbi-col-pinned{position:sticky!important;background:var(--pbi-surface)}
+.pbi-col-pinned-edge{box-shadow:3px 0 6px rgb(0 0 0/.12);border-right:1px solid var(--pbi-border)!important}
 .pbi-datatable-wrap{overflow:auto;height:100%}
 .pbi-network-node{cursor:pointer}
 .pbi-network-node:hover .pbi-network-circle{stroke:var(--pbi-fg);stroke-width:2.5px}

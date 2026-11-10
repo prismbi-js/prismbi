@@ -430,4 +430,81 @@ describe('Report', () => {
     expect(r.selectionSource()).toBe('ln1');
     r.destroy();
   });
+
+  it('supports box brush multi-selection on column / bar charts', () => {
+    const m = new DataModel().addTable('Sales', [
+      { cat: 'A', val: 100 },
+      { cat: 'B', val: 200 },
+      { cat: 'C', val: 300 },
+      { cat: 'D', val: 400 },
+    ]);
+    const r = new Report(el, {
+      model: m,
+      pages: [{
+        id: 'p1',
+        name: 'P1',
+        visuals: [{
+          id: 'col1',
+          type: 'column',
+          fields: { category: 'Sales[cat]', values: 'Sales[val]' },
+        }],
+      }],
+    });
+    r.flush();
+
+    const svg = el.querySelector<SVGSVGElement>('[data-visual-id="col1"] svg')!;
+    expect(svg).toBeTruthy();
+
+    const pointer = (type: string, clientX = 0, clientY = 0) =>
+      Object.assign(new MouseEvent(type, { bubbles: true, clientX, clientY, button: 0 }), { pointerId: 1 });
+
+    svg.dispatchEvent(pointer('pointerdown', 20, 20));
+    window.dispatchEvent(pointer('pointermove', 250, 250));
+    expect(svg.querySelector('.pbi-brush')).toBeTruthy();
+    window.dispatchEvent(pointer('pointerup', 250, 250));
+    expect(svg.querySelector('.pbi-brush')).toBeNull();
+
+    expect(r.selectionSource()).toBe('col1');
+    r.destroy();
+  });
+
+  it('exports report page as SVG string and image canvas/blob', async () => {
+    const origSrc = Object.getOwnPropertyDescriptor(Image.prototype, 'src');
+    const origToBlob = HTMLCanvasElement.prototype.toBlob;
+    Object.defineProperty(Image.prototype, 'src', {
+      set(this: HTMLImageElement) {
+        setTimeout(() => this.onload?.(new Event('load') as never), 0);
+      },
+      configurable: true,
+    });
+    HTMLCanvasElement.prototype.toBlob = function (cb) {
+      cb(new Blob(['fake'], { type: 'image/png' }));
+    };
+
+    try {
+      const m = new DataModel().addTable('T', [{ a: 1, b: 2 }]);
+      const r = new Report(el, {
+        model: m,
+        pages: [{
+          id: 'p1',
+          name: 'Page 1',
+          visuals: [{ id: 'v1', type: 'card', fields: { value: 'T[a]' } }],
+        }],
+      });
+      r.flush();
+
+      const svg = await r.toSvg('p1');
+      expect(svg).toContain('<svg');
+      expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+
+      const blob = await r.toImage({ page: 'p1', type: 'png' });
+      expect(blob).toBeInstanceOf(Blob);
+      expect(blob.type).toBe('image/png');
+
+      r.destroy();
+    } finally {
+      if (origSrc) Object.defineProperty(Image.prototype, 'src', origSrc);
+      HTMLCanvasElement.prototype.toBlob = origToBlob;
+    }
+  });
 });

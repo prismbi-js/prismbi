@@ -59,6 +59,10 @@ export interface TableFormat {
   pageSize?: number;
   /** Render only the rows in view (default: automatic above 500 rows, off when wrapping). */
   virtualize?: boolean;
+  /** Number of leading columns pinned (sticky) to the left during horizontal scrolling. */
+  freezeColumns?: number;
+  /** Explicit column names or field refs to pin to the left. */
+  pinnedColumns?: string[];
 }
 
 /** Row count above which tables window their rows. */
@@ -454,6 +458,23 @@ export const table = /* @__PURE__ */ defineVisual({
     });
     const groupFields = data.groups as QueryField[];
 
+    const pinnedCount = tf.freezeColumns ?? 0;
+    const pinnedSet = new Set(tf.pinnedColumns ?? []);
+    const isPinnedCol = (ci: number, name: string, ref?: string) => ci < pinnedCount || pinnedSet.has(name) || (!!ref && pinnedSet.has(ref));
+    let accLeft = 0;
+    const pinOffsets: (number | null)[] = [];
+    let lastPinnedIdx = -1;
+    cols.forEach((c, ci) => {
+      if (isPinnedCol(ci, c.field.name, c.field.ref)) {
+        pinOffsets[ci] = accLeft;
+        lastPinnedIdx = ci;
+        const w = tf.columnWidths?.[c.field.name] ?? (c.field.ref ? tf.columnWidths?.[c.field.ref] : undefined) ?? 120;
+        accLeft += w;
+      } else {
+        pinOffsets[ci] = null;
+      }
+    });
+
     const tableEl = h('table', { class: `pbi-table pbi-density-${tf.density ?? 'normal'}${tf.rowBanding === false ? '' : ' pbi-banded'}${tf.wrap ? ' pbi-wrap' : ''}` });
     const thead = h('thead');
     const hr = h('tr');
@@ -462,6 +483,15 @@ export const table = /* @__PURE__ */ defineVisual({
       const th = h('th', { class: c.kind === 'value' ? 'is-num' : '', scope: 'col', 'aria-sort': sorted ? (state.sortDir === 'desc' ? 'descending' : 'ascending') : undefined, tabindex: 0 }, c.field.name, sorted ? h('span', { class: 'pbi-sort' }, state.sortDir === 'desc' ? ' ↓' : ' ↑') : '');
       const w = tf.columnWidths?.[c.field.name];
       if (w) th.style.width = `${w}px`;
+      const pinLeft = pinOffsets[ci];
+      if (pinLeft !== null && pinLeft !== undefined) {
+        th.style.position = 'sticky';
+        th.style.left = `${pinLeft}px`;
+        th.style.zIndex = '3';
+        th.style.background = 'var(--pbi-surface)';
+        th.classList.add('pbi-col-pinned');
+        if (ci === lastPinnedIdx) th.classList.add('pbi-col-pinned-edge');
+      }
       const toggle = () => {
         const dir = sorted && state.sortDir === 'asc' ? 'desc' : sorted && state.sortDir === 'desc' ? 'asc' : c.kind === 'value' ? 'desc' : 'asc';
         ctx.host.setState({ sortCol: ci, sortDir: dir });
@@ -494,6 +524,15 @@ export const table = /* @__PURE__ */ defineVisual({
           decorateCell(ctx, td, undefined, v, stats[ci], text, undefined);
         } else {
           td.textContent = text;
+        }
+        const pinLeft = pinOffsets[ci];
+        if (pinLeft !== null && pinLeft !== undefined) {
+          td.style.position = 'sticky';
+          td.style.left = `${pinLeft}px`;
+          td.style.zIndex = '1';
+          if (!td.style.background) td.style.background = 'var(--pbi-surface)';
+          td.classList.add('pbi-col-pinned');
+          if (ci === lastPinnedIdx) td.classList.add('pbi-col-pinned-edge');
         }
         tr.append(td);
       });

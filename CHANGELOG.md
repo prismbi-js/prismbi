@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.19.0 (2026-11-10 / Phase 18: Cartesian Bar Brush Selection, Sticky Frozen Columns, Image Export & Studio Minimap)
+
+- **Cartesian Bar & Column Chart Box Brush Multi-Selection (`.pbi-brush`):**
+  - Added interactive 2D drag-to-select marquee box and brush selection overlay across clustered and stacked vertical column and horizontal bar charts (`src/visuals/bar.ts`).
+  - Employs `.pbi-brush` SVG rectangle overlay with dynamic pointer tracking and AABB axis-aligned bounding box collision detection against all bar marks.
+  - Automatically coordinates multi-category batch cross-filtering and highlight synchronization across the entire report (`ctx.host.select(hitIds, { multi: e.ctrlKey || e.shiftKey || e.metaKey })`).
+  - Seamlessly coexists with single-bar clicks and tooltips without interfering with standard click events.
+
+- **Table & Matrix Sticky Frozen Columns (`freezeColumns`, `pinnedColumns`):**
+  - Added leading column freezing and pinning to tables and matrices (`TableFormat.freezeColumns` and `TableFormat.pinnedColumns`).
+  - Implemented sticky CSS positioning (`position: sticky`, `style.left`) with sequential cumulative column offset computation across `<thead>` headers and `<tbody>` cells (`src/visuals/table.ts`).
+  - Added elevated right boundary shadow styling (`.pbi-col-pinned-edge`, `src/report/styles.ts`) that smoothly elevates pinned columns over scrolled content during horizontal pagination and scrolling.
+
+- **Report Page & Visual Image Export (`toSvg`, `toImage`, `exportImage`, `copyImage`):**
+  - Added programmatic page-level and visual-level image export methods on `Report` (`src/report/report.ts`):
+    - `report.toSvg(page)`: Exports self-contained SVG strings suitable for standalone vector graphics rendering.
+    - `report.toImage(opts)`: Renders high-DPI canvas snapshots and outputs image `Blob` objects in PNG, JPEG, or WebP formats.
+    - `report.exportImage(opts)`: Triggers automatic browser downloads of full page or visual snapshots as SVG or PNG files.
+    - `report.copyImage(opts)`: Copies high-resolution rendered PNG bitmaps directly to the system clipboard via `navigator.clipboard.write()`.
+  - Employs zero-bundle dynamic module loading (`import('./snapshot')`) to ensure rasterization dependencies remain lazy loaded with zero upfront impact on core bundle sizes.
+
+- **Studio Canvas Minimap Navigator (`.pbs-minimap`):**
+  - Added interactive canvas minimap navigator in Studio (`src/studio/studio.ts`, `src/studio/styles.ts`), togglable via the footer zoom bar button (`.pbs-minimap-btn`, `🗺️`).
+  - Real-time scaled visualization rendering (`.pbs-minimap-tile`) mirroring all page visuals, layout coordinates, and titles.
+  - Interactive viewport indicator (`.pbs-minimap-viewport`) representing the visible canvas scroll bounds.
+  - Supports dragging and clicking within the minimap to smoothly pan and center canvas scroll positions, with full zoom-scale awareness.
+
 ## 0.18.0 (2026-11-10 / Phase 17: Visual Locking & Grouping, Cartesian Range Brushing & Canvas Zoom)
 
 - **Studio Visual Locking & Grouping:**
