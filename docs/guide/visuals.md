@@ -126,6 +126,15 @@ format: {
   bars:       { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },
   lines:      { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true, collisionAvoidance: true },
   animation:  { enabled: true, duration: 280 },
+  smallMultiples: {
+    layout: 'grid' | 'matrix',                   // 1D grid wrap or 2D dimension matrix
+    columns: 3, rows: 2, gap: 12, padding: 8,
+    sharedYAxis: true, sharedCategoryAxis: true, // synchronize scales & category domain slots
+    outerAxesOnly: true,                         // hide redundant inner column/row tick labels
+    border: true, borderColor: '#e2e8f0', panelBackground: '#ffffff',
+    headerAlignment: 'left' | 'center' | 'right', headerPosition: 'top' | 'bottom',
+    headerFontSize: 12, headerColor: '#475569',
+  },
 }
 ```
 

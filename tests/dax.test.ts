@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DataModel, DaxSyntaxError, parseDax } from '../src/index';
+import { DataModel, DaxSyntaxError, parseDax, formatDax } from '../src/index';
+import { ExpressionEditor } from '../src/studio/expressionEditor';
 import { makeModel } from './fixtures';
 
 const m = makeModel();
@@ -320,5 +321,37 @@ describe('found by importing a real Power BI project', () => {
     expect(ev('CONTAINSROW({(1, "a"), (2, "b")}, 1, "x")')).toBe(false);
     expect(ev('CONTAINSROW(Products, 1, "Road Bike", "Bikes", "Red")')).toBe(true);
     expect(ev('CONTAINSROW(Products, 999, "Road Bike", "Bikes", "Red")')).toBe(false);
+  });
+});
+
+describe('DAX Formatter & Beautifier', () => {
+  it('formats SWITCH with aligned condition-value pairs', () => {
+    const formatted = formatDax('switch(true(),[Profit]>1000,"High",[Profit]>500,"Medium","Low")');
+    expect(formatted).toBe('SWITCH(\n    TRUE(),\n    [Profit] > 1000, "High",\n    [Profit] > 500, "Medium",\n    "Low"\n)');
+  });
+
+  it('formats multi-line CALCULATE with dedicated filter lines', () => {
+    const dax = 'calculate(sum(Sales[Amount]),Products[Color]="Red",Region[Name]="North")';
+    const formatted = formatDax(dax, { maxLine: 40 });
+    expect(formatted).toBe('CALCULATE(\n    SUM(Sales[Amount]),\n    Products[Color] = "Red",\n    Region[Name] = "North"\n)');
+  });
+
+  it('supports measure definitions and leading comments', () => {
+    const src = `// Computes gross margin
+Total Margin = divide([Profit], [Total Sales], 0)`;
+    const formatted = formatDax(src);
+    expect(formatted).toContain('// Computes gross margin');
+    expect(formatted).toContain('Total Margin = DIVIDE([Profit], [Total Sales], 0)');
+  });
+
+  it('ExpressionEditor formats via button click and Shift+Alt+F shortcut', () => {
+    const ed = new ExpressionEditor(m, 'calculate(sum(Sales[Amount]))');
+    expect(ed.formatBtn).not.toBeNull();
+    ed.formatBtn.click();
+    expect(ed.value).toBe('CALCULATE(SUM(Sales[Amount]))');
+
+    ed.value = 'divide([Profit], [Total Sales])';
+    ed.textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'F', shiftKey: true, altKey: true, bubbles: true }));
+    expect(ed.value).toBe('DIVIDE([Profit], [Total Sales])');
   });
 });

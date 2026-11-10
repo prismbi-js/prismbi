@@ -35,10 +35,12 @@ formatDax('VAR a=1 VAR b=2 RETURN a+b');
 // VAR b = 2
 // RETURN
 //     a + b
-formatDax(longExpression, { indent: '  ', maxLine: 100 });
+formatDax(longExpression, { indent: '    ', maxLine: 80, alignSwitch: true, breakCalculateFilters: true });
 ```
 
-The formatter adds parentheses only where precedence needs them, keeps spacing consistent, and breaks calls that run past `maxLine` onto one argument per line.
+The formatter adds parentheses only where precedence needs them, keeps spacing consistent, canonicalizes function and keyword casing (`CALCULATE`, `SUM`, `TRUE`, `FALSE`, etc.), aligns `SWITCH` condition-value pairs on dedicated lines, and formats `CALCULATE` filter predicates onto separate indented lines. It also cleanly formats full measure definitions (`Total Margin = DIVIDE(...)`) while preserving leading source comments (`//`, `--`, `/* */`).
+
+In the Studio formula bar, authors can click the **✦ Format DAX** button or press **Shift+Alt+F** to beautify measures in place.
 
 ## Dependency explanation
 

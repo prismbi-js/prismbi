@@ -170,6 +170,9 @@ export const STUDIO_CSS = /* css */ `
 .pbs-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 .pbs-editor{position:relative;display:flex;flex-direction:column;gap:6px}
+.pbs-editor-bar{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.pbs-format-btn{padding:3px 8px;border:1px solid var(--pbs-line);border-radius:6px;background:var(--pbs-pane);color:var(--pbi-fg-2);font-size:11.5px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.pbs-format-btn:hover{background:color-mix(in srgb,var(--pbi-accent) 12%,transparent);color:var(--pbi-fg)}
 .pbs-editor textarea{min-height:120px;resize:vertical;padding:10px;border:1px solid var(--pbs-line);border-radius:8px;background:var(--pbi-bg);font:13px/1.5 ui-monospace,Consolas,monospace;tab-size:4}
 .pbs-suggest{list-style:none;margin:0;padding:4px;border:1px solid var(--pbs-line);border-radius:8px;max-height:200px;overflow:auto;background:var(--pbs-pane)}
 .pbs-suggest li{display:flex;justify-content:space-between;gap:12px;padding:4px 8px;border-radius:5px;cursor:pointer;font:12px ui-monospace,Consolas,monospace}

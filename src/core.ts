@@ -87,6 +87,7 @@ export type {
   PdfMarginOptions,
   PdfHeaderFooterContext,
   PdfHeaderFooterFn,
+  PdfOutlineItem,
   PdfExportOptions,
   SvgToPdfOptions,
 } from './report/pdf';

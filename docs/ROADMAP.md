@@ -19,7 +19,7 @@ Each phase ends in a release that can ship on its own. A phase is done when its 
 | 11 | Executive Intelligence: Periodic DAX, Word/HTML exports, Gantt/Candlestick, ClickHouse | `0.12.0` | ✅ Implemented |
 | 12 | Advanced Analytics: Chord, Live Streaming, Anomaly Detection, Network Graphs, Vector PDF | `0.13.0` | ✅ Implemented |
 | 13 | Enterprise Fabric & Advanced Charting | `0.14.0` | ✅ Implemented |
-| 14 | Analytical Depth & Studio Polish | `0.15.0` | 🔄 In Progress |
+| 14 | Analytical Depth & Studio Polish | `0.15.0` | ✅ Implemented |
 
 ## Guiding principles
 
@@ -430,19 +430,19 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - 98 visual regression screenshots with 0 failures.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 
-## Phase 14: Analytical Depth & Studio Polish 🔄
+## Phase 14: Analytical Depth & Studio Polish ✅
 
 **Goal:** in-cell tabular visualizations (sparklines & zero-axis data bars), small multiples trellis charts, studio DAX formatter, and multi-page PDF outline bookmarks.
 
-**In Progress / Delivered:**
+**Delivered:**
 - [x] **Table & Matrix In-Cell Visualizations:** Rich mini sparklines (`line`, `area`, `column`, `winloss`) with marker dots (`endpoints`, `minmax`), zero-axis aligned bi-directional data bars (`axis: true`), custom negative colors, and `barOnly` rating display.
 - [x] **Small Multiples (Trellis / Grid Layouts):** Unified multi-chart gridding across category/dimension fields for bar, column, line, combo, waterfall, scatter, and bullet visuals; unified Category Axis alignment (`sharedCategoryAxis: true`); 2D Trellis Matrix layout (`layout: 'matrix'`); outer axes label deduplication (`outerAxesOnly`); custom grid dimensions (`rows`, `columns`, `gap`), panel borders, and header alignment.
-- [ ] **Studio DAX Formatter & Beautifier:** Pure TypeScript syntax-aware DAX indentation and beautification engine.
-- [ ] **PDF Document Outlines & Bookmarks:** Structured PDF 1.4 outline bookmarks tree for pages and visuals.
+- [x] **Studio DAX Formatter & Beautifier:** Pure TypeScript syntax-aware DAX indentation and beautification engine (`formatDax`) with canonical keyword/function casing, SWITCH condition-result pair alignment, CALCULATE multi-line filter breaking, VAR...RETURN block structuring, measure headers, comment preservation, and Studio UI shortcut (`Shift+Alt+F`) / formula bar button integration.
+- [x] **PDF Document Outlines & Bookmarks:** Structured PDF 1.4 outline bookmarks tree indexing report pages and visuals with `/PageMode /UseOutlines` auto-sidebar expansion and direct `/XYZ` coordinate page jump navigation.
 
 **Acceptance:**
-- 578 passing tests across 52 test suites (100% pass rate).
-- 98 visual regression screenshots with 0 failures.
+- 584 passing tests across 52 test suites (100% pass rate).
+- 98 visual regression screenshots with 0 failures across light and dark themes.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 
 ## Suggested order after Phase 6

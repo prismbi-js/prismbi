@@ -7,6 +7,7 @@ import { h } from '../render/svg';
 export class ExpressionEditor {
   readonly el: HTMLElement;
   readonly textarea: HTMLTextAreaElement;
+  readonly formatBtn: HTMLButtonElement;
   private list: HTMLUListElement;
   private diag: HTMLElement;
   private sig: HTMLElement;
@@ -23,7 +24,13 @@ export class ExpressionEditor {
     this.list.hidden = true;
     this.sig = h('div', { class: 'pbs-sig' });
     this.diag = h('div', { class: 'pbs-diag', role: 'status' });
-    this.el = h('div', { class: 'pbs-editor' }, this.textarea, this.list, this.sig, this.diag);
+    this.formatBtn = h('button', { type: 'button', class: 'pbs-format-btn', title: 'Format DAX (Shift+Alt+F)' }, '✦ Format DAX') as HTMLButtonElement;
+    this.formatBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.format();
+    });
+    const bar = h('div', { class: 'pbs-editor-bar' }, this.sig, this.formatBtn);
+    this.el = h('div', { class: 'pbs-editor' }, this.textarea, this.list, bar, this.diag);
     this.textarea.addEventListener('input', () => {
       this.refresh();
       this.suggest(false);
@@ -57,7 +64,12 @@ export class ExpressionEditor {
   }
 
   format(): void {
+    const prev = this.value;
     this.value = this.ls.format(this.value);
+    if (this.value !== prev) {
+      this.diag.replaceChildren(h('div', { class: 'ok' }, '✦ Formatted'));
+      setTimeout(() => this.refresh(), 2000);
+    }
     this.onChange?.(this.value);
   }
 
@@ -95,6 +107,11 @@ export class ExpressionEditor {
   }
 
   private key(e: KeyboardEvent): void {
+    if (e.shiftKey && e.altKey && (e.key === 'F' || e.key === 'f')) {
+      e.preventDefault();
+      this.format();
+      return;
+    }
     if (e.key === ' ' && e.ctrlKey) {
       e.preventDefault();
       this.suggest(true);

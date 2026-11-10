@@ -18,6 +18,19 @@
   - Upgraded cell data bars (`ConditionalFormat.dataBars`) with bi-directional zero-axis alignment (`axis: true`), dedicated axis marker line (`axisColor`), distinct negative colors (`negativeColor`), and `barOnly: true` mode (hiding text for compact visual rating columns).
   - Re-exported `TableFormat`, `MatrixFormat`, `SparklineOptions`, and `DataBarOptions` in `@prismbi/prismbi/core` and `@prismbi/prismbi/visuals`.
 
+- **Studio DAX Formatter & Beautifier:**
+  - Integrated canonical multi-line DAX formatting into `src/dax/format.ts` and Studio's measure expression editor (`src/studio/expressionEditor.ts`).
+  - Specialized multi-line formatting: `SWITCH` condition-result pairs aligned on dedicated lines, `CALCULATE` and `CALCULATETABLE` with separate indented filter predicate lines, and `VAR ... RETURN` block breaks.
+  - Support for full measure definitions (`Total Margin = ...` and bracketed measure headers `[Total Margin] = ...`) with clean indentation, and preservation of leading comments (`//`, `--`, `/* ... */`).
+  - Added `✦ Format DAX` button (`.pbs-format-btn`) in the Studio formula bar and `Shift+Alt+F` keyboard shortcut for instant in-place beautification.
+  - Added `FormatDaxOptions`: `indent`, `maxLine`, `uppercaseFunctions`, `alignSwitch`, `breakCalculateFilters`.
+
+- **PDF Document Outlines & Bookmarks Navigation:**
+  - Added PDF 1.4 vector document outlines (bookmarks) generator (`PdfOutlineItem`, `buildPdf`, `exportReportPdf`, `report.toPdf()`).
+  - Automatically indexes report pages and visual titles into an interactive hierarchical bookmarks tree with direct `/XYZ` page jump coordinates.
+  - Sets `/PageMode /UseOutlines` on the PDF document catalog dictionary so PDF readers (Adobe Acrobat, Chrome, Edge, Safari Preview) automatically open the bookmarks navigation sidebar on launch.
+  - Configurable via `outlines: boolean` and `visualOutlines: boolean` in `PdfExportOptions`. Re-exported `PdfOutlineItem` in `@prismbi/prismbi/core`.
+
 ## 0.14.0 (2026-11-09 / Phase 13: Enterprise Fabric & Advanced Charting)
 
 - **Network graph conditional formatting & metric-driven styling:**

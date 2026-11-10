@@ -9,7 +9,7 @@ import {
   svgPathToPdf,
   svgToPdf,
 } from '../src/index';
-import type { PdfPage, PdfVectorPage } from '../src/index';
+import type { PdfOutlineItem, PdfPage, PdfVectorPage } from '../src/index';
 import { makeModel } from './fixtures';
 
 describe('PDF Vector Engine', () => {
@@ -324,6 +324,81 @@ describe('PDF Vector Engine', () => {
       expect(text).toContain('/MediaBox [0 0 841.89 595.28]');
       expect(text).toContain('(Header Title) Tj');
       expect(text).toContain('(Page 1 of 5) Tj');
+    });
+
+    it('buildPdf creates /Outlines root dictionary, bookmark items, /PageMode /UseOutlines, and hierarchy', () => {
+      const pages: PdfVectorPage[] = [
+        { width: 800, height: 600, vectorCommands: '' },
+        { width: 800, height: 600, vectorCommands: '' },
+      ];
+      const outlines: PdfOutlineItem[] = [
+        {
+          title: 'Executive Summary',
+          pageNumber: 1,
+          children: [
+            { title: 'Revenue KPI', pageNumber: 1 },
+            { title: 'Regional Trends', pageNumber: 1 },
+          ],
+        },
+        {
+          title: 'Detailed Operations',
+          pageNumber: 2,
+        },
+      ];
+
+      const bytes = buildPdf(pages, 'Bookmarks Document', outlines);
+      const text = new TextDecoder('latin1').decode(bytes);
+
+      expect(text).toContain('/Type /Catalog');
+      expect(text).toContain('/PageMode /UseOutlines');
+      expect(text).toContain('/Outlines');
+      expect(text).toContain('/Type /Outlines');
+      expect(text).toContain('(Executive Summary)');
+      expect(text).toContain('(Revenue KPI)');
+      expect(text).toContain('(Regional Trends)');
+      expect(text).toContain('(Detailed Operations)');
+      expect(text).toContain('/XYZ');
+    });
+
+    it('Report.toPdf exports structured outline tree of pages and visuals', async () => {
+      const el = document.createElement('div');
+      document.body.append(el);
+      try {
+        const r = new Report(el, {
+          model: makeModel(),
+          pages: [
+            {
+              name: 'Overview Page',
+              visuals: [
+                { id: 'v1', type: 'card', title: 'Total Sales Card', fields: { value: 'Total Sales' } },
+              ],
+            },
+            {
+              name: 'Analytics Page',
+              visuals: [
+                { id: 'v2', type: 'line', title: 'Monthly Trends', fields: { category: 'Date[Date]', values: 'Total Sales' } },
+              ],
+            },
+          ],
+        });
+        r.flush();
+
+        const pdfBytes = await r.toPdf({
+          pages: 'all',
+          outlines: true,
+          visualOutlines: true,
+          vector: true,
+        });
+        const text = new TextDecoder('latin1').decode(pdfBytes);
+
+        expect(text).toContain('/PageMode /UseOutlines');
+        expect(text).toContain('(Overview Page)');
+        expect(text).toContain('(Total Sales Card)');
+        expect(text).toContain('(Analytics Page)');
+        expect(text).toContain('(Monthly Trends)');
+      } finally {
+        el.remove();
+      }
     });
   });
 });

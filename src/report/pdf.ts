@@ -28,6 +28,17 @@ export interface PdfHeaderFooterContext {
 /** Dynamic header or footer generator callback. */
 export type PdfHeaderFooterFn = (ctx: PdfHeaderFooterContext) => string;
 
+/** PDF document outline bookmark item. */
+export interface PdfOutlineItem {
+  title: string;
+  /** 1-based target page index. */
+  pageNumber: number;
+  /** Optional destination [x, y, zoom] in points (defaults to top of page). */
+  dest?: [number, number, number | null];
+  /** Child bookmark items nested under this bookmark. */
+  children?: PdfOutlineItem[];
+}
+
 /** Export options for generating PDF documents. */
 export interface PdfExportOptions {
   /** 'current' exports only the active page; 'all' exports all non-hidden report pages (default: 'current'). */
@@ -46,6 +57,10 @@ export interface PdfExportOptions {
   header?: string | PdfHeaderFooterFn;
   /** Running footer text or function. Pass `true` for standard 'Page X of Y'. */
   footer?: string | boolean | PdfHeaderFooterFn;
+  /** Generate document bookmarks outline tree (default: true). */
+  outlines?: boolean | PdfOutlineItem[];
+  /** Include visual-level bookmarks under each page in the outline (default: true). */
+  visualOutlines?: boolean;
 }
 
 /** Configuration options for translating SVG elements to a PDF vector content stream. */
@@ -170,9 +185,9 @@ const enc = new TextEncoder();
 
 /**
  * Minimal PDF 1.4 writer: supports DCT (JPEG) image XObjects, scalable vector paths,
- * standard paper sizes, margins, and running headers/footers.
+ * standard paper sizes, margins, running headers/footers, and document outline bookmarks.
  */
-export function buildPdf(pages: PdfPage[], title = 'Report'): Uint8Array {
+export function buildPdf(pages: PdfPage[], title = 'Report', outlines?: PdfOutlineItem[]): Uint8Array {
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [];
   let length = 0;
@@ -212,7 +227,95 @@ export function buildPdf(pages: PdfPage[], title = 'Report'): Uint8Array {
   });
 
   const pageIds = entries.map((e) => e.pid);
-  obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
+
+  const hasOutlines = Array.isArray(outlines) && outlines.length > 0;
+  const outlineRootId = hasOutlines ? nextId++ : undefined;
+
+  interface InternalOutlineNode {
+    id: number;
+    parentId: number;
+    title: string;
+    pageIndex: number;
+    dest?: [number, number, number | null];
+    prevId?: number;
+    nextId?: number;
+    firstId?: number;
+    lastId?: number;
+    count?: number;
+  }
+
+  const nodes: InternalOutlineNode[] = [];
+
+  if (hasOutlines && outlineRootId) {
+    const processLevel = (items: PdfOutlineItem[], parentId: number): { firstId?: number; lastId?: number; count: number } => {
+      if (!items.length) return { count: 0 };
+      const levelNodes: InternalOutlineNode[] = [];
+      let totalDescendants = items.length;
+
+      for (const item of items) {
+        const id = nextId++;
+        const node: InternalOutlineNode = {
+          id,
+          parentId,
+          title: item.title,
+          pageIndex: Math.max(0, Math.min(pages.length - 1, item.pageNumber - 1)),
+          dest: item.dest,
+        };
+        levelNodes.push(node);
+        nodes.push(node);
+
+        if (item.children && item.children.length) {
+          const childResult = processLevel(item.children, id);
+          node.firstId = childResult.firstId;
+          node.lastId = childResult.lastId;
+          node.count = childResult.count;
+          totalDescendants += childResult.count;
+        }
+      }
+
+      for (let i = 0; i < levelNodes.length; i++) {
+        if (i > 0) levelNodes[i].prevId = levelNodes[i - 1].id;
+        if (i < levelNodes.length - 1) levelNodes[i].nextId = levelNodes[i + 1].id;
+      }
+
+      return {
+        firstId: levelNodes[0].id,
+        lastId: levelNodes[levelNodes.length - 1].id,
+        count: totalDescendants,
+      };
+    };
+
+    const rootRes = processLevel(outlines, outlineRootId);
+
+    // Root Outline Dict
+    obj(outlineRootId, () => {
+      push(`<< /Type /Outlines /First ${rootRes.firstId} 0 R /Last ${rootRes.lastId} 0 R /Count ${rootRes.count} >>`);
+    });
+
+    // Outline Items
+    for (const n of nodes) {
+      obj(n.id, () => {
+        const targetPage = entries[n.pageIndex];
+        const destY = n.dest ? n.dest[1] : targetPage.h;
+        const destX = n.dest ? n.dest[0] : 0;
+        const destZoom = n.dest && n.dest[2] !== null ? n.dest[2] : 'null';
+        let body = `<< /Title (${escapePdfText(n.title)}) /Parent ${n.parentId} 0 R /Dest [${targetPage.pid} 0 R /XYZ ${destX} ${destY} ${destZoom}]`;
+        if (n.prevId) body += ` /Prev ${n.prevId} 0 R`;
+        if (n.nextId) body += ` /Next ${n.nextId} 0 R`;
+        if (n.firstId) body += ` /First ${n.firstId} 0 R /Last ${n.lastId} 0 R /Count ${n.count}`;
+        body += ' >>';
+        push(body);
+      });
+    }
+  }
+
+  obj(1, () => {
+    if (outlineRootId) {
+      push(`<< /Type /Catalog /Pages 2 0 R /Outlines ${outlineRootId} 0 R /PageMode /UseOutlines >>`);
+    } else {
+      push('<< /Type /Catalog /Pages 2 0 R >>');
+    }
+  });
   obj(2, () => push(`<< /Type /Pages /Count ${pages.length} /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] >>`));
   obj(3, () => push(`<< /Title (${escapePdfText(title)}) /Producer (PrismBI) >>`));
 
@@ -393,7 +496,37 @@ export async function exportReportPdf(report: any, opts: PdfExportOptions = {}):
     }
   }
   if (report.current !== start) report.showPage(start, false);
-  return buildPdf(out, report.name);
+
+  const generateOutlines = opts.outlines !== false;
+  let outlines: PdfOutlineItem[] | undefined;
+  if (Array.isArray(opts.outlines)) {
+    outlines = opts.outlines;
+  } else if (generateOutlines) {
+    outlines = [];
+    for (let pageNum = 1; pageNum <= targets.length; pageNum++) {
+      const pageIndex = targets[pageNum - 1];
+      const pageDef = report.pages[pageIndex]?.def;
+      if (!pageDef) continue;
+      const pageName = pageDef.name ?? `Page ${pageNum}`;
+      const pageItem: PdfOutlineItem = {
+        title: pageName,
+        pageNumber: pageNum,
+      };
+      if (opts.visualOutlines !== false && pageDef.visuals && pageDef.visuals.length > 0) {
+        pageItem.children = [];
+        for (const v of pageDef.visuals) {
+          const vTitle = v.title || (v.type ? v.type.charAt(0).toUpperCase() + v.type.slice(1) : 'Visual');
+          pageItem.children.push({
+            title: vTitle,
+            pageNumber: pageNum,
+          });
+        }
+      }
+      outlines.push(pageItem);
+    }
+  }
+
+  return buildPdf(out, report.name, outlines);
 }
 
 /** Parse a CSS/SVG color string to RGB 0-1 values. */
