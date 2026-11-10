@@ -5,13 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PrismBI visual gallery</title>
     <style>
+      * { box-sizing: border-box; }
       html, body { margin: 0; }
       body { padding: 16px; background: #f9f9f7; font: 13px system-ui, sans-serif; color: #0b0b0b; }
       body.dark { background: #0d0d0d; color: #f0efec; }
       #grid { display: grid; grid-template-columns: repeat(auto-fill, 380px); gap: 16px; }
-      .cell { width: 380px; }
+      .cell { width: 380px; max-width: 100%; }
       .cell h2 { font: 600 12px ui-monospace, Consolas, monospace; margin: 0 0 4px; opacity: .7; }
-      .vis { width: 380px; height: 260px; }
+      .vis { width: 380px; max-width: 100%; height: 260px; }
+      @media (max-width: 420px) {
+        body { padding: 10px; }
+        #grid { grid-template-columns: 1fr; gap: 12px; }
+        .cell, .vis { width: 100%; }
+        .vis { height: 230px; }
+      }
     </style>
   </head>
   <body>

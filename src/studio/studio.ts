@@ -175,6 +175,7 @@ export class Studio implements StudioContext {
       this.report.on('visualSelected', () => this.syncArrange()),
       this.report.on('visualSelected', ({ visualId }) => {
         if (visualId && this.rightTab === 'filters') this.renderRight();
+        this.root.classList.toggle('has-active-visual', !!visualId);
         this.refreshPanes(true);
         this.emitter.emit('selection', { visualId });
       }),
@@ -1083,6 +1084,7 @@ export class Studio implements StudioContext {
     const schedBtn = btn('⏰ Schedules', () => this.editSchedules(), { title: 'Scheduled sends and measure alerts' });
     const layersBtn = btn('Layers', () => this.toggleLayers(), { title: 'All visuals on this page, front to back', 'aria-expanded': 'false' });
     const phoneBtn = btn('📱 Phone', () => this.setPhoneLayout(!this.phone), { 'aria-pressed': 'false', title: 'Edit the phone layout of this page' });
+    const propsBtn = btn('Properties', () => this.toggleProperties(), { title: 'Toggle properties pane', class: 'pbs-btn pbs-props-btn' });
     const phoneReset = btn('Reset phone layout', () => {
       this.report.autoMobileLayout();
       this.commit();
@@ -1116,6 +1118,7 @@ export class Studio implements StudioContext {
     this.els.alignBar = alignBar;
     this.els.layersBtn = layersBtn;
     this.els.phoneReset = phoneReset;
+    this.els.propsBtn = propsBtn;
     const top = h(
       'div',
       { class: 'pbs-top', role: 'toolbar', 'aria-label': 'Studio' },
@@ -1143,6 +1146,7 @@ export class Studio implements StudioContext {
       layersBtn,
       phoneReset,
       phoneBtn,
+      propsBtn,
       previewBtn,
     );
     this.els.top = top;
@@ -1191,6 +1195,11 @@ export class Studio implements StudioContext {
       b.addEventListener('click', () => this.setRightTab(id));
       tabs.append(b);
     }
+    const closePanel = h('button', { type: 'button', class: 'pbs-panel-close', title: 'Close panel', 'aria-label': 'Close properties panel' }, '✕');
+    closePanel.addEventListener('click', () => {
+      this.root.classList.remove('is-panel-open', 'has-active-visual');
+    });
+    tabs.append(closePanel);
     const rightBody = h('div', { class: 'pbs-scroll' });
     this.els.tabs = tabs;
     this.els.rightBody = rightBody;
@@ -1199,9 +1208,16 @@ export class Studio implements StudioContext {
     this.root.addEventListener('keydown', (e) => this.onKey(e));
   }
 
+  /** Toggle the properties pane on mobile / small screens. */
+  toggleProperties(): void {
+    this.root.classList.toggle('is-panel-open');
+    if (this.root.classList.contains('is-panel-open')) this.renderRight();
+  }
+
   private setRightTab(tab: 'build' | 'format' | 'filters'): void {
     this.rightTab = tab;
-    this.els.tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    this.els.tabs.querySelectorAll<HTMLButtonElement>('button[role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    this.root.classList.add('is-panel-open');
     this.renderRight();
   }
 

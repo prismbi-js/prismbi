@@ -5,12 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PrismBI web components</title>
     <style>
+      * { box-sizing: border-box; }
       body { margin: 0; padding: 16px; font: 13px system-ui, sans-serif; background: #f9f9f7; color: #0b0b0b; }
       @media (prefers-color-scheme: dark) { body { background: #0d0d0d; color: #f0efec; color-scheme: dark; } }
-      .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 12px; }
-      prism-visual { height: 260px; border-radius: 10px; }
+      .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; margin-bottom: 12px; }
+      prism-visual { height: 260px; border-radius: 10px; min-width: 0; }
       code { font: 12px ui-monospace, Consolas, monospace; }
       #log { font: 12px ui-monospace, Consolas, monospace; opacity: .75; min-height: 1.4em; }
+      @media (max-width: 600px) {
+        body { padding: 10px; }
+        prism-visual { height: 220px; }
+        #report { height: 480px !important; }
+      }
     </style>
   </head>
   <body>

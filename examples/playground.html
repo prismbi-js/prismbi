@@ -10,7 +10,9 @@
       * { box-sizing: border-box; }
       html { height: 100%; }
       body { margin: 0; height: 100%; display: grid; grid-template-columns: 250px minmax(0, 1fr) minmax(0, 1.1fr); grid-template-rows: 44px minmax(0, 1fr); background: var(--bg); color: var(--fg); font: 13px/1.5 system-ui, sans-serif; }
-      header { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+      header { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid var(--line); min-width: 0; overflow-x: auto; scrollbar-width: none; }
+      header::-webkit-scrollbar { display: none; }
+      header > * { flex-shrink: 0; }
       header b { font-size: 15px; }
       header a { color: var(--accent); }
       header .spacer { flex: 1; }
@@ -29,7 +31,17 @@
       #result { margin: 0; white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 40%; overflow: auto; }
       #result:empty { display: none; }
       #result.error { color: #d0343a; }
-      @media (max-width: 900px) { body { grid-template-columns: 1fr; grid-template-rows: 44px auto 40vh minmax(60vh, auto); height: auto; } aside { max-height: 30vh; } }
+      @media (max-width: 900px) {
+        body { grid-template-columns: 1fr; grid-template-rows: 44px auto 40vh minmax(60vh, auto); height: auto; }
+        aside { max-height: 30vh; }
+      }
+      @media (max-width: 600px) {
+        header { padding: 0 10px; gap: 8px; }
+        header b { font-size: 13.5px; }
+        button { padding: 4px 10px; font-size: 12px; }
+        aside { max-height: 22vh; }
+        #el { min-height: 260px; }
+      }
     </style>
   </head>
   <body>

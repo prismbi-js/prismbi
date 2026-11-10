@@ -30,7 +30,7 @@ const SCENARIOS = [
   ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 113],
   ['full (api)', `export * from '${dist}/index.js';`, 177],
   ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 171],
-  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 152],
+  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 154],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 121],
   ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 136],
   ['connectors', `export * from '${dist}/connectors.js';`, 7],

@@ -176,7 +176,7 @@ blockquote{margin:14px 0;padding:8px 14px;border-left:3px solid var(--accent);co
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:0;list-style:none}
 .cards a{display:block;padding:14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--fg)}.cards a:hover{border-color:var(--accent)}
 .cards small{display:block;color:var(--fg2);margin-top:4px}
-@media (max-width:760px){body{grid-template-columns:minmax(0,1fr)}.guides{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding:20px 16px 60px}}
+@media (max-width:760px){body{grid-template-columns:minmax(0,1fr)}.guides{position:static;height:auto;max-height:240px;overflow-y:auto;border-right:0;border-bottom:1px solid var(--line);padding:12px 16px}main{padding:20px 16px 60px}}
 `;
 
 const SEARCH = `
