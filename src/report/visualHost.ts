@@ -511,6 +511,18 @@ export class VisualHost {
     return [head, ...d.rows.map((r) => [...r.keys, ...r.values].map(esc).join(','))].join('\n');
   }
 
+  /** TSV (tab-separated values) of the data currently shown by the visual for clipboard copy. */
+  toTsv(): string {
+    const d = this.data;
+    if (!d) return '';
+    const esc = (v: CellValue) => {
+      const s = v === null ? '' : v instanceof Date ? v.toISOString() : String(v);
+      return /[\t\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const head = [...d.groups, ...d.values].map((f) => esc(f.name)).join('\t');
+    return [head, ...d.rows.map((r) => [...r.keys, ...r.values].map(esc).join('\t'))].join('\n');
+  }
+
   /** Sheet name for exports: the visual's title, else its type. */
   get exportName(): string {
     return this.format().title.text || this.def.displayName || this.spec.type;
@@ -602,7 +614,9 @@ export class VisualHost {
       this.rt.menu(r.left, r.bottom + 4, [
         { label: 'Export data', hint: 'CSV', onClick: () => this.exportCsv() },
         { label: 'Export data', hint: 'Excel', onClick: () => void this.exportXlsx() },
+        { label: 'Copy data', hint: 'Clipboard', onClick: () => void this.copyData() },
         { label: 'Copy image', hint: 'Clipboard', onClick: () => void this.copyImage() },
+        { label: 'Copy SVG', hint: 'Clipboard', onClick: () => void this.copySvg() },
         { label: 'Export image', hint: 'PNG', onClick: () => void this.exportImage('png') },
         { label: 'Export image', hint: 'SVG', onClick: () => void this.exportImage('svg') },
       ]);
@@ -640,6 +654,36 @@ export class VisualHost {
     if (blob && typeof navigator !== 'undefined' && navigator.clipboard && typeof (navigator.clipboard as any).write === 'function' && typeof ClipboardItem !== 'undefined') {
       try {
         await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /** Copy the visual's query results as tab-separated values (TSV) directly to the system clipboard for Excel/Sheets. */
+  async copyData(): Promise<boolean> {
+    const text = this.toTsv();
+    if (!text) return false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /** Copy standalone vector SVG markup directly to the system clipboard. */
+  async copySvg(): Promise<boolean> {
+    const svgText = this.toSvg();
+    if (!svgText) return false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(svgText);
         return true;
       } catch {
         return false;

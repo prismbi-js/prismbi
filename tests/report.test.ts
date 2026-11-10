@@ -140,6 +140,35 @@ describe('Report', () => {
     expect(csv).toContain('Bikes,6000');
   });
 
+  it('exports TSV of what a visual shows and copies data/SVG to clipboard', async () => {
+    const r = new Report(el, { model: makeModel(), ...definition() });
+    r.flush();
+    const tsv = r.visual('table').toTsv();
+    expect(tsv.split('\n')[0]).toBe('Category\tTotal Sales\tMargin %');
+    expect(tsv).toContain('Bikes\t6000');
+
+    let writtenText = '';
+    const origClipboard = (navigator as any).clipboard;
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: async (text: string) => {
+          writtenText = text;
+        },
+      },
+    });
+    try {
+      const okData = await r.visual('table').copyData();
+      expect(okData).toBe(true);
+      expect(writtenText).toBe(tsv);
+
+      const okSvg = await r.visual('table').copySvg();
+      expect(okSvg).toBe(true);
+      expect(writtenText).toContain('<svg');
+    } finally {
+      Object.assign(navigator, { clipboard: origClipboard });
+    }
+  });
+
   it('shows a readable error for a bad field', () => {
     const r = new Report(el, { model: makeModel(), pages: [{ name: 'P', visuals: [{ id: 'x', type: 'card', fields: { value: 'Nope' } }] }] });
     const errors: string[] = [];

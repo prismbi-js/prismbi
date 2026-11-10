@@ -34,6 +34,41 @@ describe('visual calculations', () => {
     expect(q.totals![4]).toBe(1);
   });
 
+  it('supports OFFSET, INDEX, and WINDOW in visual calculations', () => {
+    const q = model.query({
+      groupBy: ['Date[MonthNumber]'],
+      values: [
+        'Total Sales',
+        { name: 'PrevOffset', visualCalc: 'OFFSET(-1, [Total Sales])' },
+        { name: 'FirstIndex', visualCalc: 'INDEX(1, [Total Sales])' },
+        { name: 'LastIndex', visualCalc: 'INDEX(-1, [Total Sales])' },
+        { name: 'WindowSum', visualCalc: 'WINDOW(-1, 1, [Total Sales])' },
+      ],
+      filters: [{ target: 'Date[Year]', op: 'eq', value: 2025 }],
+    });
+
+    const sales = by(q, 0) as number[];
+    const prev = by(q, 1) as (number | null)[];
+    const first = by(q, 2) as number[];
+    const last = by(q, 3) as number[];
+    const win = by(q, 4) as number[];
+
+    // First row has no offset -1
+    expect(prev[0]).toBeNull();
+    expect(prev[1]).toBe(sales[0]);
+    expect(prev[2]).toBe(sales[1]);
+
+    // First index is identical for all rows
+    expect(first.every((v) => v === sales[0])).toBe(true);
+
+    // Last index is identical for all rows
+    expect(last.every((v) => v === sales[sales.length - 1])).toBe(true);
+
+    // WindowSum(-1, 1)
+    expect(win[0]).toBe(sales[0] + sales[1]);
+    expect(win[1]).toBe(sales[0] + sales[1] + sales[2]);
+  });
+
   it('follows sorting and Top N, and restarts per parent group', () => {
     const q = model.query({ groupBy: ['Product[Category]'], values: ['Total Sales', { name: 'Running', visualCalc: 'RUNNINGSUM([Total Sales])' }], orderBy: [{ field: 'Total Sales', direction: 'desc' }], top: 2 });
     expect(q.rows).toHaveLength(2);

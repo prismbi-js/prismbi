@@ -116,6 +116,34 @@ function evalVec(ast: Expr, n: number, column: (name: string) => Vec): Vec {
           const k = Math.round(lit(1, 1)) * (ast.name === 'PREVIOUS' ? -1 : 1);
           return v.map((_, i) => v[i + k] ?? null);
         }
+        case 'OFFSET': {
+          // OFFSET(delta, [target]) or OFFSET([target], delta)
+          const isCol0 = args[0]?.type === 'bracket';
+          const v = isCol0 ? arg(0) : arg(1);
+          const delta = Math.round(isCol0 ? lit(1, 0) : lit(0, 0));
+          return v.map((_, i) => v[i + delta] ?? null);
+        }
+        case 'INDEX': {
+          // INDEX(pos, [target]) or INDEX([target], pos)
+          const isCol0 = args[0]?.type === 'bracket';
+          const v = isCol0 ? arg(0) : arg(1);
+          const pos = Math.round(isCol0 ? lit(1, 1) : lit(0, 1));
+          const idx = pos > 0 ? pos - 1 : pos < 0 ? v.length + pos : -1;
+          return fill(v[idx] ?? null);
+        }
+        case 'WINDOW': {
+          // WINDOW(fromDelta, toDelta, [target])
+          const from = Math.round(lit(0, 0));
+          const to = Math.round(lit(1, 0));
+          const v = args[2] ? arg(2) : arg(0);
+          return v.map((_, i) => {
+            const start = Math.max(0, i + from);
+            const end = Math.min(v.length - 1, i + to);
+            if (start > end) return null;
+            const slice = v.slice(start, end + 1).filter((x): x is number => x !== null);
+            return slice.length ? slice.reduce((s, x) => s + x, 0) : null;
+          });
+        }
         case 'FIRST':
           return fill(arg(0)[0] ?? null);
         case 'LAST': {

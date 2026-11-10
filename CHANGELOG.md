@@ -31,6 +31,21 @@
   - Sets `/PageMode /UseOutlines` on the PDF document catalog dictionary so PDF readers (Adobe Acrobat, Chrome, Edge, Safari Preview) automatically open the bookmarks navigation sidebar on launch.
   - Configurable via `outlines: boolean` and `visualOutlines: boolean` in `PdfExportOptions`. Re-exported `PdfOutlineItem` in `@prismbi/prismbi/core`.
 
+- **Copy Visual as SVG & Data (TSV) to Clipboard:**
+  - Added `visual.copyData()` and `toTsv()` to copy visual query result rows as clean tab-separated values (TSV) directly to system clipboard for instant pasting into Microsoft Excel / Google Sheets.
+  - Added `visual.copySvg()` to copy standalone vector SVG markup directly to clipboard for pasting into Figma, Illustrator, or web design tools.
+  - Added "Copy data" and "Copy SVG" actions to visual header ⇩ export dropdown menu alongside "Copy image (PNG)".
+  - Exposed `report.visual(id).toTsv()`, `copyData()`, and `copySvg()` in `ReportVisualHandle`.
+
+- **Client-Side Encrypted Standalone HTML Dashboards:**
+  - Added AES-GCM (256-bit) client-side encryption with PBKDF2 (100,000 iterations, SHA-256) in `buildStandaloneHtml(model, definition, { password, hint })` and `report.exportHtml({ password, hint })`.
+  - Embeds an offline decryption modal dialog with password input, optional hint, error validation, and automatic decryption via `window.crypto.subtle`.
+  - Re-exported `encryptPayload`, `decryptPayload`, `EncryptedPayload`, and `StandaloneHtmlOptions` in `@prismbi/prismbi/core`.
+
+- **Modern DAX Window Navigation in Visual Calculations:**
+  - Added `OFFSET(delta, [target])`, `INDEX(position, [target])`, and `WINDOW(from, to, [target])` functions to visual calculations engine (`src/data/visualCalc.ts`).
+  - Added comprehensive evaluation tests across sorted groups and partitioned dimensions in `tests/dax.test.ts` and `tests/phase7.test.ts`.
+
 ## 0.14.0 (2026-11-09 / Phase 13: Enterprise Fabric & Advanced Charting)
 
 - **Network graph conditional formatting & metric-driven styling:**

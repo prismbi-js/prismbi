@@ -83,5 +83,51 @@ describe('executive exporters (DOCX & standalone HTML)', () => {
     expect(html).toContain('__PRISMBI_EMBED__');
     expect(html).toContain('Total Sales');
   });
+
+  it('buildStandaloneHtml supports client-side AES-256 encrypted dashboards with password and hint', async () => {
+    const model = new DataModel()
+      .addTable('Sales', [{ Product: 'Mountain Bike', Amount: 500 }])
+      .addMeasure('Total Sales', 'SUM(Sales[Amount])');
+
+    const html = await buildStandaloneHtml(
+      model,
+      {
+        pages: [
+          {
+            name: 'Confidential Page',
+            visuals: [{ type: 'card', fields: { value: 'Total Sales' } }],
+          },
+        ],
+      },
+      {
+        password: 'SuperSecretPassword123!',
+        hint: 'Project code name',
+      }
+    );
+
+    expect(html).toContain('<!doctype html>');
+    expect(html).toContain('🔒');
+    expect(html).toContain('id="pbi-encrypted"');
+    expect(html).toContain('Project code name');
+    expect(html).toContain('Protected Report');
+    // Model payload must not be in plain text
+    expect(html).not.toContain('Mountain Bike');
+
+    // Extract encrypted JSON and verify programmatic roundtrip decryption
+    const encryptedMatch = /<script type="application\/json" id="pbi-encrypted">([\s\S]+?)<\/script>/.exec(html);
+    expect(encryptedMatch).not.toBeNull();
+    const payload = JSON.parse(encryptedMatch![1]);
+
+    const { decryptPayload } = await import('../src/index');
+    const decryptedRaw = await decryptPayload(payload, 'SuperSecretPassword123!');
+    const decrypted = JSON.parse(decryptedRaw);
+
+    expect(decrypted.model.tables[0].name).toBe('Sales');
+    expect(decrypted.model.tables[0].columns[0].name).toBe('Product');
+    expect(decrypted.report.pages[0].name).toBe('Confidential Page');
+
+    // Bad password throws decryption error
+    await expect(decryptPayload(payload, 'WrongPassword')).rejects.toThrow();
+  });
 });
 

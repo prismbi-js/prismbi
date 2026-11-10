@@ -215,6 +215,12 @@ export interface VisualHandle {
   exportImage(type?: 'png' | 'svg', filename?: string): Promise<void>;
   /** Copy high-resolution PNG image directly to system clipboard. */
   copyImage(): Promise<boolean>;
+  /** TSV (tab-separated values) representation of the visual data. */
+  toTsv(): string;
+  /** Copy visual query results as tab-separated values (TSV) directly to system clipboard. */
+  copyData(): Promise<boolean>;
+  /** Copy standalone vector SVG directly to system clipboard. */
+  copySvg(): Promise<boolean>;
 }
 
 const DATE_TAG = '$date';
@@ -1222,12 +1228,14 @@ export class Report implements ReportRuntime {
     download(new Blob([docx as unknown as BlobPart], { type: DOCX_MIME }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.docx`);
   }
 
-  /** Export a self-contained, autonomous single-file HTML report dashboard. */
-  async exportHtml(opts: { filename?: string; theme?: 'light' | 'dark' | 'high-contrast' } = {}): Promise<void> {
+  /** Export a self-contained, autonomous single-file HTML report dashboard. Supports optional AES-256 client-side password encryption. */
+  async exportHtml(opts: { filename?: string; theme?: 'light' | 'dark' | 'high-contrast'; password?: string; hint?: string } = {}): Promise<void> {
     const [{ buildStandaloneHtml }, { download }] = await Promise.all([import('./html'), import('./snapshot')]);
-    const html = buildStandaloneHtml(this.model, this.toJSON(), {
+    const html = await buildStandaloneHtml(this.model, this.toJSON(), {
       title: this.name,
       theme: opts.theme ?? (this._theme.name === 'dark' ? 'dark' : 'light'),
+      password: opts.password,
+      hint: opts.hint,
     });
     download(new Blob([html], { type: 'text/html' }), opts.filename ?? `${this.name.replace(/[^\w-]+/g, '_')}.html`);
   }
@@ -1662,6 +1670,9 @@ export class Report implements ReportRuntime {
       toSvg: () => getHost().toSvg(),
       exportImage: (type, name) => getHost().exportImage(type, name),
       copyImage: () => getHost().copyImage(),
+      toTsv: () => getHost().toTsv(),
+      copyData: () => getHost().copyData(),
+      copySvg: () => getHost().copySvg(),
     };
   }
 

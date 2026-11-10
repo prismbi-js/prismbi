@@ -439,9 +439,11 @@ A live-browser review in headless Chrome covered every demo page, the studio, da
 - [x] **Small Multiples (Trellis / Grid Layouts):** Unified multi-chart gridding across category/dimension fields for bar, column, line, combo, waterfall, scatter, and bullet visuals; unified Category Axis alignment (`sharedCategoryAxis: true`); 2D Trellis Matrix layout (`layout: 'matrix'`); outer axes label deduplication (`outerAxesOnly`); custom grid dimensions (`rows`, `columns`, `gap`), panel borders, and header alignment.
 - [x] **Studio DAX Formatter & Beautifier:** Pure TypeScript syntax-aware DAX indentation and beautification engine (`formatDax`) with canonical keyword/function casing, SWITCH condition-result pair alignment, CALCULATE multi-line filter breaking, VAR...RETURN block structuring, measure headers, comment preservation, and Studio UI shortcut (`Shift+Alt+F`) / formula bar button integration.
 - [x] **PDF Document Outlines & Bookmarks:** Structured PDF 1.4 outline bookmarks tree indexing report pages and visuals with `/PageMode /UseOutlines` auto-sidebar expansion and direct `/XYZ` coordinate page jump navigation.
+- [x] **Clipboard Exports & Encrypted Dashboards:** Direct clipboard copy of tabular data (TSV) and standalone vector SVG; AES-256 client-side encrypted offline HTML dashboards (`exportHtml({ password, hint })`) with in-browser WebCrypto password unlock dialog.
+- [x] **Modern Window Calculations:** Visual calculation support for `OFFSET`, `INDEX`, and `WINDOW` relative and absolute navigation.
 
 **Acceptance:**
-- 584 passing tests across 52 test suites (100% pass rate).
+- 591 passing tests across 52 test suites (100% pass rate).
 - 98 visual regression screenshots with 0 failures across light and dark themes.
 - Strict bundle budget compliance across all 11 targets in `scripts/size.mjs`.
 

@@ -354,4 +354,73 @@ Total Margin = divide([Profit], [Total Sales], 0)`;
     ed.textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'F', shiftKey: true, altKey: true, bubbles: true }));
     expect(ed.value).toBe('DIVIDE([Profit], [Total Sales])');
   });
+
+  it('evaluates INDEX for absolute position within an ordered relation', () => {
+    // Categories alphabetical: Accessories, Bikes, Clothing
+    // First category (INDEX(1, ...)): Accessories. Total Sales for Accessories = 150 + 100 + 250 = 500
+    const firstCatSales = ev('CALCULATE([Total Sales], INDEX(1, ALL(Products[Category]), ORDERBY(Products[Category], ASC)))');
+    expect(firstCatSales).toBe(500);
+
+    // Last category (INDEX(-1, ...)): Clothing. Total Sales for Clothing = 200 + 50 = 250
+    const lastCatSales = ev('CALCULATE([Total Sales], INDEX(-1, ALL(Products[Category]), ORDERBY(Products[Category], ASC)))');
+    expect(lastCatSales).toBe(250);
+  });
+
+  it('evaluates OFFSET for relative navigation across sorted values', () => {
+    // Sliced by Category = 'Bikes' (middle category between Accessories and Clothing)
+    // OFFSET(-1, ALL(Products[Category]), ORDERBY(Products[Category], ASC)) relative to Bikes is Accessories
+    const prevSales = ev('CALCULATE([Total Sales], OFFSET(-1, ALL(Products[Category]), ORDERBY(Products[Category], ASC)))', [
+      { target: 'Products[Category]', op: 'eq', value: 'Bikes' },
+    ]);
+    expect(prevSales).toBe(500); // Accessories
+
+    // OFFSET(+1, ...) relative to Bikes is Clothing
+    const nextSales = ev('CALCULATE([Total Sales], OFFSET(1, ALL(Products[Category]), ORDERBY(Products[Category], ASC)))', [
+      { target: 'Products[Category]', op: 'eq', value: 'Bikes' },
+    ]);
+    expect(nextSales).toBe(250); // Clothing
+  });
+
+  it('evaluates WINDOW for moving ranges and cumulative slices', () => {
+    // Sliced by Category = 'Bikes'
+    // WINDOW(0, REL, 1, REL, ALL(Products[Category]), ORDERBY(Products[Category], ASC)) -> Bikes + Clothing
+    // Bikes sales = 1000 + 3000 + 2000 = 6000; Clothing = 250; Total = 6250
+    const windowSales = ev('CALCULATE([Total Sales], WINDOW(0, REL, 1, REL, ALL(Products[Category]), ORDERBY(Products[Category], ASC)))', [
+      { target: 'Products[Category]', op: 'eq', value: 'Bikes' },
+    ]);
+    expect(windowSales).toBe(6250);
+  });
+
+  it('evaluates OFFSET and INDEX inside model.query() across grouped rows', () => {
+    const qModel = makeModel();
+    qModel.addMeasure('Prev Cat Sales', 'CALCULATE([Total Sales], OFFSET(-1, ALL(Products[Category]), ORDERBY(Products[Category], ASC)))');
+    qModel.addMeasure('First Cat Sales', 'CALCULATE([Total Sales], INDEX(1, ALL(Products[Category]), ORDERBY(Products[Category], ASC)))');
+
+    const res = qModel.query({
+      groupBy: ['Products[Category]'],
+      values: ['Total Sales', 'Prev Cat Sales', 'First Cat Sales'],
+      orderBy: [{ field: 'Products[Category]', direction: 'asc' }],
+    });
+
+    // Categories in order: Accessories, Bikes, Clothing
+    expect(res.rows).toHaveLength(3);
+
+    // Row 0: Accessories (Sales: 500, Prev: null/blank, First: 500)
+    expect(res.rows[0].keys[0]).toBe('Accessories');
+    expect(res.rows[0].values[0]).toBe(500);
+    expect(res.rows[0].values[1]).toBe(null);
+    expect(res.rows[0].values[2]).toBe(500);
+
+    // Row 1: Bikes (Sales: 6000, Prev: 500, First: 500)
+    expect(res.rows[1].keys[0]).toBe('Bikes');
+    expect(res.rows[1].values[0]).toBe(6000);
+    expect(res.rows[1].values[1]).toBe(500);
+    expect(res.rows[1].values[2]).toBe(500);
+
+    // Row 2: Clothing (Sales: 250, Prev: 6000, First: 500)
+    expect(res.rows[2].keys[0]).toBe('Clothing');
+    expect(res.rows[2].values[0]).toBe(250);
+    expect(res.rows[2].values[1]).toBe(6000);
+    expect(res.rows[2].values[2]).toBe(500);
+  });
 });
