@@ -31,7 +31,7 @@ To show the finished report to viewers, pass `doc.report` to `<PrismReport defin
 
 | Area | Features |
 |---|---|
-| **Canvas** | Select visuals, drag to move, resize from 8 handles. Magnetic smart alignment snap lines guide placement against neighboring visual edges. Multi-visual lasso marquee drag selection. Everything snaps to the page grid, which is visible while editing. Click empty space to deselect |
+| **Canvas** | Select visuals, drag to move, resize from 8 handles. Magnetic smart alignment snap lines guide placement against neighboring visual edges and midpoints. Multi-visual lasso marquee drag selection. Top toolbar quick alignment (left, center, right, top, middle, bottom), spacing distribution (horizontally, vertically), and visual size matching (width, height, both). Visual locking (`Ctrl+L`) and grouping (`Ctrl+G`). Drag-and-drop external CSV and JSON data files directly onto the canvas. Everything snaps to the configurable page grid (`Ctrl+'`). Click empty space to deselect |
 | **Keyboard** | Arrows nudge (Shift+arrows resize) · Delete removes · Ctrl+D duplicates · Ctrl+C / Ctrl+V copy and paste · Ctrl+] / Ctrl+[ front and back · Ctrl+Z / Ctrl+Y undo and redo · Ctrl+S saves · Esc deselects |
 | **Selection & Layers** | Side pane listing visuals front-to-back with visibility toggles (hide/show), lock protection, and z-order reordering |
 | **Quick measures** | Wizard dialog generating parameterized DAX measures for Year-over-Year Growth, Running Total, Rolling 3-Month Average, and Share of Category |

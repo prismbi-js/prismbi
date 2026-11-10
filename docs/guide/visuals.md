@@ -104,15 +104,19 @@ All of these are optional. Values merge as: base defaults ← visual defaults �
 
 ```ts
 format: {
-  title:      { show: true, text, subtitle, fontSize, color, align: 'left'|'center'|'right', bold: true },
+  title:      { show: true, text, subtitle, fontSize, color, align: 'left'|'center'|'right', bold: true, divider?: { color: '#e2e8f0', width: 1, margin: 6 }, tooltip?: 'Methodology info' },
   background: { show: true, color, transparency: 0 },          // 0–100
   border:     { show: true, color, width: 1, radius },
-  shadow:     { show: false },
+  shadow:     { show: false, color: 'rgba(0,0,0,0.06)', blur: 14, y: 4 },
   padding:    12,
-  header:     { show: true, focusMode: true, exportData: true, showAsTable: true, drill: true },
+  header:     { show: true, focusMode: true, exportData: true, showAsTable: true, drill: true, tooltip?: 'Visual description' },
   tooltip:    { show: true, page: 'tooltip-page-id' },  // report tooltip page
   legend:     { show: 'auto' | true | false, position: 'top'|'bottom'|'left'|'right', fontSize },
-  dataLabels: { show: false, format, displayUnits: 'auto', decimals, fontSize, color, position: 'auto' },
+  dataLabels: {
+    show: false, format, displayUnits: 'auto', decimals, fontSize, color, position: 'auto',
+    contrastColor: true,                                       // auto-adjust font color for WCAG contrast on marks
+    rules: [{ min: 0, color: '#27ae60' }, { max: -1, color: '#e74c3c' }], // conditional font colors
+  },
   categoryAxis: { show: true, maxLabelWidth: 120, labelAngle: 'auto'|0|45|90,
                   type: 'auto'|'categorical'|'continuous',   // auto = continuous for date/number fields on line & area
                   scale: 'linear'|'log' },                   // scatter x-axis
@@ -121,8 +125,11 @@ format: {
   colors:     { default, palette: [...], series: { 'Total Sales': '#...' }, categories: { 'Bikes': '#...' },
                 rules: [{ op: '<', value: 0, color: '#d03b3b' }],      // single-series charts, first match wins
                 gradient: { min: '#cde2fb', max: '#0d366b' } },        // single-series charts, by value
-  analytics:  { referenceLines: [{ type: 'average' | 'median' | 'min' | 'max' | 'percentile' | 'constant', value?, percentile?, label?: 'Goal {value}' | false, color?, dash? }],
-                trendLine: false | true | { color } },
+  analytics:  {
+    referenceLines: [{ type: 'average' | 'median' | 'min' | 'max' | 'percentile' | 'constant', value?, percentile?, label?: 'Goal {value}' | false, color?, dash? }],
+    referenceBands: [{ from: 100, to: 200, label: 'Target Zone', color: '#27ae60', opacity: 0.15, axis: 'y' }],
+    trendLine: false | true | { color },
+  },
   bars:       { maxThickness: 24, radius: 4, gap: 2, categoryGap: 0.35 },
   lines:      { width: 2, markers: 'auto', smooth: false, area: false, areaOpacity: 0.1, endLabels: true, collisionAvoidance: true },
   animation:  { enabled: true, duration: 280 },
@@ -172,13 +179,15 @@ format: { pie: { maxSlices: 8 }, donut: { innerRadius: 0.62, centerLabel: true }
 format: { table: {
   totals: true, rowBanding: true, wrap: false, density: 'compact'|'normal'|'comfortable', pageSize: 200,
   columnWidths: { 'Total Sales': 140 },
+  freezeColumns: 1, pinnedColumns: ['Category'],              // sticky frozen leading columns
+  columnOrder: ['Category', 'Total Sales', 'Profit'],         // interactive drag-and-drop column order
   sparklines: {
     'Total Sales': { type: 'area', markers: 'endpoints' },      // 'line' | 'column' | 'area' | 'winloss'
   },
   conditional: {
     'Total Sales': { dataBars: { axis: true, color: '#3498db', negativeColor: '#e74c3c' } }, // bi-directional zero axis
     'Total Margin': { dataBars: { barOnly: true } },            // hides number, displays visual bar only
-    'Margin %':    { background: true },                       // or { min, mid, max } colours
+    'Margin %':    { background: true, fontColor: true },      // cell background and text font color scales
     'YoY %':       { icons: true },                            // ▲ ▼ ● by sign
     'Profit':      { rules: [{ op: '<', value: 0, color: '#d03b3b' }, { op: 'between', value: 0, value2: 1000, background: '#fff4d6' }] },
   },
@@ -244,11 +253,18 @@ format: { slicer: { syncGroup: 'year' } }
 Hovering or focusing a visual shows its header icons:
 - **⤢ Focus mode** fills the page. Esc exits.
 - **▦ Show as table** displays the query result as a table.
-- **⇩ Export** opens a menu: data (CSV or Excel), image (PNG at 2×), image (SVG), and **Copy image** (writes PNG directly to system clipboard). The same is available in code as `report.visual(id).exportCsv()`, `.exportXlsx()`, `.exportImage('png' | 'svg')`, `.copyImage()` and `.toSvg()`.
+- **⇩ Export** opens a menu: data (CSV, TSV, JSON, or Excel XLSX), image (PNG at 2×), image (SVG), and **Copy image** (writes PNG directly to system clipboard). The same is available in code as `report.visual(id).exportCsv()`, `.exportXlsx()`, `.exportImage('png' | 'svg')`, `.copyImage()` and `.toSvg()`.
+- **ℹ Visual tooltip / details** shows a descriptive methodology or info popover card (`format.header.tooltip`).
 - **↑ Drill up**, **⇊ Go to next level** and **⤓ Expand all down one level** appear when a drillable role has several fields.
 - **⌫ Clear selections** appears on slicers.
 
 Each of these can be turned off through `format.header`.
+
+## Interactive table sorting & column reordering
+
+- **Tri-state column sorting**: Clicking any table or matrix header cycles through `ascending` → `descending` → `none` (clearing sort back to natural query order).
+- **Multi-column sorting**: Shift+clicking headers adds secondary and tertiary sort criteria, with sort priority badges (`1`, `2`) and directional arrows (`↑` / `↓`).
+- **Column reordering**: Click and drag column header handles to rearrange column positions.
 
 ## Accessibility
 

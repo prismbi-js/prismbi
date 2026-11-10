@@ -49,11 +49,55 @@ report.setSlicerSelection('region', null); // clear
 
 ### Sync slicers across pages
 
-Slicers with the same `syncGroup` share one selection on every page, whatever their style:
+Slicers can synchronize across pages by sharing a `syncGroup`, or by specifying target `syncPages`:
+
+```ts
+// Sync slicer with other pages even without duplicate slicer visuals:
+{
+  type: 'slicer',
+  fields: { field: 'Date[Year]' },
+  format: { slicer: { style: 'tiles', syncPages: ['Details', 'Analysis'] } }
+}
+```
+
+Or programmatically via `Report`:
+```ts
+report.syncSlicers('slicer-id', ['page-2', 'page-3']); // target specific pages or 'all'
+report.getSyncSlicers(); // returns all sync slicers and active selections
+```
+
+Slicers with the same `syncGroup` share one selection across every page where they appear:
 
 ```ts
 { type: 'slicer', fields: { field: 'Date[Year]' }, format: { slicer: { style: 'tiles', syncGroup: 'year' } } }   // page 1
 { type: 'slicer', fields: { field: 'Date[Year]' }, format: { slicer: { style: 'dropdown', syncGroup: 'year' } } } // page 2
+```
+
+## Canvas wallpaper, page background & watermark
+
+Pages support rich background styling and watermarks via `PageDefinition.background` or `report.setPageBackground()`:
+
+```ts
+report.setPageBackground({
+  color: '#f8fafc',
+  image: 'https://example.com/assets/dashboard-bg.png',
+  fit: 'cover', // 'cover' | 'contain' | 'fit' | 'center'
+  opacity: 0.85,
+  watermark: 'CONFIDENTIAL', // or { text: 'DRAFT', color: '#dc2626', opacity: 0.1, angle: -35 }
+});
+
+// Inspect active background
+report.getPageBackground();
+```
+
+## Page management: deletion & bulk reordering
+
+```ts
+// Reorder page tabs in any order:
+report.reorderPages(['summary', 'details', 'kpis']);
+
+// Delete a page by id or name (preserves at least one page):
+report.removePage('obsolete-page'); // returns true if removed
 ```
 
 ## Cross-filtering and cross-highlighting
