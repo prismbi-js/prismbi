@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.15.0 (Unreleased / Phase 14: Analytical Depth & Studio Polish)
+## 0.15.0 (2026-11-10 / Phase 14: Analytical Depth & Studio Polish)
 
 - **Small Multiples (Trellis / Grid Layouts):**
   - Unified multi-chart gridding across cartesian, combo, and distribution visuals (`clusteredColumn`, `stackedColumn`, `percentStackedColumn`, `clusteredBar`, `stackedBar`, `percentStackedBar`, `line`, `area`, `stackedArea`, `lineClusteredColumn`, `waterfall`, `scatter`, `bullet`).
