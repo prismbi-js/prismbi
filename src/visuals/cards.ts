@@ -165,6 +165,7 @@ export const gauge = /* @__PURE__ */ defineVisual({
     const lo = get('min') ?? 0;
     const target = get('target');
     const hi = get('max') ?? Math.max((value ?? 0) * 2, target ?? 0, 1);
+    const gf = (ctx.format.gauge ?? {}) as { thresholds?: { value: number; color: string }[]; needle?: boolean };
     const w = ctx.width;
     const hgt = ctx.height;
     const r1 = Math.max(20, Math.min(w / 2 - 10, hgt - 34));
@@ -175,12 +176,83 @@ export const gauge = /* @__PURE__ */ defineVisual({
     const A1 = Math.PI / 2;
     const ang = (v: number) => A0 + (A1 - A0) * Math.max(0, Math.min(1, (v - lo) / (hi - lo || 1)));
     const svg = s('svg', { width: w, height: hgt, class: 'pbi-svg', role: 'img', 'aria-label': `${field.name} gauge` });
-    const color = ctx.format.colors.default ?? t.dataColors[0];
-    svg.append(s('path', { d: arcPath(cx, cy, r0, r1, A0, A1), fill: t.gridline }));
-    if (value !== null) svg.append(s('path', { d: arcPath(cx, cy, r0, r1, A0, Math.max(A0 + 0.001, ang(value))), fill: color }));
+    const defaultColor = ctx.format.colors.default ?? t.dataColors[0];
+
+    const zones: { from: number; to: number; color: string }[] = [];
+    if (gf.thresholds && gf.thresholds.length) {
+      const sorted = [...gf.thresholds].sort((a, b) => a.value - b.value);
+      if (sorted[0].value <= lo) {
+        for (let i = 0; i < sorted.length; i++) {
+          const from = Math.max(lo, sorted[i].value);
+          const to = i < sorted.length - 1 ? Math.min(hi, sorted[i + 1].value) : hi;
+          if (to > from) zones.push({ from, to, color: sorted[i].color });
+        }
+      } else {
+        let cur = lo;
+        for (let i = 0; i < sorted.length; i++) {
+          const to = i === sorted.length - 1 ? hi : Math.min(hi, Math.max(lo, sorted[i].value));
+          if (to > cur) {
+            zones.push({ from: cur, to, color: sorted[i].color });
+            cur = to;
+          }
+        }
+      }
+    }
+
+    if (zones.length) {
+      for (const z of zones) {
+        const za0 = ang(z.from);
+        const za1 = ang(z.to);
+        svg.append(s('path', { d: arcPath(cx, cy, r0, r1, za0, za1), fill: z.color, opacity: gf.needle ? 0.9 : 0.28, class: 'pbi-gauge-zone' }));
+      }
+    } else {
+      svg.append(s('path', { d: arcPath(cx, cy, r0, r1, A0, A1), fill: t.gridline }));
+    }
+
+    let valueColor = defaultColor;
+    if (value !== null && zones.length) {
+      const match = zones.find((z) => value >= z.from && value <= z.to);
+      if (match) valueColor = match.color;
+      else if (value < zones[0].from) valueColor = zones[0].color;
+      else if (value > zones[zones.length - 1].to) valueColor = zones[zones.length - 1].color;
+    }
+
+    if (!gf.needle) {
+      if (value !== null) svg.append(s('path', { d: arcPath(cx, cy, r0, r1, A0, Math.max(A0 + 0.001, ang(value))), fill: valueColor, class: 'pbi-gauge-value' }));
+    }
+
     if (target !== null) {
       const a = ang(target);
-      svg.append(s('line', { x1: cx + (r0 - 6) * Math.sin(a), y1: cy - (r0 - 6) * Math.cos(a), x2: cx + (r1 + 6) * Math.sin(a), y2: cy - (r1 + 6) * Math.cos(a), stroke: t.foreground, 'stroke-width': 2 }));
+      svg.append(s('line', { x1: cx + (r0 - 6) * Math.sin(a), y1: cy - (r0 - 6) * Math.cos(a), x2: cx + (r1 + 6) * Math.sin(a), y2: cy - (r1 + 6) * Math.cos(a), stroke: t.foreground, 'stroke-width': 2, class: 'pbi-gauge-target' }));
+    }
+
+    if (gf.needle && value !== null) {
+      const a = ang(value);
+      const sinA = Math.sin(a);
+      const cosA = Math.cos(a);
+      const tipR = r1 + 2;
+      const tipX = cx + tipR * sinA;
+      const tipY = cy - tipR * cosA;
+      const baseW = 4;
+      const backR = 8;
+      const leftX = cx - backR * sinA - baseW * cosA;
+      const leftY = cy + backR * cosA - baseW * sinA;
+      const rightX = cx - backR * sinA + baseW * cosA;
+      const rightY = cy + backR * cosA + baseW * sinA;
+      svg.append(s('polygon', {
+        points: `${tipX.toFixed(2)},${tipY.toFixed(2)} ${rightX.toFixed(2)},${rightY.toFixed(2)} ${leftX.toFixed(2)},${leftY.toFixed(2)}`,
+        fill: t.foreground,
+        class: 'pbi-gauge-needle',
+      }));
+      svg.append(s('circle', {
+        cx,
+        cy,
+        r: 6,
+        fill: t.foreground,
+        stroke: t.surface,
+        'stroke-width': 2,
+        class: 'pbi-gauge-needle-cap',
+      }));
     }
     const fs = Math.max(14, Math.min(t.calloutFontSize * 0.8, r0 * 0.5));
     svg.append(s('text', { x: cx, y: cy - 4, 'text-anchor': 'middle', fill: t.foreground, 'font-size': fs, 'font-weight': 600 }, ctx.fmt(field, value, { displayUnits: 'auto' })));

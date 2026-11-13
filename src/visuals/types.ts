@@ -116,6 +116,7 @@ export interface VisualHostApi {
   setState(patch: Record<string, unknown>): void;
   readonly state: Record<string, unknown>;
   emit(event: 'dataPointClick', payload: { keys: CellValue[]; identity: DataPointIdentity; event: MouseEvent }): void;
+  emit(event: 'columnResize', payload: { column: string; width: number; widths: Record<string, number> }): void;
   /** Re-render without re-querying (e.g. after local UI state change). */
   rerender(): void;
   triggerAction?(payload: {

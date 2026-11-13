@@ -76,11 +76,25 @@ export interface StudioOptions {
   copilot?: ExpressionCopilot;
 }
 
+export type DevicePreset = 'auto' | 'desktop' | 'tablet' | 'mobile';
+
+export interface DevicePresetDimensions {
+  width: number;
+  height: number;
+}
+
+export const DEVICE_PRESETS: Record<Exclude<DevicePreset, 'auto'>, DevicePresetDimensions> = {
+  desktop: { width: 1280, height: 720 },
+  tablet: { width: 768, height: 1024 },
+  mobile: { width: 375, height: 667 },
+};
+
 export interface StudioEvents {
   [key: string]: unknown;
   change: StudioDocument;
   selection: { visualId: string | null };
   save: StudioDocument;
+  deviceChange: { preset: DevicePreset; orientation: 'portrait' | 'landscape' };
 }
 
 type View = 'report' | 'data' | 'model';
@@ -784,6 +798,77 @@ export class Studio implements StudioContext {
   /** Is the canvas showing (and editing) the phone layout? */
   private phone = false;
 
+  devicePreset: DevicePreset = 'auto';
+  deviceOrientation: 'portrait' | 'landscape' = 'portrait';
+  private deviceSelectEl?: HTMLSelectElement;
+  private deviceOrientBtn?: HTMLButtonElement;
+
+  setDevicePreset(preset: DevicePreset, orientation?: 'portrait' | 'landscape'): void {
+    this.devicePreset = preset;
+    if (orientation) this.deviceOrientation = orientation;
+    else if (preset === 'desktop') this.deviceOrientation = 'landscape';
+    else if (preset === 'mobile' || preset === 'tablet') this.deviceOrientation = 'portrait';
+
+    const canvas = this.els.canvas;
+    const canvasWrap = this.els.canvasWrap;
+    if (!canvas) return;
+
+    if (preset === 'auto') {
+      canvas.classList.remove('pbs-device-frame');
+      canvas.style.width = '';
+      canvas.style.height = '';
+      canvas.style.margin = '';
+      canvas.style.flex = '';
+      if (canvasWrap) {
+        canvasWrap.style.overflow = '';
+        canvasWrap.style.display = '';
+        canvasWrap.style.alignItems = '';
+        canvasWrap.style.justifyContent = '';
+      }
+      if (this.deviceOrientBtn) this.deviceOrientBtn.style.display = 'none';
+    } else {
+      const base = DEVICE_PRESETS[preset];
+      let w = base.width;
+      let h = base.height;
+      if (this.deviceOrientation === 'landscape' && w < h) {
+        const tmp = w;
+        w = h;
+        h = tmp;
+      } else if (this.deviceOrientation === 'portrait' && w > h) {
+        const tmp = w;
+        w = h;
+        h = tmp;
+      }
+      canvas.classList.add('pbs-device-frame');
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      canvas.style.margin = '16px auto';
+      canvas.style.flex = 'none';
+      if (canvasWrap) {
+        canvasWrap.style.overflow = 'auto';
+        canvasWrap.style.display = 'flex';
+        canvasWrap.style.alignItems = 'flex-start';
+        canvasWrap.style.justifyContent = 'center';
+      }
+      if (this.deviceOrientBtn) {
+        this.deviceOrientBtn.style.display = '';
+        this.deviceOrientBtn.title = `Rotate device (${this.deviceOrientation === 'portrait' ? 'switch to landscape' : 'switch to portrait'})`;
+      }
+    }
+
+    if (this.deviceSelectEl && this.deviceSelectEl.value !== preset) {
+      this.deviceSelectEl.value = preset;
+    }
+    this.report?.relayout();
+    this.emitter.emit('deviceChange', { preset, orientation: this.deviceOrientation });
+  }
+
+  toggleDeviceOrientation(): void {
+    if (this.devicePreset === 'auto') return;
+    const next = this.deviceOrientation === 'portrait' ? 'landscape' : 'portrait';
+    this.setDevicePreset(this.devicePreset, next);
+  }
+
   /** Toggle phone layout editing: a phone-width canvas where moves and resizes edit the page's phone layout. */
   setPhoneLayout(on: boolean): void {
     this.phone = on;
@@ -1337,6 +1422,34 @@ export class Studio implements StudioContext {
     bar.append(add);
 
     const zoomBar = h('div', { class: 'pbs-zoom-bar', role: 'group', 'aria-label': 'Canvas zoom' });
+    const deviceSelect = h(
+      'select',
+      { class: 'pbs-device-select', 'aria-label': 'Device viewport' },
+      h('option', { value: 'auto' }, 'Auto / Responsive'),
+      h('option', { value: 'desktop' }, 'Desktop (1280×720)'),
+      h('option', { value: 'tablet' }, 'Tablet (768×1024)'),
+      h('option', { value: 'mobile' }, 'Mobile (375×667)'),
+    ) as HTMLSelectElement;
+    deviceSelect.value = this.devicePreset;
+    deviceSelect.addEventListener('change', () => {
+      this.setDevicePreset(deviceSelect.value as DevicePreset);
+    });
+    this.deviceSelectEl = deviceSelect;
+
+    const orientBtn = h(
+      'button',
+      {
+        type: 'button',
+        class: 'pbs-zoom-btn pbs-device-orient-btn',
+        title: 'Rotate device orientation',
+        'aria-label': 'Rotate device orientation',
+        style: this.devicePreset === 'auto' ? 'display:none' : '',
+      },
+      '🔄',
+    ) as HTMLButtonElement;
+    orientBtn.addEventListener('click', () => this.toggleDeviceOrientation());
+    this.deviceOrientBtn = orientBtn;
+
     const zoomOut = h('button', { type: 'button', class: 'pbs-zoom-btn', title: 'Zoom out (Ctrl+-)', 'aria-label': 'Zoom out' }, '−');
     zoomOut.addEventListener('click', () => this.setZoom(this.zoom - 0.1));
     const zoomVal = h('button', { type: 'button', class: 'pbs-zoom-val', title: 'Reset zoom (Ctrl+0)', 'aria-label': 'Reset zoom' }, `${Math.round(this.zoom * 100)}%`);
@@ -1383,7 +1496,7 @@ export class Studio implements StudioContext {
       'aria-label': 'Present report',
     }, '▶');
     presBtn.addEventListener('click', () => this.present());
-    zoomBar.append(zoomOut, zoomVal, zoomIn, zoomFit, mapBtn, findBtn, gridBtn, snapBtn, presBtn);
+    zoomBar.append(deviceSelect, orientBtn, zoomOut, zoomVal, zoomIn, zoomFit, mapBtn, findBtn, gridBtn, snapBtn, presBtn);
     bar.append(zoomBar);
   }
 

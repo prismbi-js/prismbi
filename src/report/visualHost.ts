@@ -33,6 +33,30 @@ export function identitiesToFilters(ids: DataPointIdentity[]): FilterSpec[] {
   return [{ targets: cols, op: 'tuples', tuples: same.map((i) => i.values) }];
 }
 
+function summarizeFilter(f: FilterSpec): string {
+  if (f.op === 'tuples') {
+    const cols = f.targets.map((t) => (typeof t === 'string' ? t : `${t.table}[${t.column}]`)).join(', ');
+    return `${cols} (${f.tuples.length} selected)`;
+  }
+  if (f.op === 'topN') {
+    return `${f.direction ?? 'top'} ${f.n} by ${f.by}`;
+  }
+  const col = typeof f.target === 'string' ? f.target : `${f.target.table}[${f.target.column}]`;
+  if (f.op === 'in' && f.values) {
+    return `${col} in (${f.values.map(String).join(', ')})`;
+  }
+  if (f.op === 'notIn' && f.values) {
+    return `${col} not in (${f.values.map(String).join(', ')})`;
+  }
+  if (f.op === 'between') {
+    return `${col} between ${f.min ?? '-∞'} and ${f.max ?? '∞'}`;
+  }
+  if (f.value !== undefined) {
+    return `${col} ${f.op} ${f.value}`;
+  }
+  return `${col} (${f.op})`;
+}
+
 function identityKey(id: DataPointIdentity): string {
   return JSON.stringify([id.columns.map((c) => `${c.table}[${c.column}]`), id.values.map(valueKey)]);
 }
@@ -101,6 +125,10 @@ export class VisualHost {
 
   get definition(): VisualDefinition {
     return this.def;
+  }
+
+  get state(): Record<string, unknown> {
+    return this.localState;
   }
 
   get lastResult(): QueryResult | null {
@@ -522,6 +550,37 @@ export class VisualHost {
           icon('⤓', 'Expand all down one level', () => this.expandAll());
         }
       }
+      const isSelectionSource = this.rt.selectionSource?.() === this.id && (this.rt.selectionFor?.(this.id)?.length ?? 0) > 0;
+      if (isSelectionSource) {
+        icon('⌧', 'Clear selection', () => this.select(null), undefined, 'pbi-header-clear-selection');
+      }
+      const appliedFilters = this.rt.filtersFor?.(this.id) ?? [];
+      if (appliedFilters.length > 0) {
+        let filterPopover: HTMLElement | null = null;
+        icon('⏚', `Applied filters (${appliedFilters.length})`, () => {
+          if (filterPopover) {
+            filterPopover.remove();
+            filterPopover = null;
+          } else {
+            const items = appliedFilters.map((flt) => h('li', { class: 'pbi-filter-popover-item' }, summarizeFilter(flt)));
+            filterPopover = h(
+              'div',
+              { class: 'pbi-header-popover pbi-filter-popover', role: 'tooltip' },
+              h('div', { class: 'pbi-filter-popover-title' }, `Filters applied (${appliedFilters.length})`),
+              h('ul', { class: 'pbi-filter-popover-list' }, ...items),
+            );
+            this.el.append(filterPopover);
+            const onDocClick = (e: MouseEvent) => {
+              if (filterPopover && !filterPopover.contains(e.target as Node)) {
+                filterPopover.remove();
+                filterPopover = null;
+                document.removeEventListener('click', onDocClick);
+              }
+            };
+            setTimeout(() => document.addEventListener('click', onDocClick), 0);
+          }
+        }, undefined, 'pbi-header-filter');
+      }
       if (f.header.showAsTable && !this.def.static && !this.def.isSlicer) icon('▦', this.showTable ? 'Show visual' : 'Show as table', () => ((this.showTable = !this.showTable), this.render()), this.showTable);
       if (f.header.exportData && !this.def.static && !this.def.isSlicer)
         icons.append(this.exportButton());
@@ -862,7 +921,13 @@ export class VisualHost {
       get state() {
         return self.localState;
       },
-      emit: (event, payload) => self.rt.emit(event, { visualId: self.id, keys: payload.keys, identity: payload.identity, event: payload.event }),
+      emit: ((event: string, payload: any) => {
+        if (event === 'columnResize') {
+          self.rt.emit('columnResize', { visualId: self.id, column: payload.column, width: payload.width, widths: payload.widths });
+        } else {
+          self.rt.emit('dataPointClick', { visualId: self.id, keys: payload.keys, identity: payload.identity, event: payload.event });
+        }
+      }) as VisualHostApi['emit'],
       rerender: () => self.rt.schedule(self.id),
       markFocused: (i: number) => void (self.markIndex = Math.max(0, i)),
       triggerAction: (p) => self.rt.triggerAction?.(p, self.id),

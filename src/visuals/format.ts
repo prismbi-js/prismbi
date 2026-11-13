@@ -68,6 +68,16 @@ export interface DataLabelsFormat {
   rules?: DataLabelRule[];
 }
 
+export interface GaugeThreshold {
+  value: number;
+  color: string;
+}
+
+export interface GaugeFormat {
+  thresholds?: GaugeThreshold[];
+  needle?: boolean;
+}
+
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
 export interface VisualFormat {
   title: {
@@ -154,6 +164,7 @@ export interface VisualFormat {
   animation: { enabled: boolean; duration: number };
   network?: NetworkFormat;
   smallMultiples?: SmallMultiplesFormat;
+  gauge?: GaugeFormat;
   [section: string]: unknown;
 }
 

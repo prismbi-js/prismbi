@@ -8,6 +8,7 @@ export interface ReportEvents {
   selectionChanged: { pageId: string; visualId: string | null; identities: DataPointIdentity[]; filters: FilterSpec[] };
   filtersChanged: { pageId: string; scope: 'report' | 'page' | 'visual' | 'slicer'; visualId?: string; filters: FilterSpec[] };
   dataPointClick: { visualId: string; keys: CellValue[]; identity: DataPointIdentity; event: MouseEvent };
+  columnResize: { visualId: string; column: string; width: number; widths: Record<string, number> };
   drill: { visualId: string; level: number; path: CellValue[] };
   rendered: { visualId: string; ms: number };
   error: { visualId: string; error: Error };

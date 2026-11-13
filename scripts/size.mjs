@@ -28,9 +28,9 @@ const PACKAGE_ALIASES = Object.fromEntries(
 const SCENARIOS = [
   ['core (api)', `export * from '${dist}/core.js';`, 127],
   ['core (app: DataModel + Report)', `import { DataModel, Report } from '${dist}/core.js'; console.log(DataModel, Report);`, 115],
-  ['full (api)', `export * from '${dist}/index.js';`, 182],
-  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 175],
-  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 159],
+  ['full (api)', `export * from '${dist}/index.js';`, 184],
+  ['full (app: DataModel + Report + visuals)', `import { DataModel, Report } from '${dist}/index.js'; console.log(DataModel, Report);`, 177],
+  ['studio (app)', `import { Studio } from '${dist}/studio.js'; console.log(Studio);`, 161],
   ['core app + one visual entry (bar)', `import { DataModel, Report } from '${dist}/core.js'; import '${dist}/visuals/bar.js'; console.log(DataModel, Report);`, 123],
   ['core app + five visual entries', `import { DataModel, Report } from '${dist}/core.js'; ${['bar', 'line', 'pie', 'card', 'slicer'].map((v) => `import '${dist}/visuals/${v}.js';`).join(' ')} console.log(DataModel, Report);`, 138],
   ['connectors', `export * from '${dist}/connectors.js';`, 7],

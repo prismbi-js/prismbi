@@ -558,6 +558,12 @@ export class Report implements ReportRuntime {
     this.schedule();
   }
 
+  /** Re-evaluate page layout and re-render visuals on window or container resize. */
+  relayout(): void {
+    this.refreshLayoutMode(true);
+    this.schedule();
+  }
+
   /** Phone position of a visual on the current page (`null` = hidden on phones), or undefined for desktop. */
   layoutFor(visualId: string): VisualLayout | null | undefined {
     if (!this.phoneActive) return undefined;

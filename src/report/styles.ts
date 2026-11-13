@@ -128,6 +128,8 @@ export const CSS = /* css */ `
 .pbi-density-compact th,.pbi-density-compact td{padding:3px 6px}
 .pbi-density-comfortable th,.pbi-density-comfortable td{padding:9px 10px}
 .pbi-table thead th{position:sticky;top:0;z-index:1;background:var(--pbi-surface);font-weight:600;color:var(--pbi-fg-2);border-bottom:1px solid var(--pbi-axis);cursor:pointer;user-select:none}
+.pbi-col-resizer{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize;user-select:none;touch-action:none;z-index:4}
+.pbi-col-resizer:hover,.pbi-col-resizer:active{background:var(--pbi-accent);opacity:.6}
 .pbi-table tfoot td,.pbi-table tfoot th{position:sticky;bottom:0;background:var(--pbi-surface);font-weight:600;border-top:1px solid var(--pbi-axis);border-bottom:0}
 .pbi-table .is-num{text-align:right}
 .pbi-visual.is-busy .pbi-vroot{opacity:.55;transition:opacity .15s .1s}
@@ -326,6 +328,13 @@ svg.pbi-sparkline{vertical-align:middle;margin-right:6px;display:inline-block}
 .pbi-sort-rank{font-size:9px;opacity:.75;margin-left:2px;vertical-align:super}
 .pbi-title-divider{border:none;border-top:1px solid var(--pbi-axis);margin:6px 0 2px 0;width:100%}
 .pbi-header-info{cursor:pointer}
+.pbi-header-clear-selection{color:var(--pbi-bad,#e05252);font-weight:700}
+.pbi-header-clear-selection:hover{color:var(--pbi-bad,#e05252);background:color-mix(in srgb,var(--pbi-bad,#e05252) 15%,transparent)}
+.pbi-header-filter{color:var(--pbi-accent,#107c41)}
+.pbi-filter-popover{min-width:200px;max-width:280px;white-space:normal}
+.pbi-filter-popover-title{font-weight:600;margin-bottom:6px;font-size:11px;color:var(--pbi-fg-2);text-transform:uppercase;letter-spacing:0.5px}
+.pbi-filter-popover-list{margin:0;padding-left:14px;list-style:disc;font-size:11px}
+.pbi-filter-popover-item{margin-bottom:4px}
 .pbi-header-popover{position:absolute;top:38px;right:10px;z-index:20;background:var(--pbi-surface);color:var(--pbi-fg);padding:8px 12px;border:1px solid var(--pbi-axis);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);font-size:12px;max-width:240px;line-height:1.4;white-space:pre-wrap}
 .pbi-network-node{cursor:pointer}
 .pbi-network-node:hover .pbi-network-circle{stroke:var(--pbi-fg);stroke-width:2.5px}

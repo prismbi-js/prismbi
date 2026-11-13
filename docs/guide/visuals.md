@@ -79,9 +79,9 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `card` | `value`* · `delta` | Auto-sized callout value, signed delta with good/bad colour |
 | `multiRowCard` | `category` · `values`* | One card per group |
 | `kpi` | `trend` · `value`* · `target` | Headline is the last trend point. Shows % vs goal and a sparkline |
-| `gauge` | `value`* · `min` · `max` · `target` | 180° arc |
-| `table` | `columns`* (columns and measures mixed) | Click a header to sort. Totals, conditional formatting, in-header quick search (`format.table.search`), pinning, incremental rendering |
-| `matrix` | `rows` (hierarchy) · `columns` · `values`* | Expand/collapse, column pivot, real subtotals and totals, in-header quick search (`format.matrix.search`) |
+| `gauge` | `value`* · `min` · `max` · `target` | 180° radial gauge with multi-tier threshold zones (`format.gauge.thresholds`) and optional tapered needle (`format.gauge.needle`) |
+| `table` | `columns`* (columns and measures mixed) | Click a header to sort. Interactive drag column resizing (`.pbi-col-resizer`), totals, conditional formatting, in-header quick search (`format.table.search`), pinning, incremental rendering |
+| `matrix` | `rows` (hierarchy) · `columns` · `values`* | Interactive drag column resizing (`.pbi-col-resizer`), expand/collapse, column pivot, real subtotals and totals, in-header quick search (`format.matrix.search`) |
 | `slicer` | `field`* (several fields give a hierarchy tree) | list · dropdown · tiles · between · relative date · tree. Sync groups across pages |
 | `gantt` | `task`* · `start`* · `end` · `progress` · `resource` | Project schedule timeline with progress fills and milestone diamonds |
 | `candlestick` | `category`* · `open`* · `high`* · `low`* · `close`* · `volume` | Financial OHLC stock chart with wicks, bodies and bottom volume bars |

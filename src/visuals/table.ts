@@ -131,6 +131,47 @@ function windowRows(scroller: HTMLElement, tbody: HTMLElement, count: number, co
   });
 }
 
+function attachColResizer(
+  th: HTMLElement,
+  colKey: string,
+  initialWidth: number | undefined,
+  currentWidths: Record<string, number>,
+  ctx: RenderContext,
+): void {
+  if (initialWidth) {
+    th.style.width = `${initialWidth}px`;
+    th.style.minWidth = `${initialWidth}px`;
+  }
+  const resizer = h('span', { class: 'pbi-col-resizer', 'aria-hidden': 'true' });
+  resizer.addEventListener('click', (e) => e.stopPropagation());
+  resizer.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = th.getBoundingClientRect().width || initialWidth || 120;
+    let currentWidth = startWidth;
+
+    const onPointerMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      currentWidth = Math.max(30, Math.round(startWidth + delta));
+      th.style.width = `${currentWidth}px`;
+      th.style.minWidth = `${currentWidth}px`;
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove as EventListener);
+      window.removeEventListener('pointerup', onPointerUp as EventListener);
+      const updated = { ...currentWidths, [colKey]: currentWidth };
+      ctx.host.setState({ columnWidths: updated });
+      ctx.host.emit('columnResize', { column: colKey, width: currentWidth, widths: updated });
+    };
+
+    window.addEventListener('pointermove', onPointerMove as EventListener);
+    window.addEventListener('pointerup', onPointerUp as EventListener);
+  });
+  th.append(resizer);
+}
+
 function isGroupField(f: FieldSpec): boolean {
   if (typeof f === 'string') return isColumnRefString(f);
   return !!f.field && isColumnRefString(f.field) && !f.aggregation && !f.expression;
@@ -445,7 +486,7 @@ export const table = /* @__PURE__ */ defineVisual({
     let gi = 0;
     let vi = 0;
     let cols = fields.map((f) => (isGroupField(f) ? { kind: 'group' as const, i: gi++, field: data.groups[gi - 1] } : { kind: 'value' as const, i: vi++, field: data.values[vi - 1] }));
-    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; sorts?: TableSortCriterion[]; _shown?: number; columnOrder?: string[]; _search?: string; _searchFocused?: boolean };
+    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; sorts?: TableSortCriterion[]; _shown?: number; columnOrder?: string[]; _search?: string; _searchFocused?: boolean; columnWidths?: Record<string, number> };
     const order = state.columnOrder ?? tf.columnOrder;
     if (order && order.length) {
       const orderMap = new Map(order.map((name, idx) => [name, idx]));
@@ -497,6 +538,7 @@ export const table = /* @__PURE__ */ defineVisual({
     });
     const groupFields = data.groups as QueryField[];
 
+    const activeWidths: Record<string, number> = { ...(tf.columnWidths ?? {}), ...(state.columnWidths ?? {}) };
     const pinnedCount = tf.freezeColumns ?? 0;
     const pinnedSet = new Set(tf.pinnedColumns ?? []);
     const isPinnedCol = (ci: number, name: string, ref?: string) => ci < pinnedCount || pinnedSet.has(name) || (!!ref && pinnedSet.has(ref));
@@ -507,7 +549,7 @@ export const table = /* @__PURE__ */ defineVisual({
       if (isPinnedCol(ci, c.field.name, c.field.ref)) {
         pinOffsets[ci] = accLeft;
         lastPinnedIdx = ci;
-        const w = tf.columnWidths?.[c.field.name] ?? (c.field.ref ? tf.columnWidths?.[c.field.ref] : undefined) ?? 120;
+        const w = activeWidths[c.field.name] ?? (c.field.ref ? activeWidths[c.field.ref] : undefined) ?? 120;
         accLeft += w;
       } else {
         pinOffsets[ci] = null;
@@ -526,8 +568,9 @@ export const table = /* @__PURE__ */ defineVisual({
       const rankBadge = sorted && sortList.length > 1 ? h('span', { class: 'pbi-sort-rank' }, String(sortIdx + 1)) : '';
       const sortSpan = sorted ? h('span', { class: 'pbi-sort' }, arrow, rankBadge) : '';
       const th = h('th', { class: c.kind === 'value' ? 'is-num' : '', scope: 'col', 'aria-sort': sorted ? (sortDir === 'desc' ? 'descending' : 'ascending') : undefined, tabindex: 0 }, c.field.name, sortSpan);
-      const w = tf.columnWidths?.[c.field.name];
-      if (w) th.style.width = `${w}px`;
+      const colKey = (c.field.ref && activeWidths[c.field.ref] !== undefined) ? c.field.ref : c.field.name;
+      const w = activeWidths[c.field.name] ?? (c.field.ref ? activeWidths[c.field.ref] : undefined);
+      attachColResizer(th, colKey, w, activeWidths, ctx);
       const pinLeft = pinOffsets[ci];
       if (pinLeft !== null && pinLeft !== undefined) {
         th.style.position = 'sticky';
@@ -721,6 +764,8 @@ export interface MatrixFormat {
   virtualize?: boolean;
   /** Show an interactive in-matrix search input. */
   search?: boolean;
+  /** Pixel width per column name. */
+  columnWidths?: Record<string, number>;
 }
 
 export const matrix = /* @__PURE__ */ defineVisual({
@@ -787,7 +832,8 @@ export const matrix = /* @__PURE__ */ defineVisual({
       levelCache.push(m);
     }
 
-    const state = ctx.host.state as { expanded?: string[]; _search?: string; _searchFocused?: boolean };
+    const state = ctx.host.state as { expanded?: string[]; _search?: string; _searchFocused?: boolean; columnWidths?: Record<string, number> };
+    const activeWidths: Record<string, number> = { ...(mf.columnWidths ?? {}), ...(state.columnWidths ?? {}) };
     const expanded = new Set(state.expanded ?? []);
     const isExpanded = (pk: string) => (mf.expandAll ? !expanded.has(`!${pk}`) : expanded.has(pk));
 
@@ -797,22 +843,67 @@ export const matrix = /* @__PURE__ */ defineVisual({
     const isStepped = mf.stepped !== false;
     if (colField) {
       const tr = h('tr');
-      if (isStepped) tr.append(h('th', { rowspan: valuePerCol > 1 ? 2 : 1, scope: 'col' }, rowFields.map((f) => f.name).join(' / ') || ''));
-      else for (const rf of rowFields) tr.append(h('th', { rowspan: valuePerCol > 1 ? 2 : 1, scope: 'col' }, rf.name));
-      for (const ck of colKeys) tr.append(h('th', { colspan: valuePerCol, class: 'is-num pbi-col-group', scope: 'colgroup' }, ctx.fmt(colField, ck)));
-      if (mf.columnTotals !== false) tr.append(h('th', { colspan: valuePerCol, class: 'is-num pbi-col-group', scope: 'colgroup' }, 'Total'));
+      if (isStepped) {
+        const title = rowFields.map((f) => f.name).join(' / ') || '';
+        const th = h('th', { rowspan: valuePerCol > 1 ? 2 : 1, scope: 'col' }, title);
+        const w = activeWidths[title] ?? rowFields.map((f) => activeWidths[f.name] ?? (f.ref ? activeWidths[f.ref] : undefined)).find((v) => v !== undefined);
+        attachColResizer(th, title || 'Rows', w, activeWidths, ctx);
+        tr.append(th);
+      } else {
+        for (const rf of rowFields) {
+          const th = h('th', { rowspan: valuePerCol > 1 ? 2 : 1, scope: 'col' }, rf.name);
+          const w = activeWidths[rf.name] ?? (rf.ref ? activeWidths[rf.ref] : undefined);
+          attachColResizer(th, rf.name, w, activeWidths, ctx);
+          tr.append(th);
+        }
+      }
+      for (const ck of colKeys) {
+        const keyStr = String(ck);
+        const th = h('th', { colspan: valuePerCol, class: 'is-num pbi-col-group', scope: 'colgroup' }, ctx.fmt(colField, ck));
+        attachColResizer(th, keyStr, activeWidths[keyStr], activeWidths, ctx);
+        tr.append(th);
+      }
+      if (mf.columnTotals !== false) {
+        const th = h('th', { colspan: valuePerCol, class: 'is-num pbi-col-group', scope: 'colgroup' }, 'Total');
+        attachColResizer(th, 'Total', activeWidths['Total'], activeWidths, ctx);
+        tr.append(th);
+      }
       thead.append(tr);
       if (valuePerCol > 1) {
         const tr2 = h('tr');
         const groups = colKeys.length + (mf.columnTotals !== false ? 1 : 0);
-        for (let i = 0; i < groups; i++) for (const vf of valueFields) tr2.append(h('th', { class: 'is-num', scope: 'col' }, vf.name));
+        for (let i = 0; i < groups; i++) {
+          for (const vf of valueFields) {
+            const th = h('th', { class: 'is-num', scope: 'col' }, vf.name);
+            const w = activeWidths[vf.name] ?? (vf.ref ? activeWidths[vf.ref] : undefined);
+            attachColResizer(th, vf.name, w, activeWidths, ctx);
+            tr2.append(th);
+          }
+        }
         thead.append(tr2);
       }
     } else {
       const tr = h('tr');
-      if (isStepped) tr.append(h('th', { scope: 'col' }, rowFields.map((f) => f.name).join(' / ')));
-      else for (const rf of rowFields) tr.append(h('th', { scope: 'col' }, rf.name));
-      for (const vf of valueFields) tr.append(h('th', { class: 'is-num', scope: 'col' }, vf.name));
+      if (isStepped) {
+        const title = rowFields.map((f) => f.name).join(' / ');
+        const th = h('th', { scope: 'col' }, title);
+        const w = activeWidths[title] ?? rowFields.map((f) => activeWidths[f.name] ?? (f.ref ? activeWidths[f.ref] : undefined)).find((v) => v !== undefined);
+        attachColResizer(th, title || 'Rows', w, activeWidths, ctx);
+        tr.append(th);
+      } else {
+        for (const rf of rowFields) {
+          const th = h('th', { scope: 'col' }, rf.name);
+          const w = activeWidths[rf.name] ?? (rf.ref ? activeWidths[rf.ref] : undefined);
+          attachColResizer(th, rf.name, w, activeWidths, ctx);
+          tr.append(th);
+        }
+      }
+      for (const vf of valueFields) {
+        const th = h('th', { class: 'is-num', scope: 'col' }, vf.name);
+        const w = activeWidths[vf.name] ?? (vf.ref ? activeWidths[vf.ref] : undefined);
+        attachColResizer(th, vf.name, w, activeWidths, ctx);
+        tr.append(th);
+      }
       thead.append(tr);
     }
     tableEl.append(thead);
