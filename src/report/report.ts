@@ -2386,6 +2386,91 @@ export class Report implements ReportRuntime {
     return this.bookmarks;
   }
 
+  /**
+   * Serialize active interactive state (active page, theme, slicers, report filters, active bookmark) to URLSearchParams for deep-linking.
+   */
+  toUrlParams(): URLSearchParams {
+    const params = new URLSearchParams();
+    if (this.page?.def?.id) {
+      params.set('page', this.page.def.id);
+    }
+    if (this._theme?.name) {
+      params.set('theme', this._theme.name);
+    }
+    if (this._activeBookmark) {
+      params.set('bookmark', this._activeBookmark);
+    }
+    const activeSlicers: Record<string, FilterSpec[]> = {};
+    if (this.page?.slicers) {
+      for (const [vId, flts] of this.page.slicers.entries()) {
+        if (flts && flts.length > 0) {
+          activeSlicers[vId] = flts;
+        }
+      }
+    }
+    if (Object.keys(activeSlicers).length > 0) {
+      params.set('slicers', JSON.stringify(toPlain(activeSlicers)));
+    }
+    if (this.reportFilters && this.reportFilters.length > 0) {
+      params.set('filters', JSON.stringify(toPlain(this.reportFilters)));
+    }
+    return params;
+  }
+
+  /**
+   * Restore interactive state from a URL query string or URLSearchParams instance.
+   * Returns true if any state changed.
+   */
+  loadFromUrlParams(input: URLSearchParams | string): boolean {
+    const params = typeof input === 'string'
+      ? new URLSearchParams(input.includes('?') ? input.slice(input.indexOf('?') + 1) : input)
+      : input;
+    let changed = false;
+    const bmName = params.get('bookmark');
+    if (bmName && this.bookmarks.some((b) => b.name === bmName)) {
+      this.applyBookmark(bmName);
+      changed = true;
+    }
+    const pageParam = params.get('page');
+    if (pageParam && this.pageIndex(pageParam) >= 0 && this.page.def.id !== pageParam && this.page.def.name !== pageParam) {
+      this.goToPage(pageParam);
+      changed = true;
+    }
+    const themeParam = params.get('theme');
+    if (themeParam && this._theme.name !== themeParam) {
+      this.setTheme(themeParam);
+      changed = true;
+    }
+    const filtersParam = params.get('filters');
+    if (filtersParam) {
+      try {
+        const parsed = JSON.parse(filtersParam, reviveDates);
+        if (Array.isArray(parsed)) {
+          this.setReportFilters(parsed);
+          changed = true;
+        }
+      } catch {}
+    }
+    const slicersParam = params.get('slicers');
+    if (slicersParam && this.page) {
+      try {
+        const parsed = JSON.parse(slicersParam, reviveDates) as Record<string, FilterSpec[]>;
+        if (parsed && typeof parsed === 'object') {
+          for (const [k, v] of Object.entries(parsed)) {
+            if (Array.isArray(v)) {
+              this.page.slicers.set(k, v);
+              changed = true;
+            }
+          }
+          if (changed) {
+            this.afterFilterChange('page');
+          }
+        }
+      } catch {}
+    }
+    return changed;
+  }
+
   /** Serialisable report definition (pages, visuals, filters, bookmarks). Dates are tagged and revived by {@link Report.parse}. */
   toJSON(): ReportDefinition {
     return toPlain({ version: REPORT_SCHEMA_VERSION, name: this.name, pages: this.pages.map((p) => p.def), filters: this.reportFilters, bookmarks: this.bookmarks, ...(Object.keys(this.translations).length ? { translations: this.translations } : {}), ...(this.subscriptions.length ? { subscriptions: this.subscriptions } : {}), ...(this.alerts.length ? { alerts: this.alerts } : {}) }) as ReportDefinition;

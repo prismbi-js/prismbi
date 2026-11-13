@@ -1,5 +1,5 @@
 import { s, arcPath, measureText, fitText } from '../render/svg';
-import { mix, textOn } from '../render/color';
+import { mix, textOn, ramp } from '../render/color';
 import type { CellValue } from '../data/types';
 import { valueKey } from '../data/types';
 import { defineVisual } from './registry';
@@ -8,6 +8,7 @@ import { emptyState, identityOf, interactive, markOpacity } from './common';
 interface Node {
   path: CellValue[];
   value: number;
+  colorValue?: number;
   children: Node[];
   a0: number;
   a1: number;
@@ -28,6 +29,7 @@ export const sunburst = /* @__PURE__ */ defineVisual({
   roles: [
     { name: 'category', displayName: 'Levels', kind: 'grouping', multiple: true, required: true },
     { name: 'values', displayName: 'Value', kind: 'measure', required: true },
+    { name: 'color', displayName: 'Color saturation', kind: 'measure' },
   ],
   render(ctx) {
     const gi = ctx.role('category').indices;
@@ -37,13 +39,30 @@ export const sunburst = /* @__PURE__ */ defineVisual({
     const fields = gi.map((i) => data.groups[i]);
     const vField = data.values[vi];
     const valueSpec = ctx.fields('values')[0];
+    const colIdx = ctx.role('color').indices[0];
+    const colField = colIdx !== undefined ? data.values[colIdx] : undefined;
+    const colSpec = colIdx !== undefined ? ctx.fields('color')[0] : undefined;
     const filters = data.baseFilters as never[];
     const key = (path: CellValue[]) => JSON.stringify(path.map(valueKey));
 
     // one query per level above the leaves (the leaves are the visual's own rows)
-    const levels: { path: CellValue[]; value: number }[][] = fields.map((_, lvl) => {
-      const rows = lvl === fields.length - 1 ? data.rows.map((r) => ({ keys: gi.map((i) => r.keys[i]), v: r.values[vi] })) : model.query({ groupBy: fields.slice(0, lvl + 1).map((f) => f.ref), values: [valueSpec], filters }).rows.map((r) => ({ keys: r.keys, v: r.values[0] }));
-      return rows.filter((r): r is { keys: CellValue[]; v: number } => typeof r.v === 'number' && r.v > 0).map((r) => ({ path: r.keys, value: r.v }));
+    const valSpecs = colSpec ? [valueSpec, colSpec] : [valueSpec];
+    const levels: { path: CellValue[]; value: number; colorValue?: number }[][] = fields.map((_, lvl) => {
+      const isLeaf = lvl === fields.length - 1;
+      const rows = isLeaf
+        ? data.rows.map((r) => ({
+            keys: gi.map((i) => r.keys[i]),
+            v: r.values[vi],
+            cv: colIdx !== undefined && typeof r.values[colIdx] === 'number' ? (r.values[colIdx] as number) : undefined,
+          }))
+        : model.query({ groupBy: fields.slice(0, lvl + 1).map((f) => f.ref), values: valSpecs, filters }).rows.map((r) => ({
+            keys: r.keys,
+            v: r.values[0],
+            cv: colSpec && typeof r.values[1] === 'number' ? (r.values[1] as number) : undefined,
+          }));
+      return rows
+        .filter((r): r is { keys: CellValue[]; v: number; cv: number | undefined } => typeof r.v === 'number' && r.v > 0)
+        .map((r) => ({ path: r.keys, value: r.v, colorValue: r.cv }));
     });
     const total = model.query({ values: [valueSpec], filters }).rows[0]?.values[0];
 
@@ -51,15 +70,30 @@ export const sunburst = /* @__PURE__ */ defineVisual({
     const root: Node = { path: [], value: 0, children: [], a0: 0, a1: Math.PI * 2, color: t.foregroundMuted };
     const byPath = new Map<string, Node>([[key([]), root]]);
     for (const level of levels)
-      for (const { path, value } of level) {
+      for (const { path, value, colorValue } of level) {
         const parent = byPath.get(key(path.slice(0, -1)));
         if (!parent) continue;
-        const node: Node = { path, value, children: [], a0: 0, a1: 0, color: '' };
+        const node: Node = { path, value, colorValue, children: [], a0: 0, a1: 0, color: '' };
         parent.children.push(node);
         byPath.set(key(path), node);
       }
     if (!root.children.length) return emptyState(ctx);
     const pal = ctx.format.colors.palette ?? t.dataColors;
+    let minCol: number | undefined;
+    let maxCol: number | undefined;
+    if (colField) {
+      const allColorVals: number[] = [];
+      const collect = (n: Node) => {
+        if (n.colorValue !== undefined) allColorVals.push(n.colorValue);
+        n.children.forEach(collect);
+      };
+      collect(root);
+      if (allColorVals.length) {
+        minCol = Math.min(...allColorVals);
+        maxCol = Math.max(...allColorVals);
+      }
+    }
+    const stops = t.mode === 'dark' ? [...t.sequential].reverse() : t.sequential;
     const layout = (n: Node, depth: number) => {
       n.children.sort((a, b) => b.value - a.value);
       const sum = n.children.reduce((acc, c) => acc + c.value, 0);
@@ -67,8 +101,13 @@ export const sunburst = /* @__PURE__ */ defineVisual({
       n.children.forEach((c, i) => {
         c.a0 = a;
         c.a1 = a += ((n.a1 - n.a0) * c.value) / sum;
-        // the first ring takes the palette; deeper rings lighten their parent's colour
-        c.color = depth === 0 ? pal[i % pal.length] : mix(n.color, t.surface, 0.2);
+        if (colField && c.colorValue !== undefined && minCol !== undefined && maxCol !== undefined) {
+          const norm = maxCol === minCol ? 0.5 : (c.colorValue - minCol) / (maxCol - minCol);
+          c.color = ramp(stops, norm);
+        } else {
+          // the first ring takes the palette; deeper rings lighten their parent's colour
+          c.color = depth === 0 ? pal[i % pal.length] : mix(n.color, t.surface, 0.2);
+        }
         layout(c, depth + 1);
       });
     };
@@ -136,6 +175,7 @@ export const sunburst = /* @__PURE__ */ defineVisual({
             items: [
               { label: vField.name, value: ctx.fmt(vField, c.value), color: c.color },
               { label: 'Share of parent', value: `${((c.value / n.children.reduce((a, x) => a + x.value, 0)) * 100).toFixed(1)}%` },
+              ...(colField && c.colorValue !== undefined ? [{ label: colField.name, value: ctx.fmt(colField, c.colorValue) }] : []),
             ],
           }),
           c.path,

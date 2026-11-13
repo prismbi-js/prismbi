@@ -131,6 +131,31 @@ function windowRows(scroller: HTMLElement, tbody: HTMLElement, count: number, co
   });
 }
 
+function autoFitColumnWidth(th: HTMLElement): number {
+  let maxLen = (th.textContent || '').trim().length;
+  let maxScrollW = th.scrollWidth || 0;
+  const table = th.closest('table');
+  if (table) {
+    const ci = (th as HTMLTableCellElement).cellIndex;
+    if (ci >= 0) {
+      const rows = table.querySelectorAll('tbody tr');
+      const sampleSize = Math.min(rows.length, 100);
+      for (let i = 0; i < sampleSize; i++) {
+        const cell = rows[i]?.children[ci] as HTMLElement | undefined;
+        if (cell) {
+          const len = (cell.textContent || '').trim().length;
+          if (len > maxLen) maxLen = len;
+          if (cell.scrollWidth && cell.scrollWidth > maxScrollW) maxScrollW = cell.scrollWidth;
+        }
+      }
+    }
+  }
+  const estFromText = Math.round(maxLen * 8.5 + 32);
+  const estFromScroll = maxScrollW > 0 ? Math.round(maxScrollW + 24) : 0;
+  const target = Math.max(estFromText, estFromScroll);
+  return Math.max(50, Math.min(600, target));
+}
+
 function attachColResizer(
   th: HTMLElement,
   colKey: string,
@@ -144,6 +169,17 @@ function attachColResizer(
   }
   const resizer = h('span', { class: 'pbi-col-resizer', 'aria-hidden': 'true' });
   resizer.addEventListener('click', (e) => e.stopPropagation());
+  resizer.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const autoWidth = autoFitColumnWidth(th);
+    th.style.width = `${autoWidth}px`;
+    th.style.minWidth = `${autoWidth}px`;
+    const hostWidths = ((ctx.host.state as { columnWidths?: Record<string, number> })?.columnWidths) ?? currentWidths;
+    const updated = { ...hostWidths, [colKey]: autoWidth };
+    ctx.host.setState({ columnWidths: updated });
+    ctx.host.emit('columnResize', { column: colKey, width: autoWidth, widths: updated });
+  });
   resizer.addEventListener('pointerdown', (e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -161,7 +197,8 @@ function attachColResizer(
     const onPointerUp = () => {
       window.removeEventListener('pointermove', onPointerMove as EventListener);
       window.removeEventListener('pointerup', onPointerUp as EventListener);
-      const updated = { ...currentWidths, [colKey]: currentWidth };
+      const hostWidths = ((ctx.host.state as { columnWidths?: Record<string, number> })?.columnWidths) ?? currentWidths;
+      const updated = { ...hostWidths, [colKey]: currentWidth };
       ctx.host.setState({ columnWidths: updated });
       ctx.host.emit('columnResize', { column: colKey, width: currentWidth, widths: updated });
     };

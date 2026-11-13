@@ -1,5 +1,5 @@
 import { s, arcPath, measureText, fitText, h } from '../render/svg';
-import { textOn } from '../render/color';
+import { textOn, ramp } from '../render/color';
 import type { CellValue } from '../data/types';
 import type { QueryField } from '../data/query';
 import type { DataPointIdentity, RenderContext } from './types';
@@ -9,6 +9,7 @@ import { animateIn, emptyState, identityOf, interactive, labelFormatter, markOpa
 interface Slice {
   label: string;
   value: number;
+  colorValue?: number;
   highlight: number | null;
   color: string;
   identity: DataPointIdentity | null;
@@ -16,7 +17,7 @@ interface Slice {
 }
 
 /** Rows → slices; folds anything beyond the palette into a single "Other" slice. */
-function slices(ctx: RenderContext, groupRole: string, max: number): { slices: Slice[]; field?: QueryField; total: number } {
+function slices(ctx: RenderContext, groupRole: string, max: number): { slices: Slice[]; field?: QueryField; colorField?: QueryField; total: number } {
   const g = ctx.role(groupRole);
   const v = ctx.role('values');
   if (!v.indices.length) return { slices: [], total: 0 };
@@ -24,13 +25,18 @@ function slices(ctx: RenderContext, groupRole: string, max: number): { slices: S
   const vi = v.indices[0];
   const gField = gi !== undefined ? ctx.data.groups[gi] : undefined;
   const vField = ctx.data.values[vi];
+  const cRole = ctx.role('color');
+  const ci = cRole.indices[0];
+  const cField = ci !== undefined ? ctx.data.values[ci] : undefined;
   let out: Slice[] = ctx.data.rows
     .map((r) => {
       const key = gi !== undefined ? r.keys[gi] : vField.name;
       const val = typeof r.values[vi] === 'number' ? (r.values[vi] as number) : 0;
+      const colorVal = ci !== undefined && typeof r.values[ci] === 'number' ? (r.values[ci] as number) : undefined;
       return {
         label: gField ? ctx.fmt(gField, key) || '(Blank)' : vField.name,
         value: val,
+        colorValue: colorVal,
         highlight: r.highlights ? ((r.highlights[vi] as number | null) ?? 0) : null,
         color: gField ? ctx.colorFor(gField, key) : ctx.seriesColor(vField.name, 0),
         identity: gField ? identityOf([gField], [key]) : null,
@@ -51,7 +57,7 @@ function slices(ctx: RenderContext, groupRole: string, max: number): { slices: S
       keys: [],
     });
   }
-  return { slices: out, field: vField, total: out.reduce((a, x) => a + x.value, 0) };
+  return { slices: out, field: vField, colorField: cField, total: out.reduce((a, x) => a + x.value, 0) };
 }
 
 function renderPie(ctx: RenderContext, donut: boolean): void {
@@ -193,25 +199,41 @@ export const treemap = /* @__PURE__ */ defineVisual({
   roles: [
     { name: 'category', displayName: 'Category', kind: 'grouping', drillable: true, multiple: true },
     { name: 'values', displayName: 'Values', kind: 'measure', required: true },
+    { name: 'color', displayName: 'Color saturation', kind: 'measure' },
   ],
   supportsHighlight: true,
   render(ctx) {
-    const { slices: data, field, total } = slices(ctx, 'category', 30);
+    const { slices: data, field, colorField, total } = slices(ctx, 'category', 30);
     if (!data.length) return emptyState(ctx);
     const t = ctx.theme;
-    // treemaps have many tiles: past the palette, cycle it by domain position (stable under filtering) instead of
-    // greying out what may be the largest tiles
-    const gi = ctx.role('category').indices[0];
-    const gField = gi !== undefined ? ctx.data.groups[gi] : undefined;
-    if (gField?.column) {
-      const pal = ctx.format.colors.palette ?? t.dataColors;
-      const domain = ctx.model.table(gField.column.table).distinct(gField.column.column);
-      const pos = new Map(domain.map((v, i) => [v instanceof Date ? v.getTime() : v, i]));
-      for (const d of data) {
-        if (d.color !== t.otherColor || !d.keys.length) continue;
-        const k = d.keys[0];
-        const i = pos.get(k instanceof Date ? k.getTime() : k);
-        if (i !== undefined) d.color = pal[i % pal.length];
+    if (colorField) {
+      const colorVals = data.map((d) => d.colorValue).filter((v): v is number => typeof v === 'number');
+      if (colorVals.length) {
+        const minVal = Math.min(...colorVals);
+        const maxVal = Math.max(...colorVals);
+        const stops = t.mode === 'dark' ? [...t.sequential].reverse() : t.sequential;
+        for (const d of data) {
+          if (d.colorValue !== undefined) {
+            const norm = maxVal === minVal ? 0.5 : (d.colorValue - minVal) / (maxVal - minVal);
+            d.color = ramp(stops, norm);
+          }
+        }
+      }
+    } else {
+      // treemaps have many tiles: past the palette, cycle it by domain position (stable under filtering) instead of
+      // greying out what may be the largest tiles
+      const gi = ctx.role('category').indices[0];
+      const gField = gi !== undefined ? ctx.data.groups[gi] : undefined;
+      if (gField?.column) {
+        const pal = ctx.format.colors.palette ?? t.dataColors;
+        const domain = ctx.model.table(gField.column.table).distinct(gField.column.column);
+        const pos = new Map(domain.map((v, i) => [v instanceof Date ? v.getTime() : v, i]));
+        for (const d of data) {
+          if (d.color !== t.otherColor || !d.keys.length) continue;
+          const k = d.keys[0];
+          const i = pos.get(k instanceof Date ? k.getTime() : k);
+          if (i !== undefined) d.color = pal[i % pal.length];
+        }
       }
     }
     ctx.root.replaceChildren();
@@ -228,7 +250,24 @@ export const treemap = /* @__PURE__ */ defineVisual({
       const hgt = Math.max(0, r.h - gap * 2);
       const op = d.identity ? markOpacity(ctx, d.identity) : 1;
       const rect = s('rect', { x, y, width: w, height: hgt, rx: 3, fill: d.color, opacity: d.highlight !== null ? 0.35 : op });
-      if (d.identity) interactive(ctx, rect, d.identity, () => ({ title: d.label, items: [{ label: field?.name ?? '', value: ctx.fmt(field, d.value), color: d.color }, { label: 'Share', value: `${((d.value / total) * 100).toFixed(1)}%` }] }), d.keys);
+      if (d.identity) {
+        interactive(
+          ctx,
+          rect,
+          d.identity,
+          () => {
+            const items = [
+              { label: field?.name ?? '', value: ctx.fmt(field, d.value), color: d.color },
+              { label: 'Share', value: `${((d.value / total) * 100).toFixed(1)}%` },
+            ];
+            if (colorField && d.colorValue !== undefined) {
+              items.push({ label: colorField.name, value: ctx.fmt(colorField, d.colorValue) });
+            }
+            return { title: d.label, items };
+          },
+          d.keys,
+        );
+      }
       svg.append(rect);
       if (w > 40 && hgt > fs * 2 + 8) {
         const ink = textOn(d.color, t.foreground);

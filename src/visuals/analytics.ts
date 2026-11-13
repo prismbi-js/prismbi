@@ -114,6 +114,37 @@ export function drawReferenceLines(ctx: RenderContext, g: SVGGElement, scale: Li
       g.append(s('line', { y1: span[0], y2: span[1], x1: p, x2: p, ...attrs }));
       if (label) g.append(s('text', { x: p + 4, y: span[0] + 12, class: 'pbi-label pbi-refline-label', fill: t.foregroundSecondary }, label));
     }
+
+    const validVals = values.filter((x) => typeof x === 'number' && Number.isFinite(x));
+    const totalCount = validVals.length;
+    const aboveCount = validVals.filter((x) => x > v).length;
+    const belowCount = validVals.filter((x) => x < v).length;
+    const abovePct = totalCount > 0 ? `${((aboveCount / totalCount) * 100).toFixed(1)}%` : '0%';
+    const belowPct = totalCount > 0 ? `${((belowCount / totalCount) * 100).toFixed(1)}%` : '0%';
+
+    const hitAttrs = axis === 'y'
+      ? { x1: span[0], x2: span[1], y1: p, y2: p }
+      : { y1: span[0], y2: span[1], x1: p, x2: p };
+    const hit = s('line', {
+      ...hitAttrs,
+      stroke: 'transparent',
+      'stroke-width': 12,
+      class: 'pbi-refline-hit',
+      style: 'cursor: pointer;',
+    });
+    const tooltipTitle = label || `${line.type === 'percentile' ? `P${line.percentile ?? 50}` : LABELS[line.type]} Line`;
+    const tooltipItems = [
+      { label: field?.name || 'Value', value: valueText, color },
+      { label: 'Above', value: `${aboveCount} (${abovePct})` },
+      { label: 'Below', value: `${belowCount} (${belowPct})` },
+    ];
+    hit.addEventListener('mousemove', (e: MouseEvent) => {
+      ctx.host.showTooltip(e, tooltipItems, tooltipTitle);
+    });
+    hit.addEventListener('mouseleave', () => {
+      ctx.host.hideTooltip();
+    });
+    g.append(hit);
   }
 }
 

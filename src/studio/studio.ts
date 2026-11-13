@@ -1157,8 +1157,8 @@ export class Studio implements StudioContext {
       { id: 'align:top', icon: '⤊', title: 'Align top', min: 2 },
       { id: 'align:middle', icon: '⤋⤊', title: 'Align middle', min: 2 },
       { id: 'align:bottom', icon: '⤋', title: 'Align bottom', min: 2 },
-      { id: 'distribute:horizontal', icon: '⬌', title: 'Distribute horizontally', min: 3 },
-      { id: 'distribute:vertical', icon: '⬍', title: 'Distribute vertically', min: 3 },
+      { id: 'distribute:horizontal', icon: '⬌', title: 'Distribute horizontally (Alt+Shift+H)', min: 3 },
+      { id: 'distribute:vertical', icon: '⬍', title: 'Distribute vertically (Alt+Shift+V)', min: 3 },
       { id: 'size:width', icon: '↔', title: 'Match width', min: 2 },
       { id: 'size:height', icon: '↕', title: 'Match height', min: 2 },
       { id: 'group', icon: '⧉', title: 'Group visuals (Ctrl+G)', min: 2 },
@@ -1631,6 +1631,18 @@ export class Studio implements StudioContext {
       e.preventDefault();
       this.arrangeSelection('lock');
       return;
+    }
+    if (e.altKey && e.shiftKey && !typing && !this.preview) {
+      if (e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        this.arrangeSelection('distribute:horizontal');
+        return;
+      }
+      if (e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        this.arrangeSelection('distribute:vertical');
+        return;
+      }
     }
     if (mod && e.key.toLowerCase() === 'f' && !typing) {
       e.preventDefault();
