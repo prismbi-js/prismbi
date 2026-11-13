@@ -118,6 +118,13 @@ export interface VisualHostApi {
   emit(event: 'dataPointClick', payload: { keys: CellValue[]; identity: DataPointIdentity; event: MouseEvent }): void;
   /** Re-render without re-querying (e.g. after local UI state change). */
   rerender(): void;
+  triggerAction?(payload: {
+    type: 'drillthrough' | 'page' | 'bookmark' | 'back' | 'clearFilters' | 'export' | 'url';
+    destination?: string;
+    exportFormat?: 'pdf' | 'xlsx' | 'pptx' | 'image' | 'csv';
+    url?: string;
+  }): void;
+  canDrillThrough?(destinationPage: string): { canDrill: boolean; destinationName?: string };
 }
 
 export interface RoleBinding {

@@ -20,6 +20,7 @@ import { gantt } from './gantt';
 import { candlestick } from './candlestick';
 import { chord } from './chord';
 import { network } from './network';
+import { actionButton } from './button';
 
 export const builtinVisuals = {
   clusteredColumn,
@@ -47,6 +48,7 @@ export const builtinVisuals = {
   matrix,
   slicer,
   textBox,
+  actionButton,
   waterfall,
   heatmap,
   calendarHeatmap,
@@ -110,4 +112,5 @@ export function registerBuiltinVisuals(): void {
   registerVisual(candlestick);
   registerVisual(chord);
   registerVisual(network);
+  registerVisual(actionButton, ['actionButton']);
 }

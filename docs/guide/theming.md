@@ -2,13 +2,19 @@
 
 ## Built-in themes
 
-`'light'` (the default) and `'dark'`. Both use the same eight-hue categorical palette. Each mode has its own steps, tuned to its surface, and both are validated for colour-vision-deficiency separation.
+PrismBI includes six built-in theme presets:
+- `'light'` (default): Warm gray canvas with clean categorical palette
+- `'dark'`: Deep charcoal background with high-contrast vibrant marks
+- `'high-contrast'`: Pure black canvas with WCAG AAA-compliant neon accents
+- `'ocean'`: Cool marine blues, aquas, and crisp teals
+- `'sunset'`: Warm corals, deep purples, and radiant gold tones
+- `'emerald'`: Fresh botanical greens, mints, and forest accents
 
 ![The demo report in the dark theme](../images/report-overview-dark.png)
 
 ```ts
-new Report(el, { model, theme: 'dark', pages });
-report.setTheme('light');
+new Report(el, { model, theme: 'ocean', pages });
+report.setTheme('sunset');
 ```
 
 ## Custom themes

@@ -2,6 +2,7 @@ import type { DataModel } from '../data/model';
 import type { MeasureDef } from '../data/types';
 import { FORMAT_PRESETS, formatValue } from '../format/format';
 import { h } from '../render/svg';
+import { getTheme } from '../theme/theme';
 import { ExpressionEditor } from './expressionEditor';
 
 export interface DialogButton {
@@ -301,6 +302,105 @@ export function quickMeasureDialog(host: HTMLElement, model: DataModel, onSave: 
           return false;
         }
         onSave({ name: n, expression: editor.value.trim(), table: homeTable.value, format: fmt.value() });
+      },
+    },
+  ]);
+}
+
+/** Dialog for customizing report themes, presets, and color palettes. */
+export function themeDialog(
+  host: HTMLElement,
+  current: Record<string, unknown>,
+  onApply: (patch: Record<string, unknown>) => void,
+): void {
+  const presetNames = ['light', 'dark', 'high-contrast', 'ocean', 'sunset', 'emerald'];
+  const curPreset = (current.name as string) ?? (current.mode === 'dark' ? 'dark' : 'light');
+  const base = getTheme(curPreset);
+
+  const presetSelect = h('select', { 'aria-label': 'Theme preset' }) as HTMLSelectElement;
+  for (const p of presetNames) {
+    const opt = h('option', { value: p, selected: p === curPreset }, p[0].toUpperCase() + p.slice(1).replace('-', ' '));
+    presetSelect.append(opt);
+  }
+
+  const modeSelect = h('select', { 'aria-label': 'Mode' }) as HTMLSelectElement;
+  modeSelect.append(h('option', { value: 'light', selected: (current.mode ?? base.mode) === 'light' }, 'Light'));
+  modeSelect.append(h('option', { value: 'dark', selected: (current.mode ?? base.mode) === 'dark' }, 'Dark'));
+
+  const accentInput = h('input', { type: 'color', value: (current.accent as string) ?? base.accent, 'aria-label': 'Accent color' }) as HTMLInputElement;
+  const bgInput = h('input', { type: 'color', value: (current.background as string) ?? (base.background.startsWith('#') ? base.background : '#f9f9f7'), 'aria-label': 'Page background' }) as HTMLInputElement;
+  const surfaceInput = h('input', { type: 'color', value: (current.surface as string) ?? (base.surface.startsWith('#') ? base.surface : '#fcfcfb'), 'aria-label': 'Visual surface' }) as HTMLInputElement;
+  const fgInput = h('input', { type: 'color', value: (current.foreground as string) ?? (base.foreground.startsWith('#') ? base.foreground : '#0b0b0b'), 'aria-label': 'Text color' }) as HTMLInputElement;
+  const radiusInput = h('input', { type: 'number', min: '0', max: '24', value: String(current.radius ?? base.radius), 'aria-label': 'Corner radius' }) as HTMLInputElement;
+
+  let colors = [...((current.dataColors as string[]) ?? base.dataColors.slice(0, 8))];
+  const swatches = h('div', { class: 'pbs-colors', style: 'display:flex;gap:6px;flex-wrap:wrap;' });
+  const renderSwatches = () => {
+    swatches.replaceChildren();
+    colors.forEach((c, i) => {
+      const inp = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(c) ? c : '#888888', 'aria-label': `Data color ${i + 1}` }) as HTMLInputElement;
+      inp.addEventListener('change', () => {
+        colors[i] = inp.value;
+      });
+      swatches.append(inp);
+    });
+  };
+  renderSwatches();
+
+  presetSelect.addEventListener('change', () => {
+    const p = getTheme(presetSelect.value);
+    modeSelect.value = p.mode;
+    accentInput.value = p.accent;
+    bgInput.value = p.background.startsWith('#') ? p.background : '#f9f9f7';
+    surfaceInput.value = p.surface.startsWith('#') ? p.surface : '#fcfcfb';
+    fgInput.value = p.foreground.startsWith('#') ? p.foreground : '#0b0b0b';
+    radiusInput.value = String(p.radius);
+    colors = [...p.dataColors.slice(0, 8)];
+    renderSwatches();
+  });
+
+  const body = h(
+    'div',
+    { style: 'display:flex;flex-direction:column;gap:12px;min-width:320px;' },
+    field('Preset theme', presetSelect),
+    h('div', { class: 'pbs-row2' }, field('Mode', modeSelect), field('Corner radius', radiusInput)),
+    h('div', { class: 'pbs-row2' }, field('Accent', accentInput), field('Text', fgInput)),
+    h('div', { class: 'pbs-row2' }, field('Page background', bgInput), field('Visual surface', surfaceInput)),
+    field('Data colors', swatches),
+  );
+
+  openDialog(host, 'Customize Theme', body, [
+    { label: 'Cancel' },
+    {
+      label: 'Reset to preset',
+      onClick: () => {
+        const p = getTheme(presetSelect.value);
+        onApply({
+          name: p.name,
+          mode: p.mode,
+          accent: p.accent,
+          background: p.background,
+          surface: p.surface,
+          foreground: p.foreground,
+          radius: p.radius,
+          dataColors: [...p.dataColors],
+        });
+      },
+    },
+    {
+      label: 'Apply',
+      primary: true,
+      onClick: () => {
+        onApply({
+          name: presetSelect.value,
+          mode: modeSelect.value as 'light' | 'dark',
+          accent: accentInput.value,
+          background: bgInput.value,
+          surface: surfaceInput.value,
+          foreground: fgInput.value,
+          radius: Number(radiusInput.value) || 8,
+          dataColors: [...colors],
+        });
       },
     },
   ]);

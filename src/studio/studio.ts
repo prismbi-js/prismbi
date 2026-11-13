@@ -11,7 +11,7 @@ import { FilterPane } from '../report/filterPane';
 import { Report, reviveDates } from '../report/report';
 import type { ReportDefinition, VisualSearchResult } from '../report/report';
 import { themeVars } from '../report/styles';
-import { createTheme, darkTheme, lightTheme } from '../theme/theme';
+import { createTheme, darkTheme, getTheme, lightTheme } from '../theme/theme';
 import type { Theme } from '../theme/theme';
 import { Emitter } from '../utils';
 import type { DeepPartial } from '../utils';
@@ -22,7 +22,7 @@ import { autoReport } from './autoReport';
 import type { StudioContext } from './context';
 import { FIELD_MIME } from './context';
 import type { CalcColumnDef, ExpressionCopilot } from './dialogs';
-import { columnDialog, confirmDialog, measureDialog, quickMeasureDialog } from './dialogs';
+import { columnDialog, confirmDialog, measureDialog, quickMeasureDialog, themeDialog } from './dialogs';
 import { renderFormat } from './formatPane';
 import { History } from './history';
 import { RAIL_ICONS } from './icons';
@@ -844,11 +844,21 @@ export class Studio implements StudioContext {
     setTimeout(() => t.remove(), 2600);
   }
 
+  editTheme(): void {
+    const current = { ...this.theme };
+    themeDialog(this.root, current, (patch) => {
+      this.setThemeOverrides(patch);
+      this.toast('Updated report theme');
+    });
+  }
+
   // ================================================================= document / history internals
 
   private resolvedTheme(): Theme {
     const o = this.theme as DeepPartial<Theme>;
-    return createTheme(o, o.mode === 'dark' ? darkTheme : lightTheme);
+    const preset = typeof o.name === 'string' ? getTheme(o.name) : undefined;
+    const base = preset ?? (o.mode === 'dark' ? darkTheme : lightTheme);
+    return createTheme(o, base);
   }
 
   private applyThemeVars(): void {
@@ -1129,6 +1139,7 @@ export class Studio implements StudioContext {
       btn('New measure', () => this.editMeasure()),
       btn('Quick measure', () => this.quickMeasure()),
       btn('New column', () => this.editColumn()),
+      btn('Theme', () => this.editTheme(), { title: 'Customize report theme and presets' }),
       btn('Auto page', () => {
         const id = this.report.addPage(autoReport(this.model, { name: `Overview ${this.report.pageList.length + 1}` }));
         this.report.goToPage(id);

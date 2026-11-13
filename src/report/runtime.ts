@@ -16,6 +16,13 @@ export interface QueryEngine {
   query(spec: QuerySpec, signal?: AbortSignal): Promise<Omit<QueryResult, 'baseFilters'> & { baseFilters: readonly unknown[] }>;
 }
 
+export interface ButtonActionPayload {
+  type: 'drillthrough' | 'page' | 'bookmark' | 'back' | 'clearFilters' | 'export' | 'url';
+  destination?: string;
+  exportFormat?: 'pdf' | 'xlsx' | 'pptx' | 'image' | 'csv';
+  url?: string;
+}
+
 /** What a VisualHost needs from the report it lives in. */
 export interface ReportRuntime {
   readonly model: DataModel;
@@ -51,4 +58,6 @@ export interface ReportRuntime {
   showContextMenu(visualId: string, identity: DataPointIdentity, evt: MouseEvent): void;
   menu(x: number, y: number, items: MenuItem[]): void;
   showReportTooltip(pageIdOrName: string, identity: DataPointIdentity, sourceVisualId: string, evt: { clientX: number; clientY: number }): void;
+  triggerAction?(payload: ButtonActionPayload, sourceVisualId?: string): void;
+  canDrillThrough?(destinationPage: string): { canDrill: boolean; destinationName?: string };
 }

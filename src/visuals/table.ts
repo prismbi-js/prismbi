@@ -70,6 +70,8 @@ export interface TableFormat {
   pinnedColumns?: string[];
   /** Explicit column ordering by column name or field ref. */
   columnOrder?: string[];
+  /** Show an interactive in-table search input. */
+  search?: boolean;
 }
 
 /** Row count above which tables window their rows. */
@@ -443,7 +445,7 @@ export const table = /* @__PURE__ */ defineVisual({
     let gi = 0;
     let vi = 0;
     let cols = fields.map((f) => (isGroupField(f) ? { kind: 'group' as const, i: gi++, field: data.groups[gi - 1] } : { kind: 'value' as const, i: vi++, field: data.values[vi - 1] }));
-    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; sorts?: TableSortCriterion[]; _shown?: number; columnOrder?: string[] };
+    const state = ctx.host.state as { sortCol?: number; sortDir?: 'asc' | 'desc'; sorts?: TableSortCriterion[]; _shown?: number; columnOrder?: string[]; _search?: string; _searchFocused?: boolean };
     const order = state.columnOrder ?? tf.columnOrder;
     if (order && order.length) {
       const orderMap = new Map(order.map((name, idx) => [name, idx]));
@@ -459,6 +461,17 @@ export const table = /* @__PURE__ */ defineVisual({
       ? [{ col: state.sortCol, dir: state.sortDir ?? 'asc' }]
       : [];
     let rows = data.rows.slice();
+    const totalRowCount = rows.length;
+    const query = String(state._search ?? '').trim().toLowerCase();
+    if (query) {
+      rows = rows.filter((r) =>
+        cols.some((c) => {
+          const v = c.kind === 'group' ? r.keys[c.i] : r.values[c.i];
+          const text = ctx.fmt(c.field, v);
+          return text.toLowerCase().includes(query);
+        }),
+      );
+    }
     if (sortList.length) {
       rows.sort((a, b) => {
         for (const sc of sortList) {
@@ -643,9 +656,42 @@ export const table = /* @__PURE__ */ defineVisual({
       tableEl.append(tfoot);
     }
     const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);
+    let container: HTMLElement = scroller;
+    if (tf.search) {
+      const searchBox = h('div', { class: 'pbi-table-search' });
+      const searchInput = h('input', {
+        type: 'search',
+        class: 'pbi-table-search-input',
+        placeholder: 'Search table...',
+        'aria-label': 'Search table',
+        value: state._search ?? '',
+      }) as HTMLInputElement;
+      searchInput.addEventListener('input', () => {
+        ctx.host.setState({ _search: searchInput.value, _searchFocused: true });
+      });
+      searchInput.addEventListener('blur', () => {
+        (ctx.host.state as Record<string, unknown>)._searchFocused = false;
+      });
+      const matchCount = h(
+        'span',
+        { class: 'pbi-table-search-count' },
+        query ? `${rows.length} of ${totalRowCount}` : `${totalRowCount} rows`,
+      );
+      searchBox.append(searchInput, matchCount);
+      container = h('div', { class: 'pbi-table-wrap' }, searchBox, scroller);
+      if (state._searchFocused) {
+        requestAnimationFrame(() => {
+          if (document.contains(searchInput)) {
+            searchInput.focus();
+            const len = searchInput.value.length;
+            searchInput.setSelectionRange(len, len);
+          }
+        });
+      }
+    }
     if (virtual) {
       windowRows(scroller, tbody, rows.length, cols.length, rowEl);
-      ctx.root.replaceChildren(scroller);
+      ctx.root.replaceChildren(container);
       return;
     }
     // incremental rendering: append the next page when scrolled near the bottom
@@ -658,7 +704,7 @@ export const table = /* @__PURE__ */ defineVisual({
         rendered = next;
       }
     });
-    ctx.root.replaceChildren(scroller);
+    ctx.root.replaceChildren(container);
   },
 });
 
@@ -673,6 +719,8 @@ export interface MatrixFormat {
   sparklines?: Record<string, SparklineOptions>;
   /** Render only the rows in view (default: automatic above 500 visible rows; subtotal rows count). */
   virtualize?: boolean;
+  /** Show an interactive in-matrix search input. */
+  search?: boolean;
 }
 
 export const matrix = /* @__PURE__ */ defineVisual({
@@ -739,7 +787,7 @@ export const matrix = /* @__PURE__ */ defineVisual({
       levelCache.push(m);
     }
 
-    const state = ctx.host.state as { expanded?: string[] };
+    const state = ctx.host.state as { expanded?: string[]; _search?: string; _searchFocused?: boolean };
     const expanded = new Set(state.expanded ?? []);
     const isExpanded = (pk: string) => (mf.expandAll ? !expanded.has(`!${pk}`) : expanded.has(pk));
 
@@ -804,8 +852,17 @@ export const matrix = /* @__PURE__ */ defineVisual({
       if (lvl < rowFields.length && isExpanded(pk)) for (const p of childrenOf.get(pk) ?? []) walk(lvl + 1, p);
     };
     if (rowFields.length) for (const p of childrenOf.get(JSON.stringify([])) ?? []) walk(1, p);
+    const totalRowCount = visible.length;
+    let displayRows = visible;
+    const query = String(state._search ?? '').trim().toLowerCase();
+    if (query) {
+      displayRows = visible.filter((item) => {
+        const labels = item.path.map((val, idx) => ctx.fmt(rowFields[idx], val).toLowerCase());
+        return labels.some((l) => l.includes(query));
+      });
+    }
     const rowEl = (i: number): HTMLElement => {
-      const { lvl, path, pk } = visible[i];
+      const { lvl, path, pk } = displayRows[i];
       const hasKids = lvl < rowFields.length;
       const open = hasKids && isExpanded(pk);
       const tr = h('tr', { class: `pbi-level-${lvl}${hasKids ? ' has-children' : ''}` });
@@ -859,8 +916,8 @@ export const matrix = /* @__PURE__ */ defineVisual({
       });
       return tr;
     };
-    const virtual = mf.virtualize ?? visible.length > VIRTUAL_MIN;
-    if (!virtual) for (let i = 0; i < visible.length; i++) tbody.append(rowEl(i));
+    const virtual = mf.virtualize ?? displayRows.length > VIRTUAL_MIN;
+    if (!virtual) for (let i = 0; i < displayRows.length; i++) tbody.append(rowEl(i));
     tableEl.append(tbody);
     const tfoot = h('tfoot');
     const tr = h('tr');
@@ -872,8 +929,42 @@ export const matrix = /* @__PURE__ */ defineVisual({
     const prevTop = (ctx.root.querySelector('.pbi-table-scroll') as HTMLElement | null)?.scrollTop ?? 0;
     const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);
     const colspan = (isStepped ? 1 : rowFields.length) + valueFields.length * (colField ? colKeys.length + (mf.columnTotals !== false ? 1 : 0) : 1);
-    if (virtual) windowRows(scroller, tbody, visible.length, colspan, rowEl);
-    ctx.root.replaceChildren(scroller);
+    if (virtual) windowRows(scroller, tbody, displayRows.length, colspan, rowEl);
+
+    let container: HTMLElement = scroller;
+    if (mf.search) {
+      const searchBox = h('div', { class: 'pbi-table-search' });
+      const searchInput = h('input', {
+        type: 'search',
+        class: 'pbi-table-search-input',
+        placeholder: 'Search matrix...',
+        'aria-label': 'Search matrix',
+        value: state._search ?? '',
+      }) as HTMLInputElement;
+      searchInput.addEventListener('input', () => {
+        ctx.host.setState({ _search: searchInput.value, _searchFocused: true });
+      });
+      searchInput.addEventListener('blur', () => {
+        (ctx.host.state as Record<string, unknown>)._searchFocused = false;
+      });
+      const matchCount = h(
+        'span',
+        { class: 'pbi-table-search-count' },
+        query ? `${displayRows.length} of ${totalRowCount}` : `${totalRowCount} rows`,
+      );
+      searchBox.append(searchInput, matchCount);
+      container = h('div', { class: 'pbi-table-wrap' }, searchBox, scroller);
+      if (state._searchFocused) {
+        requestAnimationFrame(() => {
+          if (document.contains(searchInput)) {
+            searchInput.focus();
+            const len = searchInput.value.length;
+            searchInput.setSelectionRange(len, len);
+          }
+        });
+      }
+    }
+    ctx.root.replaceChildren(container);
     if (prevTop) {
       scroller.scrollTop = prevTop;
       if (virtual) scroller.dispatchEvent(new Event('scroll'));

@@ -1,5 +1,5 @@
 import { h } from '../render/svg';
-import { darkTheme, lightTheme } from '../theme/theme';
+import { darkTheme, getTheme, lightTheme } from '../theme/theme';
 import type { VisualSpec } from '../visuals/types';
 import type { StudioContext } from './context';
 import type { FormatControl, FormatSection } from './formatSchema';
@@ -203,6 +203,35 @@ export function renderFormat(ctx: StudioContext, container: HTMLElement, openSec
     swatches.append(inp);
   });
   const themeControls = [
+    control(
+      {
+        path: 'preset',
+        label: 'Preset',
+        type: 'select',
+        options: [
+          { value: 'light', label: 'Light' },
+          { value: 'dark', label: 'Dark' },
+          { value: 'high-contrast', label: 'High contrast' },
+          { value: 'ocean', label: 'Ocean' },
+          { value: 'sunset', label: 'Sunset' },
+          { value: 'emerald', label: 'Emerald' },
+        ],
+      },
+      (theme.name as string) ?? (mode === 'dark' ? 'dark' : 'light'),
+      (v) => {
+        const p = getTheme(v as string);
+        tset({
+          name: p.name,
+          mode: p.mode,
+          accent: p.accent,
+          background: p.background,
+          surface: p.surface,
+          foreground: p.foreground,
+          radius: p.radius,
+          dataColors: [...p.dataColors],
+        });
+      },
+    ),
     control({ path: 'mode', label: 'Mode', type: 'select', options: [{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }] }, mode, (v) => tset({ mode: v ?? 'light' })),
     control({ path: 'accent', label: 'Accent', type: 'color' }, theme.accent ?? base.accent, (v) => tset({ accent: v })),
     control({ path: 'background', label: 'Page background', type: 'color' }, theme.background ?? base.background, (v) => tset({ background: v })),

@@ -1,5 +1,6 @@
 import { s, h, barPath, measureText } from '../render/svg';
 import { downsampleRuns } from '../render/lttb';
+import { valueKey, type CellValue } from '../data/types';
 import { forecastSeries, futureKeys, type Forecast } from './forecast';
 import { detectAnomalies, type AnomalyPoint } from './anomaly';
 import { bandScale, linearScale, logScale, pointScale, timeScale } from '../render/scales';
@@ -94,6 +95,37 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
       if (se.highlights) se.highlights = se.highlights.slice(z0, z1 + 1);
     }
   }
+
+  const errLowerRole = ctx.role('errorLower');
+  const errUpperRole = ctx.role('errorUpper');
+  const eli = errLowerRole?.indices?.[0];
+  const eui = errUpperRole?.indices?.[0];
+  const hasErrors = eli !== undefined || eui !== undefined;
+  const errBounds: ({ lower: number; upper: number } | null)[] = categories.map(() => null);
+  if (hasErrors) {
+    const catIndex = new Map<string, number>();
+    const catKey = (keys: CellValue[]) => JSON.stringify(keys.map(valueKey));
+    categories.forEach((c, idx) => catIndex.set(catKey(c.keys), idx));
+    const catIndices = ctx.role('category').indices;
+    for (const r of ctx.data.rows) {
+      const k = catKey(catIndices.map((i) => r.keys[i]));
+      const ci = catIndex.get(k);
+      if (ci !== undefined) {
+        const baseVal = lineSeries[0]?.values[ci] ?? 0;
+        let lVal: number = baseVal;
+        let uVal: number = baseVal;
+        if (eli !== undefined && typeof r.values[eli] === 'number') {
+          const rawL = r.values[eli] as number;
+          lVal = rawL <= baseVal ? rawL : baseVal - rawL;
+        }
+        if (eui !== undefined && typeof r.values[eui] === 'number') {
+          const rawU = r.values[eui] as number;
+          uVal = rawU >= baseVal ? rawU : baseVal + rawU;
+        }
+        errBounds[ci] = { lower: Math.min(lVal, uVal), upper: Math.max(lVal, uVal) };
+      }
+    }
+  }
   const all = [...colSeries, ...lineSeries];
   const legend = renderLegend(
     ctx,
@@ -142,6 +174,14 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     lo = Infinity;
     hi = -Infinity;
     for (const se of all) for (const v of [...se.values, ...(se.highlights ?? [])]) if (v !== null) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
+  }
+  if (hasErrors) {
+    for (const b of errBounds) {
+      if (b) {
+        lo = Math.min(lo, b.lower);
+        hi = Math.max(hi, b.upper);
+      }
+    }
   }
   for (const { fc } of forecasts) for (const v of [...fc.lower, ...fc.upper]) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
   // combo: lines on a very different scale (or a different kind of unit) get their own axis on the right
@@ -339,6 +379,22 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
     if (stacked) se.values.forEach((v, i) => (base[i] += v ?? 0));
   });
 
+  if (hasErrors) {
+    const errGroup = s('g', { class: 'pbi-error-bars', 'pointer-events': 'none' });
+    const capW = 3.5;
+    const color = lineSeries[0]?.color ?? t.foregroundSecondary;
+    errBounds.forEach((b, i) => {
+      if (!b) return;
+      const cx = xAt(i);
+      const yLo = lscale(b.lower);
+      const yHi = lscale(b.upper);
+      errGroup.append(s('line', { x1: cx, y1: yLo, x2: cx, y2: yHi, stroke: color, 'stroke-width': 1.5, class: 'pbi-error-stem' }));
+      errGroup.append(s('line', { x1: cx - capW, y1: yLo, x2: cx + capW, y2: yLo, stroke: color, 'stroke-width': 1.5, class: 'pbi-error-cap' }));
+      errGroup.append(s('line', { x1: cx - capW, y1: yHi, x2: cx + capW, y2: yHi, stroke: color, 'stroke-width': 1.5, class: 'pbi-error-cap' }));
+    });
+    marks.append(errGroup);
+  }
+
   if (futurePos && forecasts.length) {
     const fx = futureNums.map(futurePos);
     const conf = Math.round((fcOpt ? (fcOpt.confidence ?? 0.95) : 0.95) * 100);
@@ -503,6 +559,14 @@ function renderLine(ctx: RenderContext, kind: Kind): void {
           });
         }
       }
+      if (hasErrors && errBounds[i]) {
+        const b = errBounds[i]!;
+        items.push({
+          label: 'Error Range',
+          value: `${ctx.fmt(valueField, b.lower)} – ${ctx.fmt(valueField, b.upper)}`,
+          color: lineSeries[0]?.color,
+        });
+      }
       ctx.host.showTooltip(e, items, categories[i].label, categories[i].identity);
     }
   });
@@ -622,6 +686,8 @@ const ROLES = [
   { name: 'legend', displayName: 'Legend', kind: 'grouping' as const },
   { name: 'values', displayName: 'Y-axis', kind: 'measure' as const, multiple: true, required: true },
   { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping' as const, multiple: true },
+  { name: 'errorLower', displayName: 'Lower error bound', kind: 'measure' as const },
+  { name: 'errorUpper', displayName: 'Upper error bound', kind: 'measure' as const },
 ];
 
 export const lineChart = /* @__PURE__ */ defineVisual({ type: 'line', displayName: 'Line chart', category: 'chart', roles: ROLES, supportsHighlight: true, defaultSort: 'key', render: (c) => renderLine(c, 'line') });

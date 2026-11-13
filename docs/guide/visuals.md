@@ -80,14 +80,15 @@ Every built-in visual with the demo data (light theme). The same images back the
 | `multiRowCard` | `category` · `values`* | One card per group |
 | `kpi` | `trend` · `value`* · `target` | Headline is the last trend point. Shows % vs goal and a sparkline |
 | `gauge` | `value`* · `min` · `max` · `target` | 180° arc |
-| `table` | `columns`* (columns and measures mixed) | Click a header to sort. Totals, conditional formatting, incremental rendering |
-| `matrix` | `rows` (hierarchy) · `columns` · `values`* | Expand/collapse, column pivot, real subtotals and totals |
+| `table` | `columns`* (columns and measures mixed) | Click a header to sort. Totals, conditional formatting, in-header quick search (`format.table.search`), pinning, incremental rendering |
+| `matrix` | `rows` (hierarchy) · `columns` · `values`* | Expand/collapse, column pivot, real subtotals and totals, in-header quick search (`format.matrix.search`) |
 | `slicer` | `field`* (several fields give a hierarchy tree) | list · dropdown · tiles · between · relative date · tree. Sync groups across pages |
 | `gantt` | `task`* · `start`* · `end` · `progress` · `resource` | Project schedule timeline with progress fills and milestone diamonds |
 | `candlestick` | `category`* · `open`* · `high`* · `low`* · `close`* · `volume` | Financial OHLC stock chart with wicks, bodies and bottom volume bars |
 | `chord` | `source`* · `target`* · `values`* | Circular relationship flows and inter-entity transfers with quadratic ribbons |
 | `network` | `source`* · `target`* · `values` · `group` · `size` | Force-directed entity network graph with Coulomb repulsion, Hooke springs, node dragging, cluster coloring and cross-filtering |
 | `text` (`textbox`) | `values` (optional) | Mini-markdown with `{{Measure name}}` placeholders |
+| `actionButton` (`button`) | _(none)_ | Interactive canvas button: back, page navigation, bookmark restore, clear all filters, dynamic drill-through, export (PDF/XLSX/PPTX/image), or external URL |
 
 `*` marks a required role.
 
@@ -265,6 +266,23 @@ Each of these can be turned off through `format.header`.
 - **Tri-state column sorting**: Clicking any table or matrix header cycles through `ascending` → `descending` → `none` (clearing sort back to natural query order).
 - **Multi-column sorting**: Shift+clicking headers adds secondary and tertiary sort criteria, with sort priority badges (`1`, `2`) and directional arrows (`↑` / `↓`).
 - **Column reordering**: Click and drag column header handles to rearrange column positions.
+- **Quick search**: Enable `format.table.search: true` or `format.matrix.search: true` to surface an integrated search input with instant substring filtering and matching row counts.
+
+## Error bars
+
+Add `errorLower` and/or `errorUpper` measure roles to continuous `line` or `scatter` charts to display vertical whiskers with caps, automatically extending axis bounds to prevent clipping:
+
+```ts
+{
+  type: 'line',
+  fields: {
+    category: 'Date[MonthNumber]',
+    values: 'Total Sales',
+    errorLower: 'Sales Lower Bound',
+    errorUpper: 'Sales Upper Bound',
+  },
+}
+```
 
 ## Accessibility
 

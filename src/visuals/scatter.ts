@@ -199,6 +199,8 @@ export const scatter = /* @__PURE__ */ defineVisual({
     { name: 'y', displayName: 'Y-axis', kind: 'measure', required: true },
     { name: 'size', displayName: 'Size', kind: 'measure' },
     { name: 'smallMultiples', displayName: 'Small multiples', kind: 'grouping', multiple: true },
+    { name: 'errorLower', displayName: 'Lower error bound', kind: 'measure' },
+    { name: 'errorUpper', displayName: 'Upper error bound', kind: 'measure' },
   ],
   supportsHighlight: true,
   render(ctx) {
@@ -235,7 +237,40 @@ export const scatter = /* @__PURE__ */ defineVisual({
     const ys = rows.map((r) => r.values[yi] as number);
     const sizes = sField ? rows.map((r) => Math.max(0, (r.values[si!] as number) ?? 0)) : [];
     const maxSize = Math.max(1, ...sizes);
-    const yScale0 = linearScale(Math.min(...ys), Math.max(...ys), [height - 30, 10], { includeZero: false });
+
+    const errLowerRole = ctx.role('errorLower');
+    const errUpperRole = ctx.role('errorUpper');
+    const eli = errLowerRole?.indices?.[0];
+    const eui = errUpperRole?.indices?.[0];
+    const hasErrors = eli !== undefined || eui !== undefined;
+
+    const errBounds: ({ lower: number; upper: number } | null)[] = rows.map((r, i) => {
+      if (!hasErrors) return null;
+      const baseY = ys[i];
+      let lVal: number = baseY;
+      let uVal: number = baseY;
+      if (eli !== undefined && typeof r.values[eli] === 'number') {
+        const rawL = r.values[eli] as number;
+        lVal = rawL <= baseY ? rawL : baseY - rawL;
+      }
+      if (eui !== undefined && typeof r.values[eui] === 'number') {
+        const rawU = r.values[eui] as number;
+        uVal = rawU >= baseY ? rawU : baseY + rawU;
+      }
+      return { lower: Math.min(lVal, uVal), upper: Math.max(lVal, uVal) };
+    });
+
+    let yMin = Math.min(...ys);
+    let yMax = Math.max(...ys);
+    if (hasErrors) {
+      for (const b of errBounds) {
+        if (b) {
+          yMin = Math.min(yMin, b.lower);
+          yMax = Math.max(yMax, b.upper);
+        }
+      }
+    }
+    const yScale0 = linearScale(yMin, yMax, [height - 30, 10], { includeZero: false });
     const fmtY = valueAxisFormatter(ctx, yField, yScale0);
     const left = Math.ceil(Math.max(...yScale0.ticks.map((v) => measureText(fmtY(v), fs, t.fontFamily)))) + 12;
     const bottom = height - fs - 22;
@@ -246,7 +281,7 @@ export const scatter = /* @__PURE__ */ defineVisual({
     const xr: [number, number] = [left + maxR, width - maxR];
     const yr: [number, number] = [bottom - maxR, Math.max(10, maxR)];
     const x = logX ? logScale(Math.min(...xs), Math.max(...xs), xr) : linearScale(Math.min(...xs), Math.max(...xs), xr, { includeZero: false, tickCount: Math.max(2, Math.floor(width / 90)) });
-    const y = logY ? logScale(Math.min(...ys), Math.max(...ys), yr) : linearScale(Math.min(...ys), Math.max(...ys), yr, { includeZero: false, tickCount: Math.max(2, Math.floor(height / 45)) });
+    const y = logY ? logScale(Math.min(...ys), Math.max(...ys), yr) : linearScale(yMin, yMax, yr, { includeZero: false, tickCount: Math.max(2, Math.floor(height / 45)) });
     const svg = s('svg', { width, height, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Scatter chart' });
     plot.append(svg);
     const g = s('g');
@@ -273,15 +308,19 @@ export const scatter = /* @__PURE__ */ defineVisual({
     g.append(marks);
     // draw bigger bubbles first so small ones stay clickable
     const order = rows.map((_, i) => i).sort((a, b) => (sizes[b] ?? 0) - (sizes[a] ?? 0));
-    const tooltipFor = (i: number, keys: CellValue[], color: string) => () => ({
-      title: keys.map((k, j) => ctx.fmt(dFields[j], k)).join(' · '),
-      items: [
-        { label: xField.name, value: ctx.fmt(xField, xs[i]) },
-        { label: yField.name, value: ctx.fmt(yField, ys[i]) },
-        ...(sField ? [{ label: sField.name, value: ctx.fmt(sField, rows[i].values[si!]) }] : []),
-        ...(lField ? [{ label: lField.name, value: ctx.fmt(lField, rows[i].keys[l.indices[0]]), color }] : []),
-      ],
-    });
+    const tooltipFor = (i: number, keys: CellValue[], color: string) => () => {
+      const b = errBounds[i];
+      return {
+        title: keys.map((k, j) => ctx.fmt(dFields[j], k)).join(' · '),
+        items: [
+          { label: xField.name, value: ctx.fmt(xField, xs[i]) },
+          { label: yField.name, value: ctx.fmt(yField, ys[i]) },
+          ...(b ? [{ label: 'Error Range', value: `${ctx.fmt(yField, b.lower)} – ${ctx.fmt(yField, b.upper)}` }] : []),
+          ...(sField ? [{ label: sField.name, value: ctx.fmt(sField, rows[i].values[si!]) }] : []),
+          ...(lField ? [{ label: lField.name, value: ctx.fmt(lField, rows[i].keys[l.indices[0]]), color }] : []),
+        ],
+      };
+    };
     const renderer = ((ctx.format as { scatter?: ScatterFormat }).scatter?.renderer ?? 'auto') as NonNullable<ScatterFormat['renderer']>;
     const raster = renderer === 'canvas' || renderer === 'webgl' || (renderer === 'auto' && rows.length > CANVAS_MIN);
     if (raster) {
@@ -306,7 +345,20 @@ export const scatter = /* @__PURE__ */ defineVisual({
       const identity = identityOf(dFields, keys);
       // highlighted points keep full strength; the rest fade (cross-highlight from other visuals)
       const dimmed = r.highlights ? r.highlights[yi] === null || r.highlights[xi] === null : false;
-      const c = s('circle', { cx: x(xs[i]), cy: y(ys[i]), r: radius, fill: color, 'fill-opacity': sField ? 0.7 : 1, stroke: t.surface, 'stroke-width': sField ? 1 : 2, opacity: dimmed ? 0.25 : markOpacity(ctx, identity) });
+      const op = dimmed ? 0.25 : markOpacity(ctx, identity);
+
+      if (hasErrors && errBounds[i]) {
+        const b = errBounds[i]!;
+        const cx = x(xs[i]);
+        const yLo = y(b.lower);
+        const yHi = y(b.upper);
+        const capW = 3;
+        marks.append(s('line', { x1: cx, y1: yLo, x2: cx, y2: yHi, stroke: color, 'stroke-width': 1.5, opacity: op * 0.8, 'pointer-events': 'none', class: 'pbi-error-stem' }));
+        marks.append(s('line', { x1: cx - capW, y1: yLo, x2: cx + capW, y2: yLo, stroke: color, 'stroke-width': 1.5, opacity: op * 0.8, 'pointer-events': 'none', class: 'pbi-error-cap' }));
+        marks.append(s('line', { x1: cx - capW, y1: yHi, x2: cx + capW, y2: yHi, stroke: color, 'stroke-width': 1.5, opacity: op * 0.8, 'pointer-events': 'none', class: 'pbi-error-cap' }));
+      }
+
+      const c = s('circle', { cx: x(xs[i]), cy: y(ys[i]), r: radius, fill: color, 'fill-opacity': sField ? 0.7 : 1, stroke: t.surface, 'stroke-width': sField ? 1 : 2, opacity: op });
       interactive(ctx, c, identity, tooltipFor(i, keys, color), keys);
       marks.append(c);
     }

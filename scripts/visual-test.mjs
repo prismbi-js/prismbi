@@ -48,12 +48,14 @@ try {
         failures.push(`${theme}/${c.key}: render error: ${c.error}`);
         continue;
       }
+      process.stdout.write(`[${theme}] ${c.key}... `);
       const shot = (await chrome.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: c.x, y: c.y, width: c.w, height: c.h, scale: 1 } })).data;
       const file = join(OUT, theme, `${c.key}.png`);
       checked++;
       if (UPDATE || !existsSync(file)) {
         writeFileSync(file, Buffer.from(shot, 'base64'));
         written++;
+        console.log('written');
         continue;
       }
       const ratio = await chrome.evaluate(diffInPage(readFileSync(file).toString('base64'), shot));
@@ -61,6 +63,9 @@ try {
         mkdirSync(join(OUT, '__diff__'), { recursive: true });
         writeFileSync(join(OUT, '__diff__', `${theme}-${c.key}.png`), Buffer.from(shot, 'base64'));
         failures.push(`${theme}/${c.key}: ${(ratio * 100).toFixed(2)}% of pixels differ`);
+        console.log(`FAIL (${(ratio * 100).toFixed(2)}%)`);
+      } else {
+        console.log('ok');
       }
     }
   }

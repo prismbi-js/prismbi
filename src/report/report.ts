@@ -515,6 +515,7 @@ export class Report implements ReportRuntime {
   private _layoutMode: 'auto' | 'desktop' | 'mobile' = 'auto';
   private mobileBreakpoint = 640;
   private phoneActive = false;
+  private pageHistory: number[] = [];
 
   /** Is the current page showing its phone layout? */
   get isMobileLayout(): boolean {
@@ -1161,14 +1162,69 @@ export class Report implements ReportRuntime {
     this.emit('drillThrough', { fromPageId: this.pages[from].def.id!, toPageId: page.def.id!, visualId: sourceVisualId, filters });
   }
 
-  /** Leave a drill-through page and return to where it was opened from. */
+  /** Leave a drill-through page and return to where it was opened from, or navigate back in page history. */
   back(): void {
     const p = this.page;
-    if (!p.drillState) return;
-    const from = p.drillState.from;
-    p.drillState = null;
-    for (const host of p.hosts.values()) host.invalidate();
-    this.showPage(Math.min(from, this.pages.length - 1));
+    if (p.drillState) {
+      const from = p.drillState.from;
+      p.drillState = null;
+      for (const host of p.hosts.values()) host.invalidate();
+      this.showPage(Math.min(from, this.pages.length - 1), true, false);
+      return;
+    }
+    if (this.pageHistory.length) {
+      const prev = this.pageHistory.pop()!;
+      this.showPage(Math.min(prev, this.pages.length - 1), true, false);
+    }
+  }
+
+  /** Check if a drill-through destination page can be reached from the current page's active selection. */
+  canDrillThrough(destinationPage: string): { canDrill: boolean; destinationName?: string } {
+    const ti = this.pageIndex(destinationPage);
+    if (ti < 0) return { canDrill: false };
+    const targetPage = this.pages[ti];
+    const dt = targetPage.def.drillthrough;
+    if (!dt || !dt.fields.length) return { canDrill: false, destinationName: targetPage.def.name };
+    const currentPage = this.page;
+    if (!currentPage) return { canDrill: false, destinationName: targetPage.def.name };
+
+    const sel = currentPage.selection;
+    if (!sel || !sel.identities.length) return { canDrill: false, destinationName: targetPage.def.name };
+    const matches = dt.fields.some((f) =>
+      sel.identities.some((id) => id.columns.some((c) => sameRef(c, f))),
+    );
+    return { canDrill: matches, destinationName: targetPage.def.name };
+  }
+
+  /** Trigger an action from an action button or external controller. */
+  triggerAction(payload: import('./runtime').ButtonActionPayload, sourceVisualId?: string): void {
+    if (payload.type === 'back') {
+      this.back();
+    } else if (payload.type === 'page' && payload.destination) {
+      this.goToPage(payload.destination);
+    } else if (payload.type === 'bookmark' && payload.destination) {
+      this.applyBookmark(payload.destination);
+    } else if (payload.type === 'clearFilters') {
+      this.clearSelection();
+      if (this.page) for (const [id] of this.page.hosts) this.setVisualFilters(id, []);
+      this.setReportFilters([]);
+    } else if (payload.type === 'drillthrough' && payload.destination) {
+      const currentPage = this.page;
+      const sel = currentPage?.selection;
+      if (sel && sel.identities.length) {
+        const target = sel.identities.length === 1 ? sel.identities[0] : identitiesToFilters(sel.identities);
+        this.drillThrough(payload.destination, target, sel.visualId || sourceVisualId);
+      }
+    } else if (payload.type === 'export') {
+      const fmt = payload.exportFormat ?? 'pdf';
+      if (fmt === 'pdf') void this.exportPdf();
+      else if (fmt === 'xlsx') void this.exportXlsx();
+      else if (fmt === 'pptx') void this.exportPptx();
+      else if (fmt === 'image') void this.exportImage();
+    } else if (payload.type === 'url') {
+      const u = payload.url || payload.destination;
+      if (u && typeof window !== 'undefined') window.open(u, '_blank', 'noopener,noreferrer');
+    }
   }
 
   // ---------------------------------------------------------------- report tooltips
@@ -1914,8 +1970,12 @@ export class Report implements ReportRuntime {
     return this.pages.map((p) => ({ id: p.def.id!, name: p.def.name, hidden: !!p.def.hidden }));
   }
 
-  private showPage(i: number, emit = true): void {
+  private showPage(i: number, emit = true, trackHistory = true): void {
     if (this.page?.el) this.page.el.hidden = true;
+    if (trackHistory && i !== this.current && this.current >= 0) {
+      this.pageHistory.push(this.current);
+      if (this.pageHistory.length > 50) this.pageHistory.shift();
+    }
     if (this._focused) {
       this._focused = null;
       for (const hst of this.page.hosts.values()) hst.el.classList.remove('is-focus');

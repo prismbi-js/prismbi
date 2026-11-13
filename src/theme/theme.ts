@@ -110,11 +110,48 @@ export const highContrastTheme: Theme = {
   diverging: ['#00e5ff', '#3a3a3a', '#ff5ca8'],
 };
 
+/** Ocean: cool blues, aquas, teals and crisp marine palette. */
+export const oceanTheme: Theme = {
+  ...lightTheme,
+  name: 'ocean',
+  dataColors: ['#0077b6', '#0096c7', '#00b4d8', '#48cae4', '#90e0ef', '#023e8a', '#03045e', '#5bc0be'],
+  accent: '#0077b6',
+  sequential: ['#caf0f8', '#90e0ef', '#48cae4', '#00b4d8', '#0096c7', '#0077b6', '#03045e'],
+  diverging: ['#0077b6', '#e0f2fe', '#f97316'],
+};
+
+/** Sunset: warm corals, purples, fiery oranges and glowing golds. */
+export const sunsetTheme: Theme = {
+  ...lightTheme,
+  name: 'sunset',
+  dataColors: ['#f72585', '#7209b7', '#3a0ca3', '#4361ee', '#4cc9f0', '#f3722c', '#f8961e', '#f9c74f'],
+  accent: '#f72585',
+  sequential: ['#fed7aa', '#fb923c', '#f97316', '#ea580c', '#c2410c', '#9a3412', '#7c2d12'],
+  diverging: ['#7209b7', '#fdf2f8', '#f72585'],
+};
+
+/** Emerald: fresh botanical greens, mints, and rich forest accents. */
+export const emeraldTheme: Theme = {
+  ...lightTheme,
+  name: 'emerald',
+  dataColors: ['#2d6a4f', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#1b4332', '#081c15', '#b7e4c7'],
+  accent: '#2d6a4f',
+  sequential: ['#d8f3dc', '#b7e4c7', '#95d5b2', '#74c69d', '#52b788', '#40916c', '#1b4332'],
+  diverging: ['#2d6a4f', '#ecfdf5', '#e11d48'],
+};
+
 const registry = new Map<string, Theme>([
   ['light', lightTheme],
   ['dark', darkTheme],
   ['high-contrast', highContrastTheme],
+  ['ocean', oceanTheme],
+  ['sunset', sunsetTheme],
+  ['emerald', emeraldTheme],
 ]);
+
+export function registeredThemes(): Theme[] {
+  return [...registry.values()];
+}
 
 export function registerTheme(theme: Theme): void {
   registry.set(theme.name, theme);

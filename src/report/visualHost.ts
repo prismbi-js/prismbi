@@ -865,6 +865,8 @@ export class VisualHost {
       emit: (event, payload) => self.rt.emit(event, { visualId: self.id, keys: payload.keys, identity: payload.identity, event: payload.event }),
       rerender: () => self.rt.schedule(self.id),
       markFocused: (i: number) => void (self.markIndex = Math.max(0, i)),
+      triggerAction: (p) => self.rt.triggerAction?.(p, self.id),
+      canDrillThrough: (dest) => self.rt.canDrillThrough?.(dest) ?? { canDrill: false },
     };
   }
 
