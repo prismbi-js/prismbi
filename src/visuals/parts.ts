@@ -3,7 +3,7 @@ import { textOn, ramp } from '../render/color';
 import type { CellValue } from '../data/types';
 import type { QueryField } from '../data/query';
 import type { DataPointIdentity, RenderContext } from './types';
-import type { DonutFormat, FunnelFormat, PieFormat } from './format';
+import type { DonutFormat, FunnelFormat, PieFormat, TreemapFormat } from './format';
 import { defineVisual } from './registry';
 import { animateIn, emptyState, identityOf, interactive, labelFormatter, markOpacity, renderLegend, withLegend } from './common';
 
@@ -217,7 +217,9 @@ export const treemap = /* @__PURE__ */ defineVisual({
   ],
   supportsHighlight: true,
   render(ctx) {
-    const { slices: data, field, colorField, total } = slices(ctx, 'category', 30);
+    const tmFmt = (ctx.format.treemap ?? {}) as TreemapFormat;
+    const maxTiles = tmFmt.maxTiles ?? 30;
+    const { slices: data, field, colorField, total } = slices(ctx, 'category', maxTiles);
     if (!data.length) return emptyState(ctx);
     const t = ctx.theme;
     if (colorField) {
@@ -255,15 +257,17 @@ export const treemap = /* @__PURE__ */ defineVisual({
     ctx.root.append(svg);
     const rects = squarify(data.map((d) => d.value), { x: 0, y: 0, w: ctx.width, h: ctx.height });
     const fs = t.labelFontSize;
+    const gap = tmFmt.tileGap ?? 1;
+    const cornerRadius = tmFmt.cornerRadius ?? 3;
+    const showValues = tmFmt.showValues !== false;
     data.forEach((d, i) => {
       const r = rects[i];
-      const gap = 1;
       const x = r.x + gap;
       const y = r.y + gap;
       const w = Math.max(0, r.w - gap * 2);
       const hgt = Math.max(0, r.h - gap * 2);
       const op = d.identity ? markOpacity(ctx, d.identity) : 1;
-      const rect = s('rect', { x, y, width: w, height: hgt, rx: 3, fill: d.color, opacity: d.highlight !== null ? 0.35 : op });
+      const rect = s('rect', { x, y, width: w, height: hgt, rx: cornerRadius, fill: d.color, opacity: d.highlight !== null ? 0.35 : op });
       if (d.identity) {
         interactive(
           ctx,
@@ -283,10 +287,12 @@ export const treemap = /* @__PURE__ */ defineVisual({
         );
       }
       svg.append(rect);
-      if (w > 40 && hgt > fs * 2 + 8) {
+      if (w > 40 && hgt > fs * 1.5 + 4) {
         const ink = textOn(d.color, t.foreground);
         svg.append(s('text', { x: x + 6, y: y + fs + 5, class: 'pbi-label', fill: ink, 'font-weight': 600, 'pointer-events': 'none', opacity: op }, fitText(d.label, w - 12, fs, t.fontFamily)));
-        svg.append(s('text', { x: x + 6, y: y + fs * 2 + 9, class: 'pbi-label', fill: ink, 'pointer-events': 'none', opacity: op }, ctx.fmt(field, d.value, { displayUnits: 'auto' })));
+        if (showValues && hgt > fs * 2 + 8) {
+          svg.append(s('text', { x: x + 6, y: y + fs * 2 + 9, class: 'pbi-label', fill: ink, 'pointer-events': 'none', opacity: op }, ctx.fmt(field, d.value, { displayUnits: 'auto' })));
+        }
       }
     });
   },

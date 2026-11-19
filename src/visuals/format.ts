@@ -161,6 +161,28 @@ export interface KpiFormat {
   sparklineColor?: string;
 }
 
+export interface QuadrantsFormat {
+  show?: boolean;
+  x?: number;
+  y?: number;
+  lineColor?: string;
+  lineStyle?: 'dashed' | 'dotted' | 'solid';
+  labels?: [string, string, string, string];
+  labelColor?: string;
+}
+
+export interface TreemapFormat {
+  maxTiles?: number;
+  tileGap?: number;
+  cornerRadius?: number;
+  showValues?: boolean;
+}
+
+export interface SunburstFormat {
+  innerRadius?: number;
+  maxDepth?: number;
+}
+
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
 export interface VisualFormat {
   title: {
@@ -210,6 +232,9 @@ export interface VisualFormat {
     min?: number;
     max?: number;
     gridlines: boolean;
+    gridlineColor?: string;
+    gridlineWidth?: number;
+    gridlineStyle?: 'solid' | 'dashed' | 'dotted';
     tickCount: number;
     /** `log` applies to line and scatter charts (positive values only). */
     scale?: 'linear' | 'log';
@@ -255,6 +280,9 @@ export interface VisualFormat {
   donut?: DonutFormat;
   funnel?: FunnelFormat;
   kpi?: KpiFormat;
+  quadrants?: QuadrantsFormat;
+  treemap?: TreemapFormat;
+  sunburst?: SunburstFormat;
   [section: string]: unknown;
 }
 

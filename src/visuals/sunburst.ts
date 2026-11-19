@@ -4,6 +4,7 @@ import type { CellValue } from '../data/types';
 import { valueKey } from '../data/types';
 import { defineVisual } from './registry';
 import { emptyState, identityOf, interactive, markOpacity } from './common';
+import type { SunburstFormat } from './format';
 
 interface Node {
   path: CellValue[];
@@ -32,9 +33,13 @@ export const sunburst = /* @__PURE__ */ defineVisual({
     { name: 'color', displayName: 'Color saturation', kind: 'measure' },
   ],
   render(ctx) {
-    const gi = ctx.role('category').indices;
+    const sbFmt = (ctx.format.sunburst ?? {}) as SunburstFormat;
+    let gi = ctx.role('category').indices;
+    if (sbFmt.maxDepth && sbFmt.maxDepth > 0 && gi.length > sbFmt.maxDepth) {
+      gi = gi.slice(0, sbFmt.maxDepth);
+    }
+    if (!gi.length || ctx.role('values').indices[0] === undefined || !ctx.data.rows.length) return emptyState(ctx);
     const vi = ctx.role('values').indices[0];
-    if (!gi.length || vi === undefined || !ctx.data.rows.length) return emptyState(ctx);
     const { data, theme: t, model } = ctx;
     const fields = gi.map((i) => data.groups[i]);
     const vField = data.values[vi];
@@ -118,7 +123,8 @@ export const sunburst = /* @__PURE__ */ defineVisual({
     const cx = W / 2;
     const cy = H / 2;
     const outer = Math.max(10, Math.min(W, H) / 2 - 4);
-    const hole = outer * 0.28;
+    const innerRatio = sbFmt.innerRadius ?? 0.28;
+    const hole = outer * innerRatio;
     const ring = (outer - hole) / fields.length;
     const fs = t.labelFontSize;
     const svg = s('svg', { width: W, height: H, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Sunburst' });

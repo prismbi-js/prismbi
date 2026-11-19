@@ -207,9 +207,24 @@ export function labelFormatter(ctx: RenderContext, field: QueryField | undefined
 export function drawValueAxisY(ctx: RenderContext, g: SVGGElement, scale: LinearScale, x0: number, x1: number, fmt: (v: number) => string): void {
   const va = ctx.format.valueAxis;
   const t = ctx.theme;
+  const gridColor = va.gridlineColor ?? t.gridline;
+  const gridWidth = va.gridlineWidth ?? 1;
+  const gridDash = va.gridlineStyle === 'dashed' ? '5 4' : va.gridlineStyle === 'dotted' ? '2 2' : undefined;
   for (const tick of scale.ticks) {
     const y = Math.round(scale(tick)) + 0.5;
-    if (va.gridlines || tick === 0) g.append(s('line', { x1: x0, x2: x1, y1: y, y2: y, stroke: tick === 0 ? t.axis : t.gridline, 'stroke-width': 1, class: tick === 0 ? 'pbi-baseline' : 'pbi-grid' }));
+    if (va.gridlines || tick === 0)
+      g.append(
+        s('line', {
+          x1: x0,
+          x2: x1,
+          y1: y,
+          y2: y,
+          stroke: tick === 0 ? t.axis : gridColor,
+          'stroke-width': tick === 0 ? 1 : gridWidth,
+          'stroke-dasharray': tick === 0 ? undefined : gridDash,
+          class: tick === 0 ? 'pbi-baseline' : 'pbi-grid',
+        }),
+      );
     if (va.show) g.append(s('text', { x: x0 - 6, y: y + 4, 'text-anchor': 'end', class: 'pbi-tick', fill: t.foregroundMuted }, fmt(tick)));
   }
 }
@@ -218,9 +233,23 @@ export function drawValueAxisY(ctx: RenderContext, g: SVGGElement, scale: Linear
 export function drawValueAxisX(ctx: RenderContext, g: SVGGElement, scale: LinearScale, y0: number, y1: number, fmt: (v: number) => string): void {
   const va = ctx.format.valueAxis;
   const t = ctx.theme;
+  const gridColor = va.gridlineColor ?? t.gridline;
+  const gridWidth = va.gridlineWidth ?? 1;
+  const gridDash = va.gridlineStyle === 'dashed' ? '5 4' : va.gridlineStyle === 'dotted' ? '2 2' : undefined;
   for (const tick of scale.ticks) {
     const x = Math.round(scale(tick)) + 0.5;
-    if (va.gridlines || tick === 0) g.append(s('line', { x1: x, x2: x, y1: y0, y2: y1, stroke: tick === 0 ? t.axis : t.gridline, 'stroke-width': 1 }));
+    if (va.gridlines || tick === 0)
+      g.append(
+        s('line', {
+          x1: x,
+          x2: x,
+          y1: y0,
+          y2: y1,
+          stroke: tick === 0 ? t.axis : gridColor,
+          'stroke-width': tick === 0 ? 1 : gridWidth,
+          'stroke-dasharray': tick === 0 ? undefined : gridDash,
+        }),
+      );
     if (va.show) g.append(s('text', { x, y: y1 + 14, 'text-anchor': 'middle', class: 'pbi-tick', fill: t.foregroundMuted }, fmt(tick)));
   }
 }

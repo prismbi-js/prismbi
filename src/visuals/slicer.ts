@@ -21,6 +21,10 @@ export interface SlicerFormat {
   selectAllLabel?: string;
   /** Show a clear filter button when a selection is active (default: true). */
   clearButton?: boolean;
+  /** Slicer header title styling and text. */
+  header?: { show?: boolean; text?: string; fontSize?: number; fontColor?: string };
+  /** Custom placeholder text for search input (default: 'Search'). */
+  searchPlaceholder?: string;
   /** Tiles orientation. */
   orientation?: 'horizontal' | 'vertical';
   placeholder?: string;
@@ -57,7 +61,7 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
   const isSingle = !!(fmt.single || fmt.singleSelect);
   const wrap = h('div', { class: `pbi-slicer-list${compact ? ' is-compact' : ''}`, role: 'listbox', 'aria-multiselectable': String(!isSingle), id });
   if (fmt.search !== false && domain.length > 7) {
-    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: state._search ?? '' }) as HTMLInputElement;
+    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: fmt.searchPlaceholder ?? 'Search', 'aria-label': 'Search values', value: state._search ?? '' }) as HTMLInputElement;
     input.addEventListener('input', () => {
       (ctx.host.state as { _search?: string })._search = input.value;
       const q = input.value.toLowerCase();
@@ -349,7 +353,7 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
 
   if (fmt.search !== false) {
     const searchWrap = h('div', { class: 'pbi-slicer-search-bar', style: 'display:flex;gap:4px;align-items:center;margin-bottom:6px;' });
-    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: st._search ?? '', style: 'flex:1;min-width:0;' }) as HTMLInputElement;
+    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: fmt.searchPlaceholder ?? 'Search', 'aria-label': 'Search values', value: st._search ?? '', style: 'flex:1;min-width:0;' }) as HTMLInputElement;
     input.addEventListener('input', () => ctx.host.setState({ _search: input.value }));
     input.addEventListener('change', () => ctx.host.setState({ _search: input.value }));
     input.addEventListener('keydown', (e) => e.key === 'Enter' && ctx.host.setState({ _search: input.value }));
@@ -435,15 +439,28 @@ export const slicer = /* @__PURE__ */ defineVisual({
     if (!f) return emptyState(ctx, 'Add a field');
     const target = typeof f === 'string' ? f : f.field;
     const fmt = (ctx.format.slicer ?? {}) as SlicerFormat;
+    const hdrCfg = fmt.header;
     if (all.length > 1) {
       const tree = h('div', { class: 'pbi-slicer pbi-slicer-tree' });
       ctx.root.replaceChildren(tree);
+      if (hdrCfg && hdrCfg.show !== false && hdrCfg.text) {
+        const hdrEl = h('div', { class: 'pbi-slicer-header', style: 'font-weight:600;margin-bottom:6px;' }, hdrCfg.text);
+        if (hdrCfg.fontSize) hdrEl.style.fontSize = `${hdrCfg.fontSize}px`;
+        if (hdrCfg.fontColor) hdrEl.style.color = hdrCfg.fontColor;
+        tree.append(hdrEl);
+      }
       return renderHierarchy(ctx, all.map((x) => (typeof x === 'string' ? x : x.field)), fmt, tree);
     }
     const field = ctx.data.groups[0];
     const style: SlicerStyle = fmt.style ?? (field?.type === 'date' ? 'between' : 'list');
     const container = h('div', { class: `pbi-slicer pbi-slicer-${style}` });
     ctx.root.replaceChildren(container);
+    if (hdrCfg && hdrCfg.show !== false && hdrCfg.text) {
+      const hdrEl = h('div', { class: 'pbi-slicer-header', style: 'font-weight:600;margin-bottom:6px;' }, hdrCfg.text);
+      if (hdrCfg.fontSize) hdrEl.style.fontSize = `${hdrCfg.fontSize}px`;
+      if (hdrCfg.fontColor) hdrEl.style.color = hdrCfg.fontColor;
+      container.append(hdrEl);
+    }
     const hasFilter = (ctx.host.currentFilter?.length ?? 0) > 0;
     if (hasFilter && fmt.clearButton !== false) {
       const clearBtn = h('button', {

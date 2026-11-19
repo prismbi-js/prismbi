@@ -292,6 +292,35 @@ export const scatter = /* @__PURE__ */ defineVisual({
     g.append(s('text', { x: (left + width) / 2, y: height - 4, 'text-anchor': 'middle', class: 'pbi-axis-title', fill: t.foregroundSecondary }, xField.name));
 
     drawReferenceLines(ctx, g, y, 'y', [left, width - 8], ys, yField);
+    const qFmt = ctx.format.quadrants;
+    if (qFmt && qFmt.show !== false) {
+      const qColor = qFmt.lineColor ?? t.axis;
+      const qDash = qFmt.lineStyle === 'solid' ? undefined : qFmt.lineStyle === 'dotted' ? '2 2' : '4 4';
+      const qAttrs = { stroke: qColor, 'stroke-width': 1.5, 'stroke-dasharray': qDash, class: 'pbi-quadrant-line', 'pointer-events': 'none' };
+
+      const [xMin, xMax] = x.domain;
+      const [yMinD, yMaxD] = y.domain;
+      const splitX = qFmt.x ?? (xMin + xMax) / 2;
+      const splitY = qFmt.y ?? (yMinD + yMaxD) / 2;
+
+      const px = Math.round(x(splitX)) + 0.5;
+      const py = Math.round(y(splitY)) + 0.5;
+
+      // Vertical quadrant line
+      g.append(s('line', { x1: px, x2: px, y1: 0, y2: bottom, ...qAttrs }));
+      // Horizontal quadrant line
+      g.append(s('line', { x1: left, x2: width - 8, y1: py, y2: py, ...qAttrs }));
+
+      if (qFmt.labels) {
+        const [tl, tr, bl, br] = qFmt.labels;
+        const qInk = qFmt.labelColor ?? t.foregroundSecondary;
+        const labelAttrs = { class: 'pbi-label pbi-quadrant-label', fill: qInk, 'font-size': Math.max(10, fs - 1), 'pointer-events': 'none', opacity: 0.85 };
+        if (tl) g.append(s('text', { x: left + 8, y: 16, ...labelAttrs }, tl));
+        if (tr) g.append(s('text', { x: width - 12, y: 16, 'text-anchor': 'end', ...labelAttrs }, tr));
+        if (bl) g.append(s('text', { x: left + 8, y: bottom - 8, ...labelAttrs }, bl));
+        if (br) g.append(s('text', { x: width - 12, y: bottom - 8, 'text-anchor': 'end', ...labelAttrs }, br));
+      }
+    }
     const fit = ctx.format.analytics.trendLine ? linearFit(xs.map((v, i) => [v, ys[i]] as [number, number])) : null;
     if (fit) {
       const [x0, x1] = x.domain;
