@@ -100,6 +100,30 @@ export interface GaugeThreshold {
 export interface GaugeFormat {
   thresholds?: GaugeThreshold[];
   needle?: boolean;
+  targetLabel?: string;
+  needleColor?: string;
+  needleCapColor?: string;
+  showTarget?: boolean;
+}
+
+export interface CardFormat {
+  labelPosition?: 'top' | 'bottom';
+  showLabel?: boolean;
+  align?: 'left' | 'center';
+  valueFontSize?: number;
+  upIsGood?: boolean;
+  deltaLabel?: string;
+  prefix?: string;
+  suffix?: string;
+  color?: string;
+  rules?: { min?: number; max?: number; color: string }[];
+  orientation?: 'vertical' | 'horizontal';
+}
+
+export interface MultiRowCardFormat {
+  columns?: number;
+  showAccentBar?: boolean;
+  accentColor?: string;
 }
 
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
@@ -190,6 +214,8 @@ export interface VisualFormat {
   network?: NetworkFormat;
   smallMultiples?: SmallMultiplesFormat;
   gauge?: GaugeFormat;
+  card?: CardFormat;
+  multiRowCard?: MultiRowCardFormat;
   [section: string]: unknown;
 }
 

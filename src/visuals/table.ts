@@ -79,8 +79,34 @@ export interface TableSortCriterion {
   dir: 'asc' | 'desc';
 }
 
+export interface TableTotalsOptions {
+  show?: boolean;
+  /** Label for the totals row (default: 'Total'). */
+  label?: string;
+  /** Position of the totals row (default: 'bottom'). */
+  position?: 'top' | 'bottom';
+  /** Text color for the totals row. */
+  fontColor?: string;
+  /** Background color for the totals row. */
+  background?: string;
+  /** Bold font weight for the totals row (default: true). */
+  bold?: boolean;
+}
+
+export interface MatrixSubtotalsOptions {
+  show?: boolean;
+  /** Label prefix or text for subtotals (default: 'Total'). */
+  label?: string;
+  /** Text color for subtotals. */
+  fontColor?: string;
+  /** Background color for subtotals. */
+  background?: string;
+  /** Bold font weight for subtotals (default: true). */
+  bold?: boolean;
+}
+
 export interface TableFormat {
-  totals?: boolean;
+  totals?: boolean | TableTotalsOptions;
   rowBanding?: boolean;
   wrap?: boolean;
   density?: 'compact' | 'normal' | 'comfortable';
@@ -654,7 +680,7 @@ export const table = /* @__PURE__ */ defineVisual({
       ...base,
       groupBy: fields.filter(isGroupField).map((f) => (typeof f === 'string' ? f : f.field!)),
       values: fields.filter((f) => !isGroupField(f)),
-      totals: tf.totals ?? true,
+      totals: typeof tf.totals === 'object' ? tf.totals.show !== false : (tf.totals ?? true),
     };
   },
   render(ctx) {
@@ -871,12 +897,27 @@ export const table = /* @__PURE__ */ defineVisual({
     if (!virtual) renderRows(0, shown);
     tableEl.append(tbody);
 
-    if (data.totals && tf.totals !== false) {
-      const tfoot = h('tfoot');
-      const tr = h('tr');
-      cols.forEach((c, ci) => tr.append(h('td', { class: c.kind === 'value' ? 'is-num' : '' }, c.kind === 'value' ? ctx.fmt(c.field, data.totals![c.i]) : ci === 0 ? 'Total' : '')));
-      tfoot.append(tr);
-      tableEl.append(tfoot);
+    const totalsCfg = typeof tf.totals === 'object' ? tf.totals : null;
+    const showTotals = tf.totals !== false && (totalsCfg ? totalsCfg.show !== false : true);
+    if (data.totals && showTotals) {
+      const isTop = totalsCfg?.position === 'top';
+      const tr = h('tr', { class: `pbi-total-row${isTop ? ' pbi-total-row-top' : ''}` });
+      if (totalsCfg?.background) tr.style.backgroundColor = totalsCfg.background;
+      if (totalsCfg?.fontColor) tr.style.color = totalsCfg.fontColor;
+      if (totalsCfg?.bold !== false) tr.style.fontWeight = 'bold';
+      const totalLabel = totalsCfg?.label ?? 'Total';
+      cols.forEach((c, ci) => {
+        const td = h('td', { class: c.kind === 'value' ? 'is-num' : '' }, c.kind === 'value' ? ctx.fmt(c.field, data.totals![c.i]) : ci === 0 ? totalLabel : '');
+        if (totalsCfg?.fontColor) td.style.color = totalsCfg.fontColor;
+        if (totalsCfg?.background) td.style.backgroundColor = totalsCfg.background;
+        tr.append(td);
+      });
+      if (isTop) {
+        thead.append(tr);
+      } else {
+        const tfoot = h('tfoot', {}, tr);
+        tableEl.append(tfoot);
+      }
     }
     const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);
     let container: HTMLElement = scroller;
@@ -934,7 +975,8 @@ export const table = /* @__PURE__ */ defineVisual({
 // ----------------------------------------------------------------- matrix
 
 export interface MatrixFormat {
-  subtotals?: boolean;
+  subtotals?: boolean | MatrixSubtotalsOptions;
+  grandTotals?: boolean | TableTotalsOptions;
   columnTotals?: boolean;
   expandAll?: boolean;
   stepped?: boolean;
@@ -1168,7 +1210,12 @@ export const matrix = /* @__PURE__ */ defineVisual({
             th.append(h('span', {}, label));
             tr.append(th);
           } else {
-            tr.append(h('td', { class: 'pbi-subtotal-cell' }, 'Total'));
+            const subCfg = typeof mf.subtotals === 'object' ? mf.subtotals : null;
+            const subCell = h('td', { class: 'pbi-subtotal-cell' }, subCfg?.label ?? 'Total');
+            if (subCfg?.fontColor) subCell.style.color = subCfg.fontColor;
+            if (subCfg?.background) subCell.style.backgroundColor = subCfg.background;
+            if (subCfg?.bold !== false) subCell.style.fontWeight = 'bold';
+            tr.append(subCell);
           }
         }
       }
@@ -1190,12 +1237,27 @@ export const matrix = /* @__PURE__ */ defineVisual({
     const virtual = mf.virtualize ?? displayRows.length > VIRTUAL_MIN;
     if (!virtual) for (let i = 0; i < displayRows.length; i++) tbody.append(rowEl(i));
     tableEl.append(tbody);
-    const tfoot = h('tfoot');
-    const tr = h('tr');
-    tr.append(h('th', { scope: 'row', colspan: isStepped ? 1 : rowFields.length }, 'Total'));
-    cells(tr, 0, []);
-    tfoot.append(tr);
-    tableEl.append(tfoot);
+
+    const grandCfg = typeof mf.grandTotals === 'object' ? mf.grandTotals : null;
+    const showGrand = mf.grandTotals !== false && (grandCfg ? grandCfg.show !== false : true);
+    if (showGrand) {
+      const isTop = grandCfg?.position === 'top';
+      const tr = h('tr', { class: `pbi-matrix-grand-total${isTop ? ' pbi-total-row-top' : ''}` });
+      if (grandCfg?.background) tr.style.backgroundColor = grandCfg.background;
+      if (grandCfg?.fontColor) tr.style.color = grandCfg.fontColor;
+      if (grandCfg?.bold !== false) tr.style.fontWeight = 'bold';
+      const grandLabel = grandCfg?.label ?? 'Total';
+      const grandTh = h('th', { scope: 'row', colspan: isStepped ? 1 : rowFields.length }, grandLabel);
+      if (grandCfg?.fontColor) grandTh.style.color = grandCfg.fontColor;
+      if (grandCfg?.background) grandTh.style.backgroundColor = grandCfg.background;
+      tr.append(grandTh);
+      cells(tr, 0, []);
+      if (isTop) thead.append(tr);
+      else {
+        const tfoot = h('tfoot', {}, tr);
+        tableEl.append(tfoot);
+      }
+    }
     // expanding or collapsing re-renders: keep the reader where they were
     const prevTop = (ctx.root.querySelector('.pbi-table-scroll') as HTMLElement | null)?.scrollTop ?? 0;
     const scroller = h('div', { class: 'pbi-table-scroll' }, tableEl);

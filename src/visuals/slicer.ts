@@ -17,6 +17,8 @@ export interface SlicerFormat {
   singleSelect?: boolean;
   search?: boolean;
   selectAll?: boolean;
+  /** Custom label for the 'Select all' option (default: 'Select all'). */
+  selectAllLabel?: string;
   /** Show a clear filter button when a selection is active (default: true). */
   clearButton?: boolean;
   /** Tiles orientation. */
@@ -65,7 +67,8 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
   }
   if (fmt.selectAll !== false && !isSingle) {
     const all = selected === null;
-    const row = h('label', { class: 'pbi-slicer-item pbi-select-all' }, h('input', { type: 'checkbox', checked: all, 'aria-label': 'Select all' }), h('span', {}, 'Select all'));
+    const selectAllText = fmt.selectAllLabel ?? 'Select all';
+    const row = h('label', { class: 'pbi-slicer-item pbi-select-all' }, h('input', { type: 'checkbox', checked: all, 'aria-label': selectAllText }), h('span', {}, selectAllText));
     row.querySelector('input')!.addEventListener('change', () => emitSelection(ctx, target, null));
     wrap.append(row);
   }
@@ -77,7 +80,10 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
     if (state._search && !text.toLowerCase().includes(state._search.toLowerCase())) row.hidden = true;
     input.addEventListener('change', (e) => {
       const multi = !isSingle;
-      if (!multi) return emitSelection(ctx, target, checked ? null : [v]);
+      if (!multi) {
+        if (compact) ctx.host.setState({ _open: false });
+        return emitSelection(ctx, target, checked ? null : [v]);
+      }
       const next = new Set(selected?.map(valueKey) ?? []);
       const vals = new Map((selected ?? []).map((x) => [valueKey(x), x]));
       if (checked) {

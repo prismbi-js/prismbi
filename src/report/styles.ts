@@ -102,8 +102,11 @@ export const CSS = /* css */ `
 .pbi-tooltip-row span:first-child{display:flex;align-items:center;gap:6px;color:var(--pbi-fg-2)}
 .pbi-tooltip-row b{font-weight:600;font-variant-numeric:tabular-nums}
 .pbi-card{display:flex;flex-direction:column;justify-content:center;height:100%;gap:2px;min-width:0}
+.pbi-card.is-horizontal{flex-direction:row;align-items:baseline;gap:8px}
 .pbi-card-center{align-items:center;text-align:center}
 .pbi-card-value{font-weight:600;letter-spacing:-.01em;line-height:1.1;color:var(--pbi-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbi-card-prefix{font-size:.75em;margin-right:2px;opacity:.9}
+.pbi-card-suffix{font-size:.7em;margin-left:3px;opacity:.85}
 .pbi-card-label{font-size:12px;color:var(--pbi-fg-2)}
 .pbi-card-delta{font-size:12px;color:var(--pbi-fg-2)}
 .pbi-card-delta b,.is-good,.is-bad,.is-flat{font-weight:600}
@@ -116,6 +119,7 @@ export const CSS = /* css */ `
 .pbi-mrc-title{font-weight:600;margin-bottom:4px}
 .pbi-mrc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px}
 .pbi-mrc-value{font-weight:600;font-size:16px}
+.pbi-total-row-top td,.pbi-total-row-top th{border-bottom:2px solid var(--pbi-axis)!important;font-weight:bold}
 .pbi-table-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
 .pbi-table-wrap .pbi-table-scroll{flex:1;min-height:0}
 .pbi-table-scroll{overflow:auto;height:100%}

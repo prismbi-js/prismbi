@@ -17,7 +17,7 @@ export type { GoalFormat, GoalStatus, ScorecardFormat } from './visuals/scorecar
 export { scatter } from './visuals/scatter';
 export { card, gauge, kpi, multiRowCard } from './visuals/cards';
 export { matrix, table } from './visuals/table';
-export type { ConditionalFormat, ConditionalRule, DataBarOptions, LinkOptions, ImageOptions, SparklineOptions, TableFormat, MatrixFormat } from './visuals/table';
+export type { ConditionalFormat, ConditionalRule, DataBarOptions, LinkOptions, ImageOptions, MatrixFormat, MatrixSubtotalsOptions, SparklineOptions, TableFormat, TableTotalsOptions } from './visuals/table';
 export { slicer } from './visuals/slicer';
 export { textBox } from './visuals/text';
 export { waterfall } from './visuals/waterfall';
@@ -38,6 +38,6 @@ export type { NetworkFormat } from './visuals/network';
 export { detectAnomalies } from './visuals/anomaly';
 export type { AnomalyOptions, AnomalyPoint } from './visuals/anomaly';
 export { resolveDataLabelColor } from './visuals/common';
-export type { DataLabelRule, SecondaryValueAxisFormat, SyncSlicerConfig } from './visuals/format';
+export type { CardFormat, DataLabelRule, GaugeFormat, MultiRowCardFormat, SecondaryValueAxisFormat, SyncSlicerConfig } from './visuals/format';
 export { renderSmallMultiples } from './visuals/multiples';
 export type { SmallMultiplesFormat } from './visuals/multiples';
