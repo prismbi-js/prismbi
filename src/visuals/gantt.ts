@@ -4,11 +4,8 @@ import { mix } from '../render/color';
 import type { CellValue } from '../data/types';
 import { defineVisual } from './registry';
 import { emptyState, identityOf, interactive, markOpacity } from './common';
-
-export interface GanttFormat {
-  barHeight?: number;
-  showProgress?: boolean;
-}
+import type { GanttFormat } from './format';
+export type { GanttFormat } from './format';
 
 const MS_DAY = 86_400_000;
 
@@ -45,6 +42,9 @@ export const gantt = /* @__PURE__ */ defineVisual({
     if (ti === undefined || si === undefined || !ctx.data.rows.length) return emptyState(ctx);
 
     const t = ctx.theme;
+    const gf = (ctx.format.gantt ?? {}) as GanttFormat;
+    const showProgress = gf.showProgress !== false;
+    const cornerRadius = gf.cornerRadius ?? 3;
     const taskField = ctx.data.groups[ti];
     const W = ctx.width;
     const H = ctx.height;
@@ -111,7 +111,9 @@ export const gantt = /* @__PURE__ */ defineVisual({
     // Task rows
     items.forEach((item, i) => {
       const y = yBand(i);
-      const h = Math.max(8, yBand.bandwidth);
+      const bandH = Math.max(8, yBand.bandwidth);
+      const h = gf.barHeight ? Math.min(bandH, gf.barHeight) : bandH;
+      const barY = y + (bandH - h) / 2;
       const x1 = Math.max(left, xTime(item.start.getTime()));
       const x2 = Math.min(left + chartW, xTime(item.end.getTime()));
       const barW = Math.max(4, x2 - x1);
@@ -119,35 +121,36 @@ export const gantt = /* @__PURE__ */ defineVisual({
       // Task label
       const labelText = fitText(item.name, left - 12, fs, t.fontFamily);
       svg.append(
-        s('text', { x: left - 8, y: y + h / 2 + 4, 'text-anchor': 'end', fill: t.foreground, 'font-size': fs, 'font-family': t.fontFamily }, labelText),
+        s('text', { x: left - 8, y: y + bandH / 2 + 4, 'text-anchor': 'end', fill: t.foreground, 'font-size': fs, 'font-family': t.fontFamily }, labelText),
       );
 
-      const color = ctx.seriesColor('Task', 0);
-      const progColor = mix(color, '#000000', 0.25);
+      const color = gf.barColor ?? ctx.seriesColor('Task', 0);
+      const progColor = gf.progressColor ?? mix(color, '#000000', 0.25);
+      const milestoneColor = gf.milestoneColor ?? color;
 
       const g = s('g', { class: 'pbi-mark', opacity: item.opacity });
 
       // Is it a milestone (start == end or width <= 6)?
       if (item.start.getTime() === item.end.getTime() || Math.abs(x2 - x1) < 6) {
         const mx = x1;
-        const my = y + h / 2;
+        const my = barY + h / 2;
         const size = h * 0.7;
         const diamond = `M ${mx} ${my - size} L ${mx + size} ${my} L ${mx} ${my + size} L ${mx - size} ${my} Z`;
-        g.append(s('path', { d: diamond, fill: color, stroke: t.background, 'stroke-width': 1.5 }));
+        g.append(s('path', { d: diamond, fill: milestoneColor, stroke: t.background, 'stroke-width': 1.5 }));
       } else {
         // Base task bar
-        g.append(s('rect', { x: x1, y, width: barW, height: h, rx: 3, fill: color, opacity: 0.8 }));
+        g.append(s('rect', { x: x1, y: barY, width: barW, height: h, rx: cornerRadius, fill: color, opacity: 0.8 }));
 
         // Progress bar fill
-        if (item.progress > 0) {
+        if (showProgress && item.progress > 0) {
           const pw = Math.max(2, barW * item.progress);
-          g.append(s('rect', { x: x1, y, width: pw, height: h, rx: 3, fill: progColor }));
+          g.append(s('rect', { x: x1, y: barY, width: pw, height: h, rx: cornerRadius, fill: progColor }));
         }
 
         // Percentage text inside or beside bar
-        if (barW > 36) {
+        if (showProgress && barW > 36) {
           g.append(
-            s('text', { x: x1 + 6, y: y + h / 2 + 3.5, fill: '#ffffff', 'font-size': fs - 2, 'font-family': t.fontFamily, 'font-weight': 600 }, `${Math.round(item.progress * 100)}%`),
+            s('text', { x: x1 + 6, y: barY + h / 2 + 3.5, fill: '#ffffff', 'font-size': fs - 2, 'font-family': t.fontFamily, 'font-weight': 600 }, `${Math.round(item.progress * 100)}%`),
           );
         }
       }

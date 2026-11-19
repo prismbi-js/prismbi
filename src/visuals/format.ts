@@ -239,6 +239,65 @@ export interface CandlestickFormat {
   volumeColor?: string;
 }
 
+export interface GanttFormat {
+  /** Whether to render progress fill and percentage text (default: true). */
+  showProgress?: boolean;
+  /** Task bar height cap in pixels. */
+  barHeight?: number;
+  /** Base task bar color override. */
+  barColor?: string;
+  /** Task progress fill color override. */
+  progressColor?: string;
+  /** Milestone diamond marker color override. */
+  milestoneColor?: string;
+  /** Task bar corner radius (default: 3). */
+  cornerRadius?: number;
+}
+
+export interface BoxPlotFormat {
+  /** Show mean center point indicator circle (default: true). */
+  showMean?: boolean;
+  /** Show statistical outlier dots beyond 1.5× IQR whiskers (default: true). */
+  showOutliers?: boolean;
+  /** Fill opacity of the quartile box (default: 0.25). */
+  boxOpacity?: number;
+  /** Stroke width of whisker lines and caps (default: 1.5). */
+  whiskerWidth?: number;
+}
+
+export interface ChordFormat {
+  /** Angular gap between outer arc segments in radians (default: 0.04). */
+  padAngle?: number;
+  /** Inner radius ratio or outer arc band thickness in pixels (default: 14). */
+  arcWidth?: number;
+  /** Flow ribbon fill opacity between 0 and 1 (default: 0.45). */
+  ribbonOpacity?: number;
+  /** Whether to render outer perimeter category text labels (default: true). */
+  showLabels?: boolean;
+}
+
+export interface SankeyFormat {
+  /** Width of node rectangles in pixels (default: 12). */
+  nodeWidth?: number;
+  /** Vertical padding between nodes in pixels (default: 8). */
+  nodePadding?: number;
+  /** Flow link curve fill opacity between 0 and 1 (default: 0.35). */
+  linkOpacity?: number;
+  /** Whether to render node text labels (default: true). */
+  showLabels?: boolean;
+}
+
+export interface HistogramFormat {
+  /** Explicit number of bins (default: Sturges' formula). */
+  bins?: number;
+  /** Fixed bin numeric width interval (overrides bins). */
+  binWidth?: number;
+  /** Bar column fill color override. */
+  barColor?: string;
+  /** Bar corner rounding radius in pixels (default: 0). */
+  cornerRadius?: number;
+}
+
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
 export interface VisualFormat {
   title: {
@@ -343,6 +402,11 @@ export interface VisualFormat {
   waterfall?: WaterfallFormat;
   bullet?: BulletFormat;
   candlestick?: CandlestickFormat;
+  gantt?: GanttFormat;
+  boxPlot?: BoxPlotFormat;
+  chord?: ChordFormat;
+  sankey?: SankeyFormat;
+  histogram?: HistogramFormat;
   [section: string]: unknown;
 }
 

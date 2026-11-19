@@ -38,6 +38,6 @@ export type { NetworkFormat } from './visuals/network';
 export { detectAnomalies } from './visuals/anomaly';
 export type { AnomalyOptions, AnomalyPoint } from './visuals/anomaly';
 export { resolveDataLabelColor } from './visuals/common';
-export type { BulletFormat, CardFormat, DataLabelRule, DonutFormat, FunnelFormat, GaugeFormat, KpiFormat, MultiRowCardFormat, PieFormat, PieLabelContents, QuadrantsFormat, RadarFormat, SecondaryValueAxisFormat, SunburstFormat, SyncSlicerConfig, TreemapFormat, WaterfallFormat } from './visuals/format';
+export type { BoxPlotFormat, BulletFormat, CardFormat, DataLabelRule, DonutFormat, FunnelFormat, GaugeFormat, HistogramFormat, KpiFormat, MultiRowCardFormat, PieFormat, PieLabelContents, QuadrantsFormat, RadarFormat, SankeyFormat, SecondaryValueAxisFormat, SunburstFormat, SyncSlicerConfig, TreemapFormat, WaterfallFormat } from './visuals/format';
 export { renderSmallMultiples } from './visuals/multiples';
 export type { SmallMultiplesFormat } from './visuals/multiples';

@@ -6,6 +6,8 @@ import type { FieldSpec } from '../data/query';
 import { defineVisual } from './registry';
 import { categoryLabelLayout, drawCategoryLabels, drawValueAxisY, emptyState, identityOf, interactive, markOpacity, valueAxisFormatter } from './common';
 import type { QueryBuildContext } from './types';
+import type { BoxPlotFormat, HistogramFormat } from './format';
+export type { BoxPlotFormat, HistogramFormat } from './format';
 
 const ref = (f: FieldSpec | undefined) => (f === undefined ? '' : typeof f === 'string' ? f : (f.field ?? ''));
 
@@ -37,13 +39,6 @@ export function wQuantile(pairs: [number, number][], q: number): number {
 }
 
 // ------------------------------------------------------------------- histogram
-
-interface HistogramFormat {
-  /** Number of bins (default: Sturges' rule). */
-  bins?: number;
-  /** Fixed bin width (overrides `bins`). */
-  binWidth?: number;
-}
 
 /** Histogram of a numeric column. Optional `weight` measure sums a measure per bin instead of counting rows. */
 export const histogram = /* @__PURE__ */ defineVisual({
@@ -94,13 +89,15 @@ export const histogram = /* @__PURE__ */ defineVisual({
     svg.append(g);
     drawValueAxisY(ctx, g, y, left, W - 8, valueAxisFormatter(ctx, vField, y));
     for (const tk of x.ticks) g.append(s('text', { x: x(tk), y: bottom + fs + 6, 'text-anchor': 'middle', class: 'pbi-tick', fill: t.foregroundSecondary }, ctx.fmt(field, tk, { displayUnits: 'auto' })));
-    const color = f.colors.default ?? t.dataColors[0];
+    const color = hf.barColor ?? (f.colors.default ?? t.dataColors[0]);
     const gap = f.bars.gap;
     sums.forEach((v, i) => {
       if (!v) return;
       const x0 = x(start + i * width0) + gap / 2;
       const x1 = x(start + (i + 1) * width0) - gap / 2;
-      const rect = s('rect', { x: x0, y: y(v), width: Math.max(1, x1 - x0), height: Math.max(0, bottom - y(v)), fill: color, class: 'pbi-mark' });
+      const rectAttrs: Record<string, any> = { x: x0, y: y(v), width: Math.max(1, x1 - x0), height: Math.max(0, bottom - y(v)), fill: color, class: 'pbi-mark' };
+      if (hf.cornerRadius) rectAttrs.rx = hf.cornerRadius;
+      const rect = s('rect', rectAttrs);
       const lo = start + i * width0;
       const hi = lo + width0;
       rect.addEventListener('mousemove', (e) => ctx.host.showTooltip(e, [{ label: vField.name, value: ctx.fmt(vField, v) }], `${ctx.fmt(field, lo)} – ${ctx.fmt(field, hi)}`));
@@ -176,6 +173,11 @@ export const boxPlot = /* @__PURE__ */ defineVisual({
     svg.append(g);
     drawValueAxisY(ctx, g, y, left, W - 8, valueAxisFormatter(ctx, field, y));
     drawCategoryLabels(ctx, g, labels, (i) => band(i) + band.bandwidth / 2, bottom, layout);
+    const bpf = (ctx.format.boxPlot ?? {}) as BoxPlotFormat;
+    const showMean = bpf.showMean !== false;
+    const showOutliers = bpf.showOutliers !== false;
+    const boxOpacity = bpf.boxOpacity ?? 0.25;
+    const whiskerWidth = bpf.whiskerWidth ?? 1.5;
     stats.forEach((st, i) => {
       const color = catField ? ctx.colorFor(catField, st.key) : ctx.format.colors.default ?? t.dataColors[0];
       const bw = Math.min(band.bandwidth, 48);
@@ -184,15 +186,17 @@ export const boxPlot = /* @__PURE__ */ defineVisual({
       const identity = catField ? identityOf([catField], [st.key]) : null;
       const op = identity ? markOpacity(ctx, identity) : 1;
       const grp = s('g', { opacity: op });
-      grp.append(s('line', { x1: cx, x2: cx, y1: y(st.hi), y2: y(st.q3), stroke: t.foregroundSecondary, 'stroke-width': 1.5 }));
-      grp.append(s('line', { x1: cx, x2: cx, y1: y(st.q1), y2: y(st.lo), stroke: t.foregroundSecondary, 'stroke-width': 1.5 }));
-      grp.append(s('line', { x1: cx - bw / 4, x2: cx + bw / 4, y1: y(st.hi), y2: y(st.hi), stroke: t.foregroundSecondary, 'stroke-width': 1.5 }));
-      grp.append(s('line', { x1: cx - bw / 4, x2: cx + bw / 4, y1: y(st.lo), y2: y(st.lo), stroke: t.foregroundSecondary, 'stroke-width': 1.5 }));
-      const box = s('rect', { x, y: y(st.q3), width: bw, height: Math.max(1, y(st.q1) - y(st.q3)), rx: 4, fill: color, 'fill-opacity': 0.25, stroke: color, 'stroke-width': 1.5 });
+      grp.append(s('line', { x1: cx, x2: cx, y1: y(st.hi), y2: y(st.q3), stroke: t.foregroundSecondary, 'stroke-width': whiskerWidth }));
+      grp.append(s('line', { x1: cx, x2: cx, y1: y(st.q1), y2: y(st.lo), stroke: t.foregroundSecondary, 'stroke-width': whiskerWidth }));
+      grp.append(s('line', { x1: cx - bw / 4, x2: cx + bw / 4, y1: y(st.hi), y2: y(st.hi), stroke: t.foregroundSecondary, 'stroke-width': whiskerWidth }));
+      grp.append(s('line', { x1: cx - bw / 4, x2: cx + bw / 4, y1: y(st.lo), y2: y(st.lo), stroke: t.foregroundSecondary, 'stroke-width': whiskerWidth }));
+      const box = s('rect', { x, y: y(st.q3), width: bw, height: Math.max(1, y(st.q1) - y(st.q3)), rx: 4, fill: color, 'fill-opacity': boxOpacity, stroke: color, 'stroke-width': 1.5 });
       grp.append(box);
       grp.append(s('line', { x1: x, x2: x + bw, y1: y(st.med), y2: y(st.med), stroke: color, 'stroke-width': 2.5 }));
-      grp.append(s('circle', { cx, cy: y(st.mean), r: 3, fill: t.surface, stroke: color, 'stroke-width': 1.5 }));
-      for (const o of st.outliers) grp.append(s('circle', { cx, cy: y(o), r: 4, fill: color, stroke: t.surface, 'stroke-width': 2 }));
+      if (showMean) grp.append(s('circle', { cx, cy: y(st.mean), r: 3, fill: t.surface, stroke: color, 'stroke-width': 1.5 }));
+      if (showOutliers) {
+        for (const o of st.outliers) grp.append(s('circle', { cx, cy: y(o), r: 4, fill: color, stroke: t.surface, 'stroke-width': 2 }));
+      }
       const tip = () => ({
         title: labels[i],
         items: [

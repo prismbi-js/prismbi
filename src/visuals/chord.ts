@@ -2,11 +2,8 @@ import { s, measureText } from '../render/svg';
 import type { CellValue } from '../data/types';
 import { defineVisual } from './registry';
 import { emptyState, identityOf, interactive, markOpacity } from './common';
-
-export interface ChordFormat {
-  padAngle?: number;
-  innerRadiusRatio?: number;
-}
+import type { ChordFormat } from './format';
+export type { ChordFormat } from './format';
 
 interface FlowLink {
   source: string;
@@ -67,6 +64,11 @@ export const chord = /* @__PURE__ */ defineVisual({
     if (!links.length) return emptyState(ctx);
 
     const t = ctx.theme;
+    const cf = (ctx.format.chord ?? {}) as ChordFormat;
+    const padAngle = cf.padAngle ?? 0.04;
+    const arcWidth = cf.arcWidth ?? 14;
+    const ribbonOpacity = cf.ribbonOpacity ?? 0.55;
+    const showLabels = cf.showLabels !== false;
     const W = ctx.width;
     const H = ctx.height;
     const cx = W / 2;
@@ -74,7 +76,7 @@ export const chord = /* @__PURE__ */ defineVisual({
     const margin = 28;
     const maxR = Math.max(20, Math.min(W, H) / 2 - margin);
     const rOut = maxR;
-    const rIn = Math.max(10, rOut - 14);
+    const rIn = Math.max(10, rOut - arcWidth);
 
     // Collect distinct nodes and compute flow totals
     const nodeMap = new Map<string, { value: CellValue; total: number; colorIndex: number }>();
@@ -86,7 +88,6 @@ export const chord = /* @__PURE__ */ defineVisual({
     }
 
     const nodes: ChordNode[] = [];
-    const padAngle = 0.04;
     const numNodes = nodeMap.size;
     const totalWeight = [...nodeMap.values()].reduce((acc, n) => acc + n.total, 0);
 
@@ -168,7 +169,7 @@ export const chord = /* @__PURE__ */ defineVisual({
       const ribbonPath = s('path', {
         d,
         fill: color,
-        'fill-opacity': 0.55,
+        'fill-opacity': ribbonOpacity,
         stroke: 'none',
         class: 'pbi-chord-ribbon',
       });
@@ -222,27 +223,29 @@ export const chord = /* @__PURE__ */ defineVisual({
         [n.value],
       );
 
-      // Node label on perimeter
-      const midAngle = (a1 + a2) / 2;
-      const labelR = rOut + 10;
-      const lx = cx + labelR * Math.cos(midAngle);
-      const ly = cy + labelR * Math.sin(midAngle);
-      const isRight = Math.cos(midAngle) >= 0;
+      if (showLabels) {
+        // Node label on perimeter
+        const midAngle = (a1 + a2) / 2;
+        const labelR = rOut + 10;
+        const lx = cx + labelR * Math.cos(midAngle);
+        const ly = cy + labelR * Math.sin(midAngle);
+        const isRight = Math.cos(midAngle) >= 0;
 
-      nodeG.append(
-        s(
-          'text',
-          {
-            x: lx,
-            y: ly + 3,
-            'text-anchor': isRight ? 'start' : 'end',
-            fill: t.axis,
-            'font-size': fs,
-            'font-family': t.fontFamily,
-          },
-          measureText(n.label, fs, t.fontFamily) > 60 ? n.label.slice(0, 8) + '…' : n.label,
-        ),
-      );
+        nodeG.append(
+          s(
+            'text',
+            {
+              x: lx,
+              y: ly + 3,
+              'text-anchor': isRight ? 'start' : 'end',
+              fill: t.axis,
+              'font-size': fs,
+              'font-family': t.fontFamily,
+            },
+            measureText(n.label, fs, t.fontFamily) > 60 ? n.label.slice(0, 8) + '…' : n.label,
+          ),
+        );
+      }
 
       nodesGroup.append(nodeG);
     }

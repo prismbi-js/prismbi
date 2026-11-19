@@ -6,7 +6,8 @@ import { valueKey } from '../data/types';
 import { defineVisual } from './registry';
 import { renderSmallMultiples } from './multiples';
 import { drawCategoryLabels, categoryLabelLayout, drawValueAxisY, emptyState, identityOf, interactive, markOpacity, mergeIdentity, pivot, renderLegend, tooltipItems, valueAxisFormatter, withLegend } from './common';
-import type { BulletFormat, RadarFormat } from './format';
+import type { BulletFormat, RadarFormat, SankeyFormat } from './format';
+export type { SankeyFormat } from './format';
 
 // ------------------------------------------------------------------- bullet
 
@@ -232,8 +233,11 @@ export const sankey = /* @__PURE__ */ defineVisual({
     const W = ctx.width;
     const H = ctx.height;
     const fs = t.labelFontSize;
-    const nodeW = 12;
-    const pad = 8;
+    const skFmt = (ctx.format.sankey ?? {}) as SankeyFormat;
+    const nodeW = skFmt.nodeWidth ?? 12;
+    const pad = skFmt.nodePadding ?? 8;
+    const linkOpacity = skFmt.linkOpacity ?? 0.35;
+    const showLabels = skFmt.showLabels !== false;
     const labelRoom = Math.min(130, Math.max(...[...nodes.values()].map((n) => measureText(n.label, fs, t.fontFamily))) + 10);
     const colX = (d: number) => (depthMax === 0 ? 0 : ((W - nodeW) * d) / depthMax);
     const columns = new Map<number, SankeyNode[]>();
@@ -271,7 +275,7 @@ export const sankey = /* @__PURE__ */ defineVisual({
       const path = s('path', {
         d: `M${x0},${y0}C${mx},${y0} ${mx},${y1} ${x1},${y1}L${x1},${y1 + w}C${mx},${y1 + w} ${mx},${y0 + w} ${x0},${y0 + w}Z`,
         fill: colorOf(a),
-        'fill-opacity': 0.35,
+        'fill-opacity': linkOpacity,
         opacity: markOpacity(ctx, identity),
       });
       interactive(ctx, path, identity, () => ({ title: `${l.s} → ${l.t}`, items: [{ label: vField.name, value: ctx.fmt(vField, l.v), color: colorOf(a) }] }), [l.sv, l.tv]);
@@ -285,8 +289,10 @@ export const sankey = /* @__PURE__ */ defineVisual({
       const rect = s('rect', { x, y: n.y, width: nodeW, height: n.h, rx: 2, fill: color, opacity: markOpacity(ctx, identity) });
       interactive(ctx, rect, identity, () => ({ title: n.label, items: [{ label: 'In', value: ctx.fmt(vField, n.inflow) }, { label: 'Out', value: ctx.fmt(vField, n.outflow) }] }), [n.value]);
       svg.append(rect);
-      const rightSide = n.depth < depthMax || depthMax === 0;
-      svg.append(s('text', { x: rightSide ? x + nodeW + 6 : x - 6, y: n.y + n.h / 2 + fs / 3, 'text-anchor': rightSide ? 'start' : 'end', class: 'pbi-label', fill: t.foregroundSecondary }, fitText(n.label, labelRoom - 8, fs, t.fontFamily)));
+      if (showLabels) {
+        const rightSide = n.depth < depthMax || depthMax === 0;
+        svg.append(s('text', { x: rightSide ? x + nodeW + 6 : x - 6, y: n.y + n.h / 2 + fs / 3, 'text-anchor': rightSide ? 'start' : 'end', class: 'pbi-label', fill: t.foregroundSecondary }, fitText(n.label, labelRoom - 8, fs, t.fontFamily)));
+      }
     }
     ctx.root.replaceChildren(svg);
   },
