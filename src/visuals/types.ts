@@ -111,6 +111,7 @@ export interface VisualHostApi {
   contextMenu(evt: MouseEvent, identity: DataPointIdentity): void;
   drillDown(value: CellValue): void;
   drillUp(): void;
+  drillTo(level: number): void;
   readonly drill: { level: number; path: CellValue[]; levels: number };
   /** Persist visual-local UI state (e.g. matrix expansion) without a re-query. */
   setState(patch: Record<string, unknown>): void;

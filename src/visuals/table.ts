@@ -444,10 +444,22 @@ export function decorateCell(
   if (cf.background) {
     const minVal = typeof cf.background === 'object' && cf.background.minValue !== undefined ? cf.background.minValue : stats.min;
     const maxVal = typeof cf.background === 'object' && cf.background.maxValue !== undefined ? cf.background.maxValue : stats.max;
+    const midVal = typeof cf.background === 'object' ? cf.background.midValue : undefined;
     const stops = typeof cf.background === 'object'
       ? [cf.background.min ?? t.sequential[0], ...(cf.background.mid ? [cf.background.mid] : []), cf.background.max ?? t.sequential[t.sequential.length - 2]]
       : [t.sequential[0], t.sequential[Math.floor(t.sequential.length * 0.7)]];
-    const tt = maxVal === minVal ? 1 : Math.max(0, Math.min(1, (v - minVal) / (maxVal - minVal)));
+    let tt: number;
+    if (maxVal === minVal) {
+      tt = 1;
+    } else if (midVal !== undefined && midVal > minVal && midVal < maxVal) {
+      if (v <= midVal) {
+        tt = 0.5 * Math.max(0, (v - minVal) / (midVal - minVal));
+      } else {
+        tt = 0.5 + 0.5 * Math.min(1, (v - midVal) / (maxVal - midVal));
+      }
+    } else {
+      tt = Math.max(0, Math.min(1, (v - minVal) / (maxVal - minVal)));
+    }
     const bg = ramp(stops, tt);
     td.style.background = bg;
     td.style.color = textOn(bg, t.foreground);
@@ -455,10 +467,22 @@ export function decorateCell(
   if (cf.fontColor) {
     const minVal = typeof cf.fontColor === 'object' && cf.fontColor.minValue !== undefined ? cf.fontColor.minValue : stats.min;
     const maxVal = typeof cf.fontColor === 'object' && cf.fontColor.maxValue !== undefined ? cf.fontColor.maxValue : stats.max;
+    const midVal = typeof cf.fontColor === 'object' ? cf.fontColor.midValue : undefined;
     const stops = typeof cf.fontColor === 'object'
       ? [cf.fontColor.min ?? t.bad, ...(cf.fontColor.mid ? [cf.fontColor.mid] : []), cf.fontColor.max ?? t.good]
       : [t.bad, t.good];
-    const tt = maxVal === minVal ? 1 : Math.max(0, Math.min(1, (v - minVal) / (maxVal - minVal)));
+    let tt: number;
+    if (maxVal === minVal) {
+      tt = 1;
+    } else if (midVal !== undefined && midVal > minVal && midVal < maxVal) {
+      if (v <= midVal) {
+        tt = 0.5 * Math.max(0, (v - minVal) / (midVal - minVal));
+      } else {
+        tt = 0.5 + 0.5 * Math.min(1, (v - minVal) / (maxVal - midVal));
+      }
+    } else {
+      tt = Math.max(0, Math.min(1, (v - minVal) / (maxVal - minVal)));
+    }
     td.style.color = ramp(stops, tt);
   }
   for (const r of cf.rules ?? [])

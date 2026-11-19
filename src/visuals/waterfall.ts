@@ -88,6 +88,7 @@ export const waterfall = /* @__PURE__ */ defineVisual({
     drawCategoryLabels(ctx, g, labels, (i) => band(i) + band.bandwidth / 2, bottom, catLayout);
     const fmtLabel = labelFormatter(ctx, se.field);
     const thick = Math.min(band.bandwidth, f.bars.maxThickness * 1.6);
+    const markMap: { identity: any; rect: { x: number; y: number; w: number; h: number } }[] = [];
     steps.forEach((st, i) => {
       const x = band(i) + (band.bandwidth - thick) / 2;
       const y0 = scale(Math.max(st.start, st.end));
@@ -95,7 +96,10 @@ export const waterfall = /* @__PURE__ */ defineVisual({
       const color = st.kind === 'up' ? up : st.kind === 'down' ? down : totalC;
       const cat = st.ci >= 0 ? pv.categories[st.ci] : null;
       const rect = s('rect', { x, y: y0, width: thick, height: Math.max(1, y1 - y0), rx: 3, fill: color, opacity: cat ? markOpacity(ctx, cat.identity) : 1 });
-      if (cat) interactive(ctx, rect, cat.identity, () => ({ title: cat.label, items: [{ label: se.name, value: ctx.fmt(se.field, st.end - st.start), color }, { label: 'Running total', value: ctx.fmt(se.field, st.end) }] }), cat.keys);
+      if (cat) {
+        interactive(ctx, rect, cat.identity, () => ({ title: cat.label, items: [{ label: se.name, value: ctx.fmt(se.field, st.end - st.start), color }, { label: 'Running total', value: ctx.fmt(se.field, st.end) }] }), cat.keys);
+        markMap.push({ identity: cat.identity, rect: { x, y: y0, w: thick, h: Math.max(1, y1 - y0) } });
+      }
       g.append(rect);
       // connector from this step's end to the next step's start
       if (i < steps.length - 1) {
@@ -111,5 +115,104 @@ export const waterfall = /* @__PURE__ */ defineVisual({
         }
       }
     });
+    wireWaterfallBrush(svg, ctx, width, height, markMap);
   },
 });
+
+function wireWaterfallBrush(
+  svg: SVGSVGElement,
+  ctx: import('./types').RenderContext,
+  width: number,
+  height: number,
+  markMap: { identity: any; rect: { x: number; y: number; w: number; h: number } }[],
+): void {
+  let dragStart: { clientX: number; clientY: number; pX: number; pY: number } | null = null;
+  let brushEl: SVGElement | null = null;
+  let didBrush = false;
+
+  const plotCoords = (clientX: number, clientY: number) => {
+    const r = svg.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      return {
+        x: Math.max(0, Math.min(width, ((clientX - r.left) * width) / r.width)),
+        y: Math.max(0, Math.min(height, ((clientY - r.top) * height) / r.height)),
+      };
+    }
+    const attrW = parseFloat(svg.getAttribute('width') || String(width)) || width;
+    const attrH = parseFloat(svg.getAttribute('height') || String(height)) || height;
+    return {
+      x: Math.max(0, Math.min(width, (clientX * width) / attrW)),
+      y: Math.max(0, Math.min(height, (clientY * height) / attrH)),
+    };
+  };
+
+  const onWindowPointerMove = (e: PointerEvent) => {
+    if (!dragStart) return;
+    const cur = plotCoords(e.clientX, e.clientY);
+    const dx = Math.abs(e.clientX - dragStart.clientX);
+    const dy = Math.abs(e.clientY - dragStart.clientY);
+    if (!didBrush && Math.hypot(dx, dy) < 4) return;
+    didBrush = true;
+    ctx.host.hideTooltip();
+    const bx = Math.min(dragStart.pX, cur.x);
+    const by = Math.min(dragStart.pY, cur.y);
+    const bw = Math.abs(cur.x - dragStart.pX);
+    const bh = Math.abs(cur.y - dragStart.pY);
+    if (!brushEl) {
+      brushEl = s('rect', { class: 'pbi-brush' });
+      svg.append(brushEl);
+    }
+    brushEl.setAttribute('x', String(bx));
+    brushEl.setAttribute('y', String(by));
+    brushEl.setAttribute('width', String(bw));
+    brushEl.setAttribute('height', String(bh));
+  };
+
+  const onWindowPointerUp = (e: PointerEvent) => {
+    if (!dragStart) return;
+    const start = dragStart;
+    dragStart = null;
+    window.removeEventListener('pointermove', onWindowPointerMove);
+    window.removeEventListener('pointerup', onWindowPointerUp);
+    window.removeEventListener('pointercancel', onWindowPointerUp);
+    if (brushEl) {
+      brushEl.remove();
+      brushEl = null;
+    }
+    if (didBrush) {
+      const cur = plotCoords(e.clientX, e.clientY);
+      const bx0 = Math.min(start.pX, cur.x);
+      const bx1 = Math.max(start.pX, cur.x);
+      const by0 = Math.min(start.pY, cur.y);
+      const by1 = Math.max(start.pY, cur.y);
+      const hitIds: any[] = [];
+      const seen = new Set<string>();
+      for (const m of markMap) {
+        const mx0 = m.rect.x;
+        const mx1 = m.rect.x + m.rect.w;
+        const my0 = m.rect.y;
+        const my1 = m.rect.y + m.rect.h;
+        if (mx0 <= bx1 && mx1 >= bx0 && my0 <= by1 && my1 >= by0) {
+          const key = JSON.stringify(m.identity.values);
+          if (!seen.has(key)) {
+            seen.add(key);
+            hitIds.push(m.identity);
+          }
+        }
+      }
+      if (hitIds.length) ctx.host.select(hitIds, { multi: e.ctrlKey || e.metaKey || e.shiftKey });
+    }
+  };
+
+  svg.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const target = e.target as Element | null;
+    if (target?.closest('.pbi-mark')) return;
+    const p = plotCoords(e.clientX, e.clientY);
+    dragStart = { clientX: e.clientX, clientY: e.clientY, pX: p.x, pY: p.y };
+    didBrush = false;
+    window.addEventListener('pointermove', onWindowPointerMove);
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerUp);
+  });
+}

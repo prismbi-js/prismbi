@@ -224,6 +224,7 @@ export interface VisualHandle {
   describe(): string;
   drillUp(): void;
   drillDown(value: CellValue): void;
+  drillTo(level: number): void;
   /** "Expand all down one level". */
   expandAll(): void;
   /** Standalone SVG snapshot. */
@@ -998,6 +999,45 @@ export class Report implements ReportRuntime {
         pos += (h ? l.w : l.h) + gap;
         return { id, layout: n };
       }),
+    );
+  }
+
+  /** Center visual(s) horizontally, vertically, or both relative to the page grid. */
+  centerVisuals(axis: 'horizontal' | 'vertical' | 'both' = 'horizontal', ids = this.selectedVisuals): void {
+    if (!ids.length) return;
+    const p = this.page;
+    if (!p) return;
+    const cols = p.def.layout?.columns ?? (p as any).cols ?? 12;
+    const ls = ids.map((id) => ({ id, l: this.layoutOf(id) }));
+    const minX = Math.min(...ls.map((v) => v.l.x));
+    const maxX = Math.max(...ls.map((v) => v.l.x + v.l.w));
+    const minY = Math.min(...ls.map((v) => v.l.y));
+    const maxY = Math.max(...ls.map((v) => v.l.y + v.l.h));
+    const boxW = maxX - minX;
+    const boxH = maxY - minY;
+
+    let deltaX = 0;
+    let deltaY = 0;
+    if (axis === 'horizontal' || axis === 'both') {
+      const targetX = Math.max(0, Math.round((cols - boxW) / 2));
+      deltaX = targetX - minX;
+    }
+    if (axis === 'vertical' || axis === 'both') {
+      const pageVisuals = p.def.visuals.filter((v) => v.layout);
+      const pageMaxY = Math.max(16, ...pageVisuals.map((v) => v.layout!.y + v.layout!.h));
+      const targetY = Math.max(0, Math.round((pageMaxY - boxH) / 2));
+      deltaY = targetY - minY;
+    }
+
+    this.commitLayouts(
+      ls.map(({ id, l }) => ({
+        id,
+        layout: {
+          ...l,
+          x: Math.max(0, Math.min(cols - l.w, l.x + deltaX)),
+          y: Math.max(0, l.y + deltaY),
+        },
+      })),
     );
   }
 
@@ -2138,6 +2178,7 @@ export class Report implements ReportRuntime {
       describe: () => getHost().describe(),
       drillUp: () => getHost().drillUp(),
       drillDown: (v) => getHost().drillDown(v),
+      drillTo: (level) => getHost().drillTo(level),
       expandAll: () => getHost().expandAll(),
       toSvg: () => getHost().toSvg(),
       exportImage: (type, name) => getHost().exportImage(type, name),
@@ -2146,6 +2187,11 @@ export class Report implements ReportRuntime {
       copyData: () => getHost().copyData(),
       copySvg: () => getHost().copySvg(),
     };
+  }
+
+  /** Drill a visual directly to a specific hierarchy level. */
+  drillTo(visualId: string, level: number): void {
+    this.visual(visualId).drillTo(level);
   }
 
   visualIds(pageId?: string): string[] {

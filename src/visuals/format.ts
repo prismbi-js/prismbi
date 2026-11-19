@@ -103,7 +103,7 @@ export interface VisualFormat {
   title: {
     show: boolean;
     text?: string;
-    subtitle?: string;
+    subtitle?: string | { text?: string; fontSize?: number; color?: string; italic?: boolean };
     fontSize?: number;
     color?: string;
     align: 'left' | 'center' | 'right';

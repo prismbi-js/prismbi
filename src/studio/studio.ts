@@ -468,6 +468,7 @@ export class Studio implements StudioContext {
     if (kind === 'align') this.report.alignVisuals(arg as never, ids);
     else if (kind === 'distribute') this.report.distributeVisuals(arg as never, ids);
     else if (kind === 'size') this.report.matchVisualSize(arg as never, ids);
+    else if (kind === 'center') this.report.centerVisuals(arg as never, ids);
     else if (kind === 'group') {
       if (!this.report.groupVisuals(ids)) return this.toast('Select two or more visuals to group them');
     } else if (kind === 'ungroup') this.report.ungroupVisuals(ids);
@@ -1140,6 +1141,7 @@ export class Studio implements StudioContext {
     const previewBtn = btn('Preview', () => this.setPreview(!this.preview), { 'aria-pressed': 'false', title: 'Preview the report as a viewer' });
     const arrange = h('select', { class: 'pbs-btn pbs-arrange', 'aria-label': 'Arrange selected visuals', title: 'Align, distribute, group and order the selected visuals' },
       h('option', { value: '' }, 'Arrange…'),
+      h('optgroup', { label: 'Center on page (1+ selected)' }, h('option', { value: 'center:horizontal', 'data-min': '1' }, 'Center horizontally (Alt+C)'), h('option', { value: 'center:vertical', 'data-min': '1' }, 'Center vertically (Alt+Shift+C)')),
       h('optgroup', { label: 'Align (2+ selected)' }, ...['left', 'center', 'right', 'top', 'middle', 'bottom'].map((v) => h('option', { value: `align:${v}`, 'data-min': '2' }, `Align ${v}`))),
       h('optgroup', { label: 'Distribute (3+ selected)' }, h('option', { value: 'distribute:horizontal', 'data-min': '3' }, 'Distribute horizontally'), h('option', { value: 'distribute:vertical', 'data-min': '3' }, 'Distribute vertically')),
       h('optgroup', { label: 'Group' }, h('option', { value: 'group', 'data-min': '2' }, 'Group (Ctrl+G)'), h('option', { value: 'ungroup', 'data-min': '1' }, 'Ungroup (Ctrl+Shift+G)')),
@@ -1151,11 +1153,13 @@ export class Studio implements StudioContext {
       if (v) this.arrangeSelection(v);
     });
     const alignActions = [
+      { id: 'center:horizontal', icon: '⇥⇤', title: 'Center horizontally on page (Alt+C)', min: 1 },
+      { id: 'center:vertical', icon: '⤋⤊', title: 'Center vertically on page (Alt+Shift+C)', min: 1 },
       { id: 'align:left', icon: '⇤', title: 'Align left', min: 2 },
       { id: 'align:center', icon: '⇥⇤', title: 'Align center', min: 2 },
       { id: 'align:right', icon: '⇥', title: 'Align right', min: 2 },
       { id: 'align:top', icon: '⤊', title: 'Align top', min: 2 },
-      { id: 'align:middle', icon: '⤋⤊', title: 'Align middle', min: 2 },
+      { id: 'align:middle', icon: '⤋⤋', title: 'Align middle', min: 2 },
       { id: 'align:bottom', icon: '⤋', title: 'Align bottom', min: 2 },
       { id: 'distribute:horizontal', icon: '⬌', title: 'Distribute horizontally (Alt+Shift+H)', min: 3 },
       { id: 'distribute:vertical', icon: '⬍', title: 'Distribute vertically (Alt+Shift+V)', min: 3 },
@@ -1641,6 +1645,18 @@ export class Studio implements StudioContext {
       if (e.key.toLowerCase() === 'v') {
         e.preventDefault();
         this.arrangeSelection('distribute:vertical');
+        return;
+      }
+      if (e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        this.arrangeSelection('center:vertical');
+        return;
+      }
+    }
+    if (e.altKey && !e.shiftKey && !typing && !this.preview) {
+      if (e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        this.arrangeSelection('center:horizontal');
         return;
       }
     }

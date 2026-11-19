@@ -621,19 +621,55 @@ export class VisualHost {
       if (!f.title.bold) title.style.fontWeight = '400';
       text.append(title);
     }
-    if (f.title.subtitle) text.append(h('div', { class: 'pbi-subtitle' }, f.title.subtitle));
+    if (f.title.subtitle) {
+      const subCfg = typeof f.title.subtitle === 'object' ? f.title.subtitle : { text: f.title.subtitle };
+      if (subCfg.text) {
+        const sub = h('div', { class: 'pbi-subtitle' }, subCfg.text);
+        if (subCfg.fontSize) sub.style.fontSize = `${subCfg.fontSize}px`;
+        if (subCfg.color) sub.style.color = subCfg.color;
+        if (subCfg.italic) sub.style.fontStyle = 'italic';
+        text.append(sub);
+      }
+    }
     const crumbLevels = drill.expanded ? Math.min(drill.path.length, drill.level) : drill.level;
-    if (drill.levels > 1 && crumbLevels > 0) {
+    if (drill.levels > 1 && (crumbLevels > 0 || drill.expanded)) {
       const role = drill.role!;
-      const names = this.fields(role.name).slice(0, crumbLevels);
-      text.append(h('div', { class: 'pbi-drill-crumb' }, names.map((n, i) => `${fieldRef(n).replace(/^.*\[|\]$/g, '')}: ${formatValue(drill.path[i] ?? null)}`).join(' › ')));
+      const names = this.fields(role.name).slice(0, Math.max(crumbLevels, drill.level));
+      const crumbWrap = h('div', { class: 'pbi-drill-crumb' });
+      const rootBtn = h('button', {
+        type: 'button',
+        class: 'pbi-drill-crumb-btn pbi-drill-crumb-root',
+        title: 'Drill to top level',
+      }, 'All');
+      rootBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.drillTo(0);
+      });
+      crumbWrap.append(rootBtn);
+
+      for (let i = 0; i < crumbLevels; i++) {
+        crumbWrap.append(h('span', { class: 'pbi-drill-separator' }, ' › '));
+        const crumbLabel = `${fieldRef(names[i]).replace(/^.*\[|\]$/g, '')}: ${formatValue(drill.path[i] ?? null)}`;
+        const isCurrent = i === crumbLevels - 1;
+        const crumbBtn = h('button', {
+          type: 'button',
+          class: `pbi-drill-crumb-btn${isCurrent ? ' is-active' : ''}`,
+          title: `Drill to ${fieldRef(names[i])}`,
+        }, crumbLabel);
+        crumbBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.drillTo(i + 1);
+        });
+        crumbWrap.append(crumbBtn);
+      }
+      text.append(crumbWrap);
     }
     this.header.append(text, icons);
     if (f.title.divider) {
       const divider = h('hr', { class: 'pbi-title-divider' });
       const cfg = typeof f.title.divider === 'object' ? f.title.divider : null;
       if (cfg?.color) divider.style.borderColor = cfg.color;
-      if (cfg?.width) divider.style.borderWidth = `${cfg.width}px`;
+      if (cfg?.width !== undefined) divider.style.borderWidth = `${cfg.width}px`;
       if (cfg?.margin !== undefined) divider.style.margin = `${cfg.margin}px 0`;
       this.header.append(divider);
     }
@@ -790,6 +826,15 @@ export class VisualHost {
     this.afterDrill();
   }
 
+  /** Drill directly to a specific hierarchy level. */
+  drillTo(level: number): void {
+    const d = this.drillInfo();
+    if (level < 0 || level >= d.levels) return;
+    if (level === d.level && !d.expanded) return;
+    this.spec.drill = { level, path: d.path.slice(0, level), skip: d.skip.filter((i) => i < level), expanded: false };
+    this.afterDrill();
+  }
+
   /** Go to the next level for all members (no parent filter). */
   nextLevel(): void {
     const d = this.drillInfo();
@@ -937,6 +982,7 @@ export class VisualHost {
       contextMenu: (evt, identity) => self.rt.showContextMenu(self.id, identity, evt),
       drillDown: (v) => self.drillDown(v),
       drillUp: () => self.drillUp(),
+      drillTo: (lvl) => self.drillTo(lvl),
       get drill() {
         const d = self.drillInfo();
         return { level: d.level, path: d.path, levels: d.expanded ? d.level + 1 : d.levels };
