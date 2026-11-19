@@ -37,6 +37,28 @@ export interface DataBarOptions {
   opacity?: number;
 }
 
+export interface LinkOptions {
+  /** Target url or template. Defaults to cell value if not provided. */
+  url?: string;
+  /** Whether to open in a new browser tab/window (default: true). */
+  openInNewTab?: boolean;
+  /** Display label instead of raw URL text. */
+  text?: string;
+  /** Show an external link icon (default: true). */
+  icon?: boolean;
+}
+
+export interface ImageOptions {
+  /** Maximum image width in pixels. */
+  width?: number;
+  /** Maximum image height in pixels (default: 28). */
+  height?: number;
+  /** Object-fit css style (default: 'contain'). */
+  fit?: 'contain' | 'cover' | 'fill' | 'none';
+  /** Alternative text description. */
+  alt?: string;
+}
+
 export interface ConditionalFormat {
   dataBars?: boolean | DataBarOptions;
   /** Colour scale on cell background: `true` uses the theme sequential ramp. */
@@ -46,6 +68,10 @@ export interface ConditionalFormat {
   rules?: ConditionalRule[];
   /** ▲ ▼ ● icons by sign, or advanced icon indicator options & rules. */
   icons?: boolean | IconOptions;
+  /** Render cell value as an interactive hyperlink. */
+  link?: boolean | LinkOptions;
+  /** Render cell value (image URL) as an inline image. */
+  image?: boolean | ImageOptions;
 }
 
 export interface TableSortCriterion {
@@ -436,6 +462,43 @@ export function decorateCell(
 ): void {
   const span = h('span', { class: 'pbi-cell-text' }, text);
   if (sparkline?.values.length) span.prepend(renderSparkline(sparkline.values, sparkline));
+
+  if (cf?.image && (typeof v === 'string' || v !== null)) {
+    const imgCfg = typeof cf.image === 'object' ? cf.image : {};
+    const src = typeof v === 'string' ? v : String(v ?? '');
+    if (src) {
+      const imgEl = h('img', {
+        class: 'pbi-table-img',
+        src,
+        alt: imgCfg.alt ?? text,
+        style: `max-height:${imgCfg.height ?? 28}px;${imgCfg.width ? `max-width:${imgCfg.width}px;` : ''}object-fit:${imgCfg.fit ?? 'contain'};`,
+      }) as HTMLImageElement;
+      imgEl.addEventListener('error', () => {
+        imgEl.replaceWith(span);
+      });
+      td.append(imgEl);
+      return;
+    }
+  }
+
+  if (cf?.link) {
+    const linkCfg = typeof cf.link === 'object' ? cf.link : {};
+    const url = linkCfg.url ?? (typeof v === 'string' ? v : String(v ?? ''));
+    if (url) {
+      const linkText = linkCfg.text ?? text;
+      const a = h('a', {
+        class: 'pbi-table-link',
+        href: url,
+        target: linkCfg.openInNewTab !== false ? '_blank' : '_self',
+        rel: 'noopener noreferrer',
+      }, linkText);
+      if (linkCfg.icon !== false) {
+        a.append(h('span', { class: 'pbi-link-icon', 'aria-hidden': 'true', style: 'margin-left:4px;font-size:10px;' }, ' ↗'));
+      }
+      span.replaceChildren(a);
+    }
+  }
+
   if (!cf || typeof v !== 'number') {
     td.append(span);
     return;

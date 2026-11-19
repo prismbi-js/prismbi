@@ -45,6 +45,64 @@ function drawWhisker(marks: SVGGElement, scale: (v: number) => number, c: number
   marks.append(s('path', { d, stroke: color, 'stroke-width': 1.5, fill: 'none', opacity: 0.8, class: 'pbi-error-bar', 'pointer-events': 'none' }));
 }
 
+function renderBarDataLabel(
+  marks: SVGElement,
+  text: string,
+  x: number,
+  y: number,
+  anchor: 'start' | 'middle' | 'end',
+  fs: number,
+  color: string,
+  op: number,
+  fontFamily: string,
+  fLabels: any,
+  themeBg: string,
+  isInside: boolean,
+): void {
+  const isVertical = fLabels.orientation === 'vertical';
+  const tw = measureText(text, fs, fontFamily);
+  if (fLabels.showBackground) {
+    const bgFill = fLabels.backgroundColor ?? (isInside ? 'rgba(0,0,0,0.5)' : themeBg);
+    const bgOp = fLabels.backgroundOpacity ?? 0.85;
+    const padX = 4;
+    const padY = 2;
+    const rw = tw + padX * 2;
+    const rh = fs + padY * 2;
+    let rx = x - padX;
+    if (anchor === 'middle') rx = x - tw / 2 - padX;
+    else if (anchor === 'end') rx = x - tw - padX;
+    const ry = y - fs + padY / 2;
+    const rect = s('rect', {
+      class: 'pbi-label-bg',
+      x: rx,
+      y: ry,
+      width: rw,
+      height: rh,
+      rx: 3,
+      fill: bgFill,
+      opacity: bgOp,
+      'pointer-events': 'none',
+    });
+    if (isVertical) {
+      rect.setAttribute('transform', `rotate(-90 ${x} ${y})`);
+    }
+    marks.append(rect);
+  }
+  const textAttrs: Record<string, any> = {
+    x,
+    y,
+    'text-anchor': anchor,
+    class: 'pbi-label',
+    fill: color,
+    opacity: op,
+    'pointer-events': 'none',
+  };
+  if (isVertical) {
+    textAttrs.transform = `rotate(-90 ${x} ${y})`;
+  }
+  marks.append(s('text', textAttrs, text));
+}
+
 /** Lower/upper error bounds per category (from the error-bar roles), aligned with `categories`. */
 function errorBounds(ctx: RenderContext, categories: { keys: unknown[] }[]): { lo: (number | null)[]; hi: (number | null)[] } | null {
   const li = ctx.role('errorLower').indices[0];
@@ -183,12 +241,22 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           if (showLabels) {
             const text = fmtOf(se)(se.highlights && hl !== null && hl !== undefined ? hl : v);
             const tw = measureText(text, fs, t.fontFamily);
-            const ty = v >= 0 ? y1 - 5 : y1 + fs + 3;
+            const pos = f.dataLabels.position;
+            const isInside = pos === 'inside' || pos === 'insideEnd' || pos === 'insideCenter' || pos === 'insideBase';
+            let ty = v >= 0 ? y1 - 5 : y1 + fs + 3;
+            if (pos === 'insideEnd') ty = v >= 0 ? y1 + fs + 3 : y1 - 4;
+            else if (pos === 'insideCenter') ty = (y0 + y1) / 2 + fs / 3;
+            else if (pos === 'insideBase') ty = v >= 0 ? y0 - 4 : y0 + fs + 3;
+            else if (pos === 'outsideEnd' || pos === 'outside') ty = v >= 0 ? y1 - 5 : y1 + fs + 3;
             const cx = x + thick / 2;
             const cFill = colorOf(se, v);
-            const lColor = resolveDataLabelColor(v, f.dataLabels.position === 'inside' ? cFill : undefined, f.dataLabels, f.dataLabels.color ?? t.foregroundSecondary);
-            if (tryPlace(cx - tw / 2 - 2, cx + tw / 2 + 2, ty - fs, ty + 2))
-              marks.append(s('text', { x: cx, y: ty, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor, opacity: op }, text));
+            const lColor = resolveDataLabelColor(v, isInside ? cFill : undefined, f.dataLabels, f.dataLabels.color ?? (isInside ? textOn(cFill, t.foreground) : t.foregroundSecondary));
+            const isVert = f.dataLabels.orientation === 'vertical';
+            const bxW = isVert ? fs + 4 : tw + 4;
+            const bxH = isVert ? tw + 4 : fs + 4;
+            if (tryPlace(cx - bxW / 2, cx + bxW / 2, ty - bxH / 2, ty + bxH / 2)) {
+              renderBarDataLabel(marks, text, cx, ty, 'middle', fs, lColor, op, t.fontFamily, f.dataLabels, t.background, isInside);
+            }
           }
         });
       } else {
@@ -232,9 +300,18 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
           }
           if (showLabels) {
             const text = fmtOf(se)(mode === 'percent' ? v : se.values[ci]);
+            const tw = measureText(text, fs, t.fontFamily);
+            const pos = f.dataLabels.position;
+            let ty = yTop + hgt / 2 + fs / 3;
+            if (pos === 'insideEnd') ty = v >= 0 ? yTop + fs + 2 : yTop + hgt - 4;
+            else if (pos === 'insideBase') ty = v >= 0 ? yTop + hgt - 4 : yTop + fs + 2;
+            const cx = x + thick / 2;
             const lColor = resolveDataLabelColor(v, se.color, f.dataLabels, textOn(se.color, t.foreground));
-            if (hgt >= fs + 4 && measureText(text, fs, t.fontFamily) + 6 <= thick)
-              marks.append(s('text', { x: x + thick / 2, y: yTop + hgt / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor, opacity: op }, text));
+            const isVert = f.dataLabels.orientation === 'vertical';
+            const fits = isVert ? (tw + 4 <= hgt && fs + 4 <= thick) : (hgt >= fs + 4 && tw + 6 <= thick);
+            if (fits) {
+              renderBarDataLabel(marks, text, cx, ty, 'middle', fs, lColor, op, t.fontFamily, f.dataLabels, t.background, true);
+            }
           }
         });
       }
@@ -291,12 +368,36 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         if (showLabels) {
           const text = fmtOf(se)(v);
           const tw = measureText(text, fs, t.fontFamily);
-          const tx = v >= 0 ? xb + 5 : xb - 5;
+          const pos = f.dataLabels.position;
+          const isInside = pos === 'inside' || pos === 'insideEnd' || pos === 'insideCenter' || pos === 'insideBase';
+          let tx = v >= 0 ? xb + 5 : xb - 5;
+          let anchor: 'start' | 'middle' | 'end' = v >= 0 ? 'start' : 'end';
+          if (pos === 'insideEnd') {
+            tx = v >= 0 ? xb - 6 : xb + 6;
+            anchor = v >= 0 ? 'end' : 'start';
+          } else if (pos === 'insideCenter') {
+            tx = (xa + xb) / 2;
+            anchor = 'middle';
+          } else if (pos === 'insideBase') {
+            tx = v >= 0 ? xa + 6 : xa - 6;
+            anchor = v >= 0 ? 'start' : 'end';
+          } else if (pos === 'outsideEnd' || pos === 'outside') {
+            tx = v >= 0 ? xb + 5 : xb - 5;
+            anchor = v >= 0 ? 'start' : 'end';
+          }
           const cy = y + thick / 2;
           const cFill = colorOf(se, v);
-          const lColor = resolveDataLabelColor(v, f.dataLabels.position === 'inside' ? cFill : undefined, f.dataLabels, f.dataLabels.color ?? t.foregroundSecondary);
-          if (tryPlace(v >= 0 ? tx : tx - tw, v >= 0 ? tx + tw : tx, cy - fs / 2, cy + fs / 2))
-            marks.append(s('text', { x: tx, y: cy + fs / 3, 'text-anchor': v >= 0 ? 'start' : 'end', class: 'pbi-label', fill: lColor, opacity: op }, text));
+          const lColor = resolveDataLabelColor(v, isInside ? cFill : undefined, f.dataLabels, f.dataLabels.color ?? (isInside ? textOn(cFill, t.foreground) : t.foregroundSecondary));
+          const isVert = f.dataLabels.orientation === 'vertical';
+          const bxW = isVert ? fs + 4 : tw + 4;
+          const bxH = isVert ? tw + 4 : fs + 4;
+          let minX = tx;
+          let maxX = tx + bxW;
+          if (anchor === 'middle') { minX = tx - bxW / 2; maxX = tx + bxW / 2; }
+          else if (anchor === 'end') { minX = tx - bxW; maxX = tx; }
+          if (tryPlace(minX, maxX, cy - bxH / 2, cy + bxH / 2)) {
+            renderBarDataLabel(marks, text, tx, cy + fs / 3, anchor, fs, lColor, op, t.fontFamily, f.dataLabels, t.background, isInside);
+          }
         }
       });
     } else {
@@ -332,9 +433,23 @@ function renderBars(ctx: RenderContext, horizontal: boolean, mode: Mode): void {
         markMap.push({ identity, rect: { x, y, w, h: thick } });
         if (showLabels) {
           const text = fmtOf(se)(mode === 'percent' ? v : se.values[ci]);
+          const tw = measureText(text, fs, t.fontFamily);
+          const pos = f.dataLabels.position;
+          let tx = x + w / 2;
+          let anchor: 'start' | 'middle' | 'end' = 'middle';
+          if (pos === 'insideEnd') {
+            tx = v >= 0 ? x + w - 4 : x + 4;
+            anchor = v >= 0 ? 'end' : 'start';
+          } else if (pos === 'insideBase') {
+            tx = v >= 0 ? x + 4 : x + w - 4;
+            anchor = v >= 0 ? 'start' : 'end';
+          }
           const lColor = resolveDataLabelColor(v, se.color, f.dataLabels, textOn(se.color, t.foreground));
-          if (thick >= fs + 2 && measureText(text, fs, t.fontFamily) + 8 <= w)
-            marks.append(s('text', { x: x + w / 2, y: y + thick / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: lColor, opacity: op }, text));
+          const isVert = f.dataLabels.orientation === 'vertical';
+          const fits = isVert ? (tw + 4 <= thick && fs + 4 <= w) : (thick >= fs + 2 && tw + 8 <= w);
+          if (fits) {
+            renderBarDataLabel(marks, text, tx, y + thick / 2 + fs / 3, anchor, fs, lColor, op, t.fontFamily, f.dataLabels, t.background, true);
+          }
         }
       });
     }

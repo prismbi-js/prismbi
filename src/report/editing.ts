@@ -136,8 +136,15 @@ export class EditController {
     for (const vid of ids) {
       const l = { ...(p.specs.find((s) => s.id === vid)?.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
       if (e.shiftKey) {
-        l.w = Math.max(1, Math.min(p.cols - l.x, l.w + dx));
-        l.h = Math.max(1, l.h + dy);
+        const spec = p.specs.find((s) => s.id === vid);
+        if (spec?.lockAspectRatio && dx) {
+          const origRatio = l.w / Math.max(1, l.h);
+          l.w = Math.max(1, Math.min(p.cols - l.x, l.w + dx));
+          l.h = Math.max(1, Math.round(l.w / origRatio));
+        } else {
+          l.w = Math.max(1, Math.min(p.cols - l.x, l.w + dx));
+          l.h = Math.max(1, l.h + dy);
+        }
       } else {
         l.x = Math.max(0, Math.min(p.cols - l.w, l.x + dx));
         l.y = Math.max(0, l.y + dy);
@@ -267,6 +274,15 @@ export class EditController {
         if (m.includes('n')) {
           y += dr;
           hh -= dr;
+        }
+        const spec = p.specs.find((sp) => sp.id === d.id);
+        const lockRatio = spec?.lockAspectRatio || (e.shiftKey && m.length === 2);
+        if (lockRatio) {
+          const origRatio = s.w / Math.max(1, s.h);
+          hh = Math.max(1, Math.round(w / origRatio));
+          if (m.includes('n')) {
+            y = s.y + s.h - hh;
+          }
         }
       }
     }

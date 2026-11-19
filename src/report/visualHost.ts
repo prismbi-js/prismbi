@@ -619,6 +619,15 @@ export class VisualHost {
       if (f.title.fontSize) title.style.fontSize = `${f.title.fontSize}px`;
       if (f.title.color) title.style.color = f.title.color;
       if (!f.title.bold) title.style.fontWeight = '400';
+      if (f.title.badge) {
+        const badgeCfg = typeof f.title.badge === 'object' ? f.title.badge : { text: f.title.badge };
+        if (badgeCfg.text) {
+          const badgeEl = h('span', { class: 'pbi-title-badge' }, badgeCfg.text);
+          if (badgeCfg.color) badgeEl.style.color = badgeCfg.color;
+          if (badgeCfg.background) badgeEl.style.backgroundColor = badgeCfg.background;
+          title.append(badgeEl);
+        }
+      }
       text.append(title);
     }
     if (f.title.subtitle) {

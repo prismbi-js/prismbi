@@ -83,7 +83,11 @@ export interface DataLabelsFormat {
   decimals?: number;
   fontSize?: number;
   color?: string;
-  position: 'auto' | 'inside' | 'outside';
+  position: 'auto' | 'inside' | 'outside' | 'insideEnd' | 'insideCenter' | 'insideBase' | 'outsideEnd';
+  orientation?: 'horizontal' | 'vertical';
+  showBackground?: boolean;
+  backgroundColor?: string;
+  backgroundOpacity?: number;
   contrastColor?: boolean;
   rules?: DataLabelRule[];
 }
@@ -104,6 +108,7 @@ export interface VisualFormat {
     show: boolean;
     text?: string;
     subtitle?: string | { text?: string; fontSize?: number; color?: string; italic?: boolean };
+    badge?: string | { text: string; color?: string; background?: string };
     fontSize?: number;
     color?: string;
     align: 'left' | 'center' | 'right';

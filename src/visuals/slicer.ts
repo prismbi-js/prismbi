@@ -13,8 +13,12 @@ export interface SlicerFormat {
   style?: SlicerStyle;
   /** Single-select mode (radio behaviour). */
   single?: boolean;
+  /** Alias for single-select mode. */
+  singleSelect?: boolean;
   search?: boolean;
   selectAll?: boolean;
+  /** Show a clear filter button when a selection is active (default: true). */
+  clearButton?: boolean;
   /** Tiles orientation. */
   orientation?: 'horizontal' | 'vertical';
   placeholder?: string;
@@ -48,7 +52,8 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
   const selKeys = new Set(selected?.map(valueKey));
   const state = ctx.host.state as { _search?: string };
   const id = `pbi-sl-${++uidSeq}`;
-  const wrap = h('div', { class: `pbi-slicer-list${compact ? ' is-compact' : ''}`, role: 'listbox', 'aria-multiselectable': String(!fmt.single), id });
+  const isSingle = !!(fmt.single || fmt.singleSelect);
+  const wrap = h('div', { class: `pbi-slicer-list${compact ? ' is-compact' : ''}`, role: 'listbox', 'aria-multiselectable': String(!isSingle), id });
   if (fmt.search !== false && domain.length > 7) {
     const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: state._search ?? '' }) as HTMLInputElement;
     input.addEventListener('input', () => {
@@ -58,7 +63,7 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
     });
     container.append(input);
   }
-  if (fmt.selectAll !== false && !fmt.single) {
+  if (fmt.selectAll !== false && !isSingle) {
     const all = selected === null;
     const row = h('label', { class: 'pbi-slicer-item pbi-select-all' }, h('input', { type: 'checkbox', checked: all, 'aria-label': 'Select all' }), h('span', {}, 'Select all'));
     row.querySelector('input')!.addEventListener('change', () => emitSelection(ctx, target, null));
@@ -67,11 +72,11 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
   for (const v of domain) {
     const text = label(ctx, v);
     const checked = selected !== null && selKeys.has(valueKey(v));
-    const input = h('input', { type: fmt.single ? 'radio' : 'checkbox', name: id, checked });
+    const input = h('input', { type: isSingle ? 'radio' : 'checkbox', name: id, checked });
     const row = h('label', { class: `pbi-slicer-item${checked ? ' is-checked' : ''}`, 'data-label': text, role: 'option', 'aria-selected': String(checked) }, input, h('span', {}, text));
     if (state._search && !text.toLowerCase().includes(state._search.toLowerCase())) row.hidden = true;
     input.addEventListener('change', (e) => {
-      const multi = !fmt.single;
+      const multi = !isSingle;
       if (!multi) return emitSelection(ctx, target, checked ? null : [v]);
       const next = new Set(selected?.map(valueKey) ?? []);
       const vals = new Map((selected ?? []).map((x) => [valueKey(x), x]));
@@ -93,12 +98,13 @@ function renderList(ctx: RenderContext, target: string, domain: CellValue[], fmt
 function renderTiles(ctx: RenderContext, target: string, domain: CellValue[], fmt: SlicerFormat, container: HTMLElement): void {
   const selected = currentValues(ctx);
   const selKeys = new Set(selected?.map(valueKey));
+  const isSingle = !!(fmt.single || fmt.singleSelect);
   const wrap = h('div', { class: `pbi-slicer-tiles is-${fmt.orientation ?? 'horizontal'}`, role: 'group' });
   for (const v of domain) {
     const on = selected !== null && selKeys.has(valueKey(v));
     const b = h('button', { type: 'button', class: 'pbi-tile', 'aria-pressed': String(on) }, label(ctx, v));
     b.addEventListener('click', (e) => {
-      const multi = !fmt.single && (e.ctrlKey || e.metaKey || (fmt.single === false && !!selected));
+      const multi = !isSingle && (e.ctrlKey || e.metaKey || (fmt.single === false && !!selected));
       if (!multi) return emitSelection(ctx, target, on && selected!.length === 1 ? null : [v]);
       const vals = new Map((selected ?? []).map((x) => [valueKey(x), x]));
       if (on) vals.delete(valueKey(v));
@@ -356,7 +362,8 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
     searchWrap.append(expandAll, collapseAll);
     container.append(searchWrap);
   }
-  const list = h('div', { class: 'pbi-slicer-list pbi-tree', role: 'tree', 'aria-multiselectable': String(!fmt.single) });
+  const isSingle = !!(fmt.single || fmt.singleSelect);
+  const list = h('div', { class: 'pbi-slicer-list pbi-tree', role: 'tree', 'aria-multiselectable': String(!isSingle) });
   const matches = (n: TreeNode): boolean => !q || n.label.toLowerCase().includes(q) || n.children.some(matches);
   const highlightLabel = (label: string): (string | HTMLElement)[] => {
     if (!q) return [label];
@@ -382,7 +389,7 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
     const open = hasKids && (expanded.has(n.key) || !!q);
     const count = n.leaves.filter((l) => selected.has(l)).length;
     const checked = count > 0 && count === n.leaves.length;
-    const input = h('input', { type: fmt.single ? 'radio' : 'checkbox', checked, 'aria-label': n.label }) as HTMLInputElement;
+    const input = h('input', { type: isSingle ? 'radio' : 'checkbox', checked, 'aria-label': n.label }) as HTMLInputElement;
     input.indeterminate = count > 0 && !checked;
     input.addEventListener('change', () => toggle(n));
     const row = h('div', { class: 'pbi-slicer-item pbi-tree-item', role: 'treeitem', 'aria-expanded': hasKids ? String(open) : undefined, 'aria-selected': String(checked), style: `padding-left:${n.depth * 16}px` });
@@ -431,6 +438,19 @@ export const slicer = /* @__PURE__ */ defineVisual({
     const style: SlicerStyle = fmt.style ?? (field?.type === 'date' ? 'between' : 'list');
     const container = h('div', { class: `pbi-slicer pbi-slicer-${style}` });
     ctx.root.replaceChildren(container);
+    const hasFilter = (ctx.host.currentFilter?.length ?? 0) > 0;
+    if (hasFilter && fmt.clearButton !== false) {
+      const clearBtn = h('button', {
+        type: 'button',
+        class: 'pbi-slicer-clear',
+        title: 'Clear selections',
+        'aria-label': 'Clear selections',
+      }, '✕ Clear');
+      clearBtn.addEventListener('click', () => {
+        emitSelection(ctx, target, null);
+      });
+      container.append(clearBtn);
+    }
     if (style === 'relative') return renderRelative(ctx, target, fmt, container);
     const domain = ctx.host.domain(target);
     if (style === 'between') return renderBetween(ctx, target, domain, container);

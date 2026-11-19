@@ -472,7 +472,10 @@ export class Studio implements StudioContext {
     else if (kind === 'group') {
       if (!this.report.groupVisuals(ids)) return this.toast('Select two or more visuals to group them');
     } else if (kind === 'ungroup') this.report.ungroupVisuals(ids);
-    else if (kind === 'lock') for (const id of ids) this.report.toggleLock(id);
+    else if (kind === 'lock') {
+      if (arg === 'aspectRatio') for (const id of ids) this.report.toggleAspectRatioLock(id);
+      else for (const id of ids) this.report.toggleLock(id);
+    }
     else if (kind === 'order') for (const id of ids) this.report.arrange(id, arg as never);
     else return;
     this.commit();
@@ -761,11 +764,16 @@ export class Studio implements StudioContext {
 
   private layersOpen = false;
 
-  private toggleLayers(): void {
+  toggleLayers(): void {
     this.layersOpen = !this.layersOpen;
     this.els.layersBtn?.setAttribute('aria-expanded', String(this.layersOpen));
     if (this.layersOpen) this.renderLayers();
     else this.root.querySelector('.pbs-layers')?.remove();
+  }
+
+  setLayersOpen(open: boolean): void {
+    if (this.layersOpen === open) return;
+    this.toggleLayers();
   }
 
   /** Selection pane: the page's visuals front to back; click selects (Ctrl/Shift-click adds), arrows reorder. */
@@ -784,6 +792,13 @@ export class Studio implements StudioContext {
       const up = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': 'Bring forward', title: 'Bring forward' }, '↑');
       const down = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': 'Send backward', title: 'Send backward' }, '↓');
       const hide = h('button', { type: 'button', class: 'pbs-icon-btn', 'aria-label': v.hidden ? 'Show' : 'Hide', title: v.hidden ? 'Show visual' : 'Hide visual' }, v.hidden ? '◌' : '●');
+      const lock = h('button', {
+        type: 'button',
+        class: `pbs-icon-btn pbs-layer-lock${v.locked ? ' is-locked' : ''}`,
+        'data-id': v.id!,
+        'aria-label': v.locked ? 'Unlock visual' : 'Lock visual',
+        title: v.locked ? 'Unlock visual (locked on canvas)' : 'Lock visual',
+      }, v.locked ? '🔒' : '🔓');
       up.addEventListener('click', () => (this.report.arrange(v.id!, 'forward'), this.commit(), this.renderLayers()));
       down.addEventListener('click', () => (this.report.arrange(v.id!, 'backward'), this.commit(), this.renderLayers()));
       hide.addEventListener('click', () => {
@@ -791,7 +806,12 @@ export class Studio implements StudioContext {
         this.commit();
         this.renderLayers();
       });
-      list.append(h('li', {}, label, up, down, hide));
+      lock.addEventListener('click', () => {
+        this.report.toggleLock(v.id!);
+        this.commit();
+        this.renderLayers();
+      });
+      list.append(h('li', {}, label, up, down, hide, lock));
     }
     this.root.append(list);
   }
@@ -1145,6 +1165,7 @@ export class Studio implements StudioContext {
       h('optgroup', { label: 'Align (2+ selected)' }, ...['left', 'center', 'right', 'top', 'middle', 'bottom'].map((v) => h('option', { value: `align:${v}`, 'data-min': '2' }, `Align ${v}`))),
       h('optgroup', { label: 'Distribute (3+ selected)' }, h('option', { value: 'distribute:horizontal', 'data-min': '3' }, 'Distribute horizontally'), h('option', { value: 'distribute:vertical', 'data-min': '3' }, 'Distribute vertically')),
       h('optgroup', { label: 'Group' }, h('option', { value: 'group', 'data-min': '2' }, 'Group (Ctrl+G)'), h('option', { value: 'ungroup', 'data-min': '1' }, 'Ungroup (Ctrl+Shift+G)')),
+      h('optgroup', { label: 'Lock (1+ selected)' }, h('option', { value: 'lock', 'data-min': '1' }, 'Lock / unlock position (Ctrl+L)'), h('option', { value: 'lock:aspectRatio', 'data-min': '1' }, 'Lock / unlock aspect ratio')),
       h('optgroup', { label: 'Order' }, ...[['front', 'Bring to front'], ['forward', 'Bring forward'], ['backward', 'Send backward'], ['back', 'Send to back']].map(([v, l]) => h('option', { value: `order:${v}`, 'data-min': '1' }, l))),
     ) as HTMLSelectElement;
     arrange.addEventListener('change', () => {
@@ -1168,6 +1189,7 @@ export class Studio implements StudioContext {
       { id: 'group', icon: '⧉', title: 'Group visuals (Ctrl+G)', min: 2 },
       { id: 'ungroup', icon: '⧈', title: 'Ungroup visuals (Ctrl+Shift+G)', min: 1 },
       { id: 'lock', icon: '🔒', title: 'Lock / unlock visual (Ctrl+L)', min: 1 },
+      { id: 'lock:aspectRatio', icon: '🔒📐', title: 'Lock / unlock aspect ratio', min: 1 },
     ];
     const alignBtns = alignActions.map((a) => {
       const b = btn(a.icon, () => this.arrangeSelection(a.id), {

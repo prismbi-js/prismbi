@@ -239,6 +239,10 @@ export interface VisualHandle {
   copyData(): Promise<boolean>;
   /** Copy standalone vector SVG directly to system clipboard. */
   copySvg(): Promise<boolean>;
+  /** Lock or unlock visual positioning on canvas. */
+  toggleLock(): boolean;
+  /** Lock or unlock aspect ratio constraint on canvas. */
+  toggleAspectRatioLock(): boolean;
 }
 
 const DATE_TAG = '$date';
@@ -1096,6 +1100,26 @@ export class Report implements ReportRuntime {
     const locked = !v.spec.locked;
     this.updateVisual(id, { locked: locked || undefined });
     return locked;
+  }
+
+  isVisualLocked(id: string): boolean {
+    const v = this.findVisual(id);
+    return !!v?.spec.locked;
+  }
+
+  /** Lock or unlock aspect ratio during resize for a visual (or the active visual). */
+  toggleAspectRatioLock(id = this.active): boolean {
+    if (!id) return false;
+    const v = this.findVisual(id);
+    if (!v) return false;
+    const locked = !v.spec.lockAspectRatio;
+    this.updateVisual(id, { lockAspectRatio: locked || undefined });
+    return locked;
+  }
+
+  isVisualAspectRatioLocked(id: string): boolean {
+    const v = this.findVisual(id);
+    return !!v?.spec.lockAspectRatio;
   }
 
   private _zoom = 1;
@@ -2186,6 +2210,8 @@ export class Report implements ReportRuntime {
       toTsv: () => getHost().toTsv(),
       copyData: () => getHost().copyData(),
       copySvg: () => getHost().copySvg(),
+      toggleLock: () => this.toggleLock(id),
+      toggleAspectRatioLock: () => this.toggleAspectRatioLock(id),
     };
   }
 

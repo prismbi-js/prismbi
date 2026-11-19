@@ -34,6 +34,8 @@ export interface VisualSpec {
   group?: string;
   /** When true, the visual is locked and cannot be moved or resized on canvas in edit mode. */
   locked?: boolean;
+  /** When true, the visual's aspect ratio is preserved during resize on canvas. */
+  lockAspectRatio?: boolean;
   /** Visual annotations / callout pins attached to marks or positions. */
   annotations?: VisualAnnotation[];
   id?: string;
