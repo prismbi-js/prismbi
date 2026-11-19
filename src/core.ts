@@ -48,7 +48,7 @@ export type { PowerBIThemeJson, Theme } from './theme/theme';
 export { defineVisual, getVisual, hasVisual, listVisuals, registerVisual } from './visuals/registry';
 export { baseFormat } from './visuals/format';
 export { resolveDataLabelColor } from './visuals/common';
-export type { CardFormat, DataLabelRule, DonutFormat, FunnelFormat, GaugeFormat, KpiFormat, MultiRowCardFormat, PieFormat, PieLabelContents, QuadrantsFormat, ReferenceBand, ReferenceLine, SunburstFormat, SyncSlicerConfig, TreemapFormat, VisualFormat } from './visuals/format';
+export type { BulletFormat, CandlestickFormat, CardFormat, DataLabelRule, DonutFormat, FunnelFormat, GaugeFormat, KpiFormat, MultiRowCardFormat, PieFormat, PieLabelContents, QuadrantsFormat, RadarFormat, ReferenceBand, ReferenceLine, SunburstFormat, SyncSlicerConfig, TreemapFormat, VisualFormat, WaterfallFormat } from './visuals/format';
 export { detectAnomalies } from './visuals/anomaly';
 export type { AnomalyOptions, AnomalyPoint } from './visuals/anomaly';
 export type {

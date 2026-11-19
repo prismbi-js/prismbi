@@ -132,6 +132,10 @@ export interface MultiRowCardFormat {
   columns?: number;
   showAccentBar?: boolean;
   accentColor?: string;
+  cardPadding?: number;
+  valueFontSize?: number;
+  labelFontSize?: number;
+  labelColor?: string;
 }
 
 export type PieLabelContents = 'category' | 'value' | 'percent' | 'category, percent' | 'value, percent' | 'all';
@@ -181,6 +185,58 @@ export interface TreemapFormat {
 export interface SunburstFormat {
   innerRadius?: number;
   maxDepth?: number;
+}
+
+export interface RadarFormat {
+  /** Render circular concentric rings instead of polygon web (default: false). */
+  circularGrid?: boolean;
+  /** Series polygon fill opacity between 0 and 1 (default: 0.1). */
+  fillOpacity?: number;
+  /** Series polygon line stroke width (default: 2). */
+  lineWidth?: number;
+  /** Show data point vertex dots (default: true). */
+  showDots?: boolean;
+  /** Radius of data point vertex dots (default: 4). */
+  dotRadius?: number;
+}
+
+export interface WaterfallFormat {
+  showTotal?: boolean;
+  totalLabel?: string;
+  increaseColor?: string;
+  decreaseColor?: string;
+  totalColor?: string;
+  /** Show connector bridge lines between steps (default: true). */
+  showConnectors?: boolean;
+  /** Connector line color (default: theme.axis). */
+  connectorColor?: string;
+  /** Connector stroke width (default: 1). */
+  connectorWidth?: number;
+  /** Connector line style: 'solid' | 'dashed' | 'dotted' (default: 'solid'). */
+  connectorStyle?: 'solid' | 'dashed' | 'dotted';
+}
+
+export interface BulletFormat {
+  bands?: number[];
+  sharedScale?: boolean;
+  /** Custom qualitative band colors (e.g. ['#fee2e2', '#fef3c7', '#dcfce7']). */
+  bandColors?: string[];
+  /** Target indicator line stroke color (default: theme.foreground). */
+  targetColor?: string;
+  /** Target indicator line stroke width (default: 2.5). */
+  targetWidth?: number;
+}
+
+export interface CandlestickFormat {
+  upColor?: string;
+  downColor?: string;
+  showVolume?: boolean;
+  /** Wick stroke line width (default: 1.5). */
+  wickWidth?: number;
+  /** Hollow bullish candles: transparent body with colored stroke (default: false). */
+  hollow?: boolean;
+  /** Custom volume bar fill color override. */
+  volumeColor?: string;
 }
 
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
@@ -283,6 +339,10 @@ export interface VisualFormat {
   quadrants?: QuadrantsFormat;
   treemap?: TreemapFormat;
   sunburst?: SunburstFormat;
+  radar?: RadarFormat;
+  waterfall?: WaterfallFormat;
+  bullet?: BulletFormat;
+  candlestick?: CandlestickFormat;
   [section: string]: unknown;
 }
 

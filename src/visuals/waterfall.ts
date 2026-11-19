@@ -16,14 +16,7 @@ import {
   valueAxisFormatter,
   withLegend,
 } from './common';
-
-interface WaterfallFormat {
-  showTotal?: boolean;
-  totalLabel?: string;
-  increaseColor?: string;
-  decreaseColor?: string;
-  totalColor?: string;
-}
+import type { WaterfallFormat } from './format';
 
 /** Waterfall: each category is a step up or down from the running total, ending in a total bar. */
 export const waterfall = /* @__PURE__ */ defineVisual({
@@ -102,9 +95,23 @@ export const waterfall = /* @__PURE__ */ defineVisual({
       }
       g.append(rect);
       // connector from this step's end to the next step's start
-      if (i < steps.length - 1) {
+      if (i < steps.length - 1 && wf.showConnectors !== false) {
         const yc = Math.round(scale(st.end)) + 0.5;
-        g.append(s('line', { x1: x + thick, x2: band(i + 1) + (band.bandwidth - thick) / 2, y1: yc, y2: yc, stroke: t.axis, 'stroke-width': 1, 'pointer-events': 'none' }));
+        const cColor = wf.connectorColor ?? t.axis;
+        const cWidth = wf.connectorWidth ?? 1;
+        const cStyle = wf.connectorStyle ?? 'solid';
+        const dash = cStyle === 'dashed' ? '4,3' : cStyle === 'dotted' ? '2,2' : undefined;
+        const lineAttrs: Record<string, any> = {
+          x1: x + thick,
+          x2: band(i + 1) + (band.bandwidth - thick) / 2,
+          y1: yc,
+          y2: yc,
+          stroke: cColor,
+          'stroke-width': cWidth,
+          'pointer-events': 'none',
+        };
+        if (dash) lineAttrs['stroke-dasharray'] = dash;
+        g.append(s('line', lineAttrs));
       }
       if (f.dataLabels.show) {
         const delta = st.kind === 'total' ? st.end : st.end - st.start;

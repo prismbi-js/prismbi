@@ -6,15 +6,9 @@ import { valueKey } from '../data/types';
 import { defineVisual } from './registry';
 import { renderSmallMultiples } from './multiples';
 import { drawCategoryLabels, categoryLabelLayout, drawValueAxisY, emptyState, identityOf, interactive, markOpacity, mergeIdentity, pivot, renderLegend, tooltipItems, valueAxisFormatter, withLegend } from './common';
+import type { BulletFormat, RadarFormat } from './format';
 
 // ------------------------------------------------------------------- bullet
-
-interface BulletFormat {
-  /** Qualitative band edges as fractions of the maximum (default [0.6, 0.85, 1]). */
-  bands?: number[];
-  /** One scale for every row (default true). */
-  sharedScale?: boolean;
-}
 
 /** Bullet chart: actual vs target over qualitative bands, one row per category. */
 export const bullet = /* @__PURE__ */ defineVisual({
@@ -59,8 +53,10 @@ export const bullet = /* @__PURE__ */ defineVisual({
     const band = bandScale(rows.length, [4, H - 4], 0.35, 0.1);
     const svg = s('svg', { width: W, height: H, class: 'pbi-svg', role: 'img', 'aria-label': ctx.spec.title ?? 'Bullet chart' });
     const color = f.colors.default ?? t.dataColors[0];
-    // band shades: steps from the gridline grey towards the surface
-    const shades = bands.map((_, k) => mix(t.gridline, t.mode === 'dark' ? '#000000' : t.surface, 0.15 + (0.55 * (bands.length - 1 - k)) / Math.max(1, bands.length - 1)));
+    // band shades: steps from the gridline grey towards the surface, or custom band colors
+    const shades = bf.bandColors && bf.bandColors.length >= bands.length
+      ? bf.bandColors
+      : bands.map((_, k) => mix(t.gridline, t.mode === 'dark' ? '#000000' : t.surface, 0.15 + (0.55 * (bands.length - 1 - k)) / Math.max(1, bands.length - 1)));
     rows.forEach((row, i) => {
       const max = bf.sharedScale === false ? row.max : sharedMax;
       const x = linearScale(0, max, [left, W - valueW], { fixedMax: max });
@@ -86,7 +82,9 @@ export const bullet = /* @__PURE__ */ defineVisual({
       svg.append(bar);
       if (row.tg !== null) {
         const tx = x(row.tg);
-        svg.append(s('line', { x1: tx, x2: tx, y1: y0 + hgt * 0.12, y2: y0 + hgt * 0.88, stroke: t.foreground, 'stroke-width': 2.5, 'pointer-events': 'none' }));
+        const tgColor = bf.targetColor ?? t.foreground;
+        const tgWidth = bf.targetWidth ?? 2.5;
+        svg.append(s('line', { x1: tx, x2: tx, y1: y0 + hgt * 0.12, y2: y0 + hgt * 0.88, stroke: tgColor, 'stroke-width': tgWidth, 'pointer-events': 'none' }));
       }
       svg.append(s('text', { x: left - 8, y: y0 + hgt / 2 + fs / 3, 'text-anchor': 'end', class: 'pbi-tick', fill: t.foregroundSecondary }, fitText(labels[i], left - 10, fs, t.fontFamily)));
       svg.append(s('text', { x: W - valueW + 6, y: y0 + hgt / 2 + fs / 3, class: 'pbi-label', fill: t.foreground, 'font-weight': 600 }, ctx.fmt(vField, row.v, { displayUnits: 'auto' })));
@@ -112,6 +110,12 @@ export const radar = /* @__PURE__ */ defineVisual({
     const pv = pivot(ctx);
     if (pv.categories.length < 3 || !pv.series.length) return emptyState(ctx, 'A radar chart needs at least three categories');
     const t = ctx.theme;
+    const rf = (ctx.format.radar ?? {}) as RadarFormat;
+    const circularGrid = rf.circularGrid === true;
+    const fillOpacity = rf.fillOpacity ?? 0.1;
+    const lineWidth = rf.lineWidth ?? 2;
+    const showDots = rf.showDots !== false;
+    const dotRadius = rf.dotRadius ?? 4;
     const legend = renderLegend(ctx, pv.series.map((se) => ({ name: se.name, color: se.color, identity: se.identity, shape: 'line' as const })));
     const { plot, width, height } = withLegend(ctx, legend);
     const fs = t.labelFontSize;
@@ -130,7 +134,11 @@ export const radar = /* @__PURE__ */ defineVisual({
     for (const tk of scale.ticks) {
       if (tk === 0) continue;
       const r = scale(tk);
-      svg.append(s('polygon', { points: pv.categories.map((_, i) => pt(i, r).join(',')).join(' '), fill: 'none', stroke: t.gridline, 'stroke-width': 1 }));
+      if (circularGrid) {
+        svg.append(s('circle', { cx, cy, r, fill: 'none', stroke: t.gridline, 'stroke-width': 1 }));
+      } else {
+        svg.append(s('polygon', { points: pv.categories.map((_, i) => pt(i, r).join(',')).join(' '), fill: 'none', stroke: t.gridline, 'stroke-width': 1 }));
+      }
       // labels sit left of the vertical axis, and the outermost (next to the top category label) is left out
       if (r < R - fs) svg.append(s('text', { x: cx - 4, y: cy - r + fs / 3, 'text-anchor': 'end', class: 'pbi-tick', fill: t.foregroundMuted }, fmt(tk)));
     }
@@ -144,14 +152,16 @@ export const radar = /* @__PURE__ */ defineVisual({
     pv.series.forEach((se) => {
       const pts = se.values.map((v, i) => pt(i, scale(v ?? 0)));
       const op = se.identity ? markOpacity(ctx, se.identity) : 1;
-      svg.append(s('polygon', { points: pts.map((p) => p.join(',')).join(' '), fill: se.color, 'fill-opacity': 0.1, stroke: se.color, 'stroke-width': 2, 'stroke-linejoin': 'round', opacity: op, 'pointer-events': 'none' }));
-      pts.forEach((p, i) => {
-        if (se.values[i] === null) return;
-        const cat = pv.categories[i];
-        const dot = s('circle', { cx: p[0], cy: p[1], r: 4, fill: se.color, stroke: t.surface, 'stroke-width': 2, opacity: markOpacity(ctx, mergeIdentity(cat.identity, se.identity)) });
-        interactive(ctx, dot, mergeIdentity(cat.identity, se.identity), () => ({ title: cat.label, items: tooltipItems(ctx, cat, pv.series, i) }), cat.keys);
-        svg.append(dot);
-      });
+      svg.append(s('polygon', { points: pts.map((p) => p.join(',')).join(' '), fill: se.color, 'fill-opacity': fillOpacity, stroke: se.color, 'stroke-width': lineWidth, 'stroke-linejoin': 'round', opacity: op, 'pointer-events': 'none' }));
+      if (showDots) {
+        pts.forEach((p, i) => {
+          if (se.values[i] === null) return;
+          const cat = pv.categories[i];
+          const dot = s('circle', { cx: p[0], cy: p[1], r: dotRadius, fill: se.color, stroke: t.surface, 'stroke-width': 2, opacity: markOpacity(ctx, mergeIdentity(cat.identity, se.identity)) });
+          interactive(ctx, dot, mergeIdentity(cat.identity, se.identity), () => ({ title: cat.label, items: tooltipItems(ctx, cat, pv.series, i) }), cat.keys);
+          svg.append(dot);
+        });
+      }
     });
   },
 });

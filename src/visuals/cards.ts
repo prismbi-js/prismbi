@@ -89,12 +89,20 @@ export const multiRowCard = /* @__PURE__ */ defineVisual({
     const colCount = mrcFmt.columns;
     for (const r of ctx.data.rows.slice(0, 200)) {
       const item = h('div', { class: 'pbi-mrc-row' });
+      if (mrcFmt.cardPadding !== undefined) item.style.padding = `${mrcFmt.cardPadding}px`;
       if (mrcFmt.showAccentBar === false) item.style.borderLeft = 'none';
       else if (mrcFmt.accentColor) item.style.borderLeftColor = mrcFmt.accentColor;
       if (gi !== undefined) item.append(h('div', { class: 'pbi-mrc-title' }, ctx.fmt(ctx.data.groups[gi], r.keys[gi])));
       const grid = h('div', { class: 'pbi-mrc-grid' });
       if (colCount) grid.style.gridTemplateColumns = `repeat(${colCount}, minmax(0, 1fr))`;
-      for (const vi of vals) grid.append(h('div', {}, h('div', { class: 'pbi-mrc-value' }, ctx.fmt(ctx.data.values[vi], r.values[vi], { displayUnits: 'auto' })), h('div', { class: 'pbi-card-label' }, ctx.data.values[vi].name)));
+      for (const vi of vals) {
+        const valDiv = h('div', { class: 'pbi-mrc-value' }, ctx.fmt(ctx.data.values[vi], r.values[vi], { displayUnits: 'auto' }));
+        if (mrcFmt.valueFontSize !== undefined) valDiv.style.fontSize = `${mrcFmt.valueFontSize}px`;
+        const lblDiv = h('div', { class: 'pbi-card-label' }, ctx.data.values[vi].name);
+        if (mrcFmt.labelFontSize !== undefined) lblDiv.style.fontSize = `${mrcFmt.labelFontSize}px`;
+        if (mrcFmt.labelColor !== undefined) lblDiv.style.color = mrcFmt.labelColor;
+        grid.append(h('div', {}, valDiv, lblDiv));
+      }
       item.append(grid);
       list.append(item);
     }

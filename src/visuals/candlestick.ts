@@ -3,12 +3,8 @@ import { linearScale, bandScale } from '../render/scales';
 import type { CellValue } from '../data/types';
 import { defineVisual } from './registry';
 import { emptyState, identityOf, interactive, markOpacity } from './common';
-
-export interface CandlestickFormat {
-  upColor?: string;
-  downColor?: string;
-  showVolume?: boolean;
-}
+import type { CandlestickFormat } from './format';
+export type { CandlestickFormat } from './format';
 
 function num(v: CellValue): number {
   return typeof v === 'number' ? v : Number(v) || 0;
@@ -44,6 +40,8 @@ export const candlestick = /* @__PURE__ */ defineVisual({
     const cf = (ctx.format.candlestick ?? {}) as CandlestickFormat;
     const upColor = cf.upColor ?? (t.good || t.accent || '#16a34a');
     const downColor = cf.downColor ?? (t.bad || '#dc2626');
+    const wickWidth = cf.wickWidth ?? 1.5;
+    const isHollow = cf.hollow === true;
 
     const W = ctx.width;
     const H = ctx.height;
@@ -127,16 +125,23 @@ export const candlestick = /* @__PURE__ */ defineVisual({
       const g = s('g', { class: 'pbi-mark', opacity: item.opacity });
 
       // Wick line
-      g.append(s('line', { x1: cx, y1: yHigh, x2: cx, y2: yLow, stroke: color, 'stroke-width': 1.5 }));
+      g.append(s('line', { x1: cx, y1: yHigh, x2: cx, y2: yLow, stroke: color, 'stroke-width': wickWidth }));
 
       // Body rect
-      g.append(s('rect', { x, y: yBodyTop, width: bw, height: yBodyH, fill: color, rx: 1 }));
+      const bodyFill = isHollow && isUp ? 'transparent' : color;
+      const bodyAttrs: Record<string, any> = { x, y: yBodyTop, width: bw, height: yBodyH, fill: bodyFill, rx: 1 };
+      if (isHollow && isUp) {
+        bodyAttrs.stroke = color;
+        bodyAttrs['stroke-width'] = 1.5;
+      }
+      g.append(s('rect', bodyAttrs));
 
       // Volume bar if present
       if (hasVol && item.volume !== undefined) {
         const vY = yVolScale(item.volume);
         const vH = Math.max(1, volTop + volH - vY);
-        g.append(s('rect', { x, y: vY, width: bw, height: vH, fill: color, opacity: 0.4 }));
+        const vColor = cf.volumeColor ?? color;
+        g.append(s('rect', { x, y: vY, width: bw, height: vH, fill: vColor, opacity: 0.4 }));
       }
 
       interactive(
