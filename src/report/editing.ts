@@ -165,9 +165,9 @@ export class EditController {
     const spec = p?.specs.find((s) => s.id === id);
     if (!p || !spec || spec.locked) return;
     const start = { ...(spec.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
-    // moving one of several selected visuals moves them all
+    // moving or resizing one of several selected visuals adjusts them together
     const group = (this.host.selection?.() ?? []).filter((x) => x !== id);
-    const others = (mode ?? 'move') === 'move' && group.length ? new Map(group.map((x) => {
+    const others = group.length ? new Map(group.map((x) => {
       const l = { ...(p.specs.find((s) => s.id === x)?.layout ?? { x: 0, y: 0, w: 4, h: 6 }) };
       return [x, { start: l, current: { ...l } }] as const;
     })) : undefined;
@@ -188,7 +188,11 @@ export class EditController {
     const { col, row } = this.steps(p);
     let dc = Math.round((e.clientX - d.x) / col);
     let dr = Math.round((e.clientY - d.y) / row);
-    if (d.others) {
+    const s = d.start;
+    let { x, y, w, h: hh } = s;
+    const m = d.mode;
+
+    if (d.others && m === 'move') {
       // the whole selection moves by the same amount and stays on the grid
       const all = [d.start, ...[...d.others.values()].map((o) => o.start)];
       dc = Math.max(-Math.min(...all.map((l) => l.x)), Math.min(p.cols - Math.max(...all.map((l) => l.x + l.w)), dc));
@@ -198,23 +202,72 @@ export class EditController {
         const oel = p.visuals.get(oid);
         if (oel) for (const k of ['x', 'y'] as const) oel.style.setProperty(`--${k}`, String(o.current[k]));
       }
-    }
-    const s = d.start;
-    let { x, y, w, h: hh } = s;
-    const m = d.mode;
-    if (m === 'move') {
       x += dc;
       y += dr;
-    } else {
-      if (m.includes('e')) w += dc;
-      if (m.includes('s')) hh += dr;
+    } else if (d.others && m !== 'move') {
+      // proportional collective resize across the selection bounding box
+      const allStarts = [d.start, ...[...d.others.values()].map((o) => o.start)];
+      const minX = Math.min(...allStarts.map((l) => l.x));
+      const maxX = Math.max(...allStarts.map((l) => l.x + l.w));
+      const minY = Math.min(...allStarts.map((l) => l.y));
+      const maxY = Math.max(...allStarts.map((l) => l.h + l.y));
+      const boxW = Math.max(1, maxX - minX);
+      const boxH = Math.max(1, maxY - minY);
+
+      let deltaW = 0;
+      let deltaH = 0;
+      let deltaX = 0;
+      let deltaY = 0;
+
+      if (m.includes('e')) deltaW += dc;
+      if (m.includes('s')) deltaH += dr;
       if (m.includes('w')) {
-        x += dc;
-        w -= dc;
+        deltaX += dc;
+        deltaW -= dc;
       }
       if (m.includes('n')) {
+        deltaY += dr;
+        deltaH -= dr;
+      }
+
+      const targetBoxW = Math.max(1, Math.min(p.cols - (minX + deltaX), boxW + deltaW));
+      const targetBoxH = Math.max(1, boxH + deltaH);
+      const scaleX = targetBoxW / boxW;
+      const scaleY = targetBoxH / boxH;
+
+      for (const [oid, o] of d.others) {
+        const relX = o.start.x - minX;
+        const relY = o.start.y - minY;
+        const newX = Math.max(0, Math.min(p.cols - 1, Math.round(minX + deltaX + relX * scaleX)));
+        const newY = Math.max(0, Math.round(minY + deltaY + relY * scaleY));
+        const newW = Math.max(1, Math.min(p.cols - newX, Math.round(o.start.w * scaleX)));
+        const newH = Math.max(1, Math.round(o.start.h * scaleY));
+        o.current = { ...o.start, x: newX, y: newY, w: newW, h: newH };
+        const oel = p.visuals.get(oid);
+        if (oel) for (const k of ['x', 'y', 'w', 'h'] as const) oel.style.setProperty(`--${k}`, String(o.current[k]));
+      }
+
+      const relX = d.start.x - minX;
+      const relY = d.start.y - minY;
+      x = Math.max(0, Math.min(p.cols - 1, Math.round(minX + deltaX + relX * scaleX)));
+      y = Math.max(0, Math.round(minY + deltaY + relY * scaleY));
+      w = Math.max(1, Math.min(p.cols - x, Math.round(d.start.w * scaleX)));
+      hh = Math.max(1, Math.round(d.start.h * scaleY));
+    } else {
+      if (m === 'move') {
+        x += dc;
         y += dr;
-        hh -= dr;
+      } else {
+        if (m.includes('e')) w += dc;
+        if (m.includes('s')) hh += dr;
+        if (m.includes('w')) {
+          x += dc;
+          w -= dc;
+        }
+        if (m.includes('n')) {
+          y += dr;
+          hh -= dr;
+        }
       }
     }
     // clamp to the page grid

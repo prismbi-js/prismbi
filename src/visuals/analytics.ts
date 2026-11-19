@@ -35,7 +35,7 @@ export function referenceValue(line: ReferenceLine, values: number[]): number | 
 const LABELS: Record<ReferenceLine['type'], string> = { constant: '', average: 'Average', median: 'Median', min: 'Min', max: 'Max', percentile: 'P' };
 
 /** Draw shaded target tolerance reference bands across the plot. */
-export function drawReferenceBands(ctx: RenderContext, g: SVGGElement, scale: LinearScale, axis: 'x' | 'y', span: [number, number]): void {
+export function drawReferenceBands(ctx: RenderContext, g: SVGGElement, scale: LinearScale, axis: 'x' | 'y', span: [number, number], values?: number[], field?: QueryField): void {
   const t = ctx.theme;
   for (const band of ctx.format.analytics.referenceBands ?? []) {
     const fromVal = band.from;
@@ -89,6 +89,35 @@ export function drawReferenceBands(ctx: RenderContext, g: SVGGElement, scale: Li
         }, band.label));
       }
     }
+
+    const minVal = Math.min(fromVal, toVal);
+    const maxVal = Math.max(fromVal, toVal);
+    const validVals = (values ?? []).filter((x) => typeof x === 'number' && Number.isFinite(x));
+    const inBand = validVals.filter((x) => x >= minVal && x <= maxVal).length;
+    const totalCount = validVals.length;
+    const inPct = totalCount > 0 ? `${((inBand / totalCount) * 100).toFixed(1)}%` : '0%';
+
+    const hitRect = s('rect', {
+      x: axis === 'y' ? span[0] : minP,
+      y: axis === 'y' ? minP : span[0],
+      width: axis === 'y' ? Math.max(0, span[1] - span[0]) : bandSize,
+      height: axis === 'y' ? bandSize : Math.max(0, span[1] - span[0]),
+      fill: 'transparent',
+      class: 'pbi-refband-hit',
+      style: 'cursor: pointer;',
+    });
+    const bandTitle = band.label || `Band: ${ctx.fmt(field, minVal)} – ${ctx.fmt(field, maxVal)}`;
+    const tooltipItems = [
+      { label: 'Range', value: `${ctx.fmt(field, minVal)} – ${ctx.fmt(field, maxVal)}`, color },
+      ...(totalCount > 0 ? [{ label: 'In Range', value: `${inBand} of ${totalCount} (${inPct})` }] : []),
+    ];
+    hitRect.addEventListener('mousemove', (e: MouseEvent) => {
+      ctx.host.showTooltip(e, tooltipItems, bandTitle);
+    });
+    hitRect.addEventListener('mouseleave', () => {
+      ctx.host.hideTooltip();
+    });
+    g.append(hitRect);
   }
 }
 
@@ -97,7 +126,7 @@ export function drawReferenceBands(ctx: RenderContext, g: SVGGElement, scale: Li
  * `axis: 'y'` → horizontal lines (vertical charts); `axis: 'x'` → vertical lines (horizontal bars).
  */
 export function drawReferenceLines(ctx: RenderContext, g: SVGGElement, scale: LinearScale, axis: 'x' | 'y', span: [number, number], values: number[], field?: QueryField): void {
-  drawReferenceBands(ctx, g, scale, axis, span);
+  drawReferenceBands(ctx, g, scale, axis, span, values, field);
   const t = ctx.theme;
   for (const line of ctx.format.analytics.referenceLines ?? []) {
     const v = referenceValue(line, values);
@@ -113,6 +142,60 @@ export function drawReferenceLines(ctx: RenderContext, g: SVGGElement, scale: Li
     } else {
       g.append(s('line', { y1: span[0], y2: span[1], x1: p, x2: p, ...attrs }));
       if (label) g.append(s('text', { x: p + 4, y: span[0] + 12, class: 'pbi-label pbi-refline-label', fill: t.foregroundSecondary }, label));
+    }
+
+    if (line.shade) {
+      const shadeColor = line.shadeColor ?? line.color ?? t.accent;
+      const shadeOpacity = line.shadeOpacity ?? 0.08;
+      if (axis === 'y') {
+        let y0 = p;
+        let y1 = p;
+        if (line.shade === 'above') {
+          y0 = 0;
+          y1 = p;
+        } else if (line.shade === 'below') {
+          y0 = p;
+          y1 = ctx.height;
+        } else if (line.shade === 'to-zero') {
+          const zeroP = Math.round(scale(0));
+          y0 = Math.min(p, zeroP);
+          y1 = Math.max(p, zeroP);
+        }
+        g.append(s('rect', {
+          x: span[0],
+          y: y0,
+          width: Math.max(0, span[1] - span[0]),
+          height: Math.max(0, y1 - y0),
+          fill: shadeColor,
+          'fill-opacity': shadeOpacity,
+          class: 'pbi-refline-shade',
+          'pointer-events': 'none',
+        }));
+      } else {
+        let x0 = p;
+        let x1 = p;
+        if (line.shade === 'above') {
+          x0 = p;
+          x1 = ctx.width;
+        } else if (line.shade === 'below') {
+          x0 = 0;
+          x1 = p;
+        } else if (line.shade === 'to-zero') {
+          const zeroP = Math.round(scale(0));
+          x0 = Math.min(p, zeroP);
+          x1 = Math.max(p, zeroP);
+        }
+        g.append(s('rect', {
+          x: x0,
+          y: span[0],
+          width: Math.max(0, x1 - x0),
+          height: Math.max(0, span[1] - span[0]),
+          fill: shadeColor,
+          'fill-opacity': shadeOpacity,
+          class: 'pbi-refline-shade',
+          'pointer-events': 'none',
+        }));
+      }
     }
 
     const validVals = values.filter((x) => typeof x === 'number' && Number.isFinite(x));

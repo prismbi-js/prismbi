@@ -3,6 +3,8 @@ import { ramp, textOn } from '../render/color';
 import type { CellValue } from '../data/types';
 import { compareValues, isColumnRefString, valueKey } from '../data/types';
 import type { FieldSpec, QueryField, QueryRow } from '../data/query';
+import type { Theme } from '../theme/theme';
+import type { IconOptions } from './format';
 import { defineVisual } from './registry';
 import { emptyState, identityOf } from './common';
 import type { RenderContext } from './types';
@@ -42,8 +44,8 @@ export interface ConditionalFormat {
   /** Colour scale on cell text/font: `true` uses the theme sequential ramp. */
   fontColor?: boolean | { min?: string; mid?: string; max?: string; minValue?: number; midValue?: number; maxValue?: number };
   rules?: ConditionalRule[];
-  /** ▲ ▼ ● icons by sign. */
-  icons?: boolean;
+  /** ▲ ▼ ● icons by sign, or advanced icon indicator options & rules. */
+  icons?: boolean | IconOptions;
 }
 
 export interface TableSortCriterion {
@@ -383,6 +385,45 @@ export function renderSparkline(values: number[], opts: SparklineOptions = {}): 
   return svg;
 }
 
+function renderIconIndicator(v: number, opts: IconOptions, t: Theme): { el: HTMLElement; align: 'left' | 'right' | 'iconOnly' } | null {
+  const align = opts.align ?? 'left';
+  if (opts.rules?.length) {
+    for (const r of opts.rules) {
+      if (ruleMatch(r as ConditionalRule, v)) {
+        const iconChar = r.icon ?? (v > 0 ? '▲' : v < 0 ? '▼' : '●');
+        const color = r.color;
+        const el = h('i', { class: 'pbi-cf-icon', style: color ? `color:${color};` : undefined }, iconChar + ' ');
+        return { el, align };
+      }
+    }
+  }
+  const set = opts.set ?? 'kpi-shapes';
+  let iconChar = '●';
+  let cls = 'is-flat';
+  let customColor: string | undefined;
+  if (set === 'arrows') {
+    iconChar = v > 0 ? '▲' : v < 0 ? '▼' : '▶';
+    cls = v > 0 ? 'is-good' : v < 0 ? 'is-bad' : 'is-flat';
+  } else if (set === 'flags') {
+    iconChar = '⚑';
+    cls = v > 0 ? 'is-good' : v < 0 ? 'is-bad' : 'is-flat';
+  } else if (set === 'stars') {
+    iconChar = v > 0 ? '★' : '☆';
+    cls = v > 0 ? 'is-good' : 'is-flat';
+  } else if (set === 'traffic-lights') {
+    iconChar = '●';
+    cls = v > 0 ? 'is-good' : v < 0 ? 'is-bad' : 'is-warning';
+    customColor = v > 0 ? t.good : v < 0 ? t.bad : t.warning;
+  } else {
+    // 'kpi-shapes':
+    iconChar = v > 0 ? '●' : v < 0 ? '◆' : '▲';
+    cls = v > 0 ? 'is-good' : v < 0 ? 'is-bad' : 'is-warning';
+    customColor = v > 0 ? t.good : v < 0 ? t.bad : t.warning;
+  }
+  const el = h('i', { class: `pbi-cf-icon ${cls}`, style: customColor ? `color:${customColor};` : undefined }, iconChar + ' ');
+  return { el, align };
+}
+
 /** Apply conditional formatting to a value cell. */
 export function decorateCell(
   ctx: RenderContext,
@@ -426,7 +467,22 @@ export function decorateCell(
       if (r.background) td.style.background = r.background;
       if (r.icon) span.prepend(h('i', { class: 'pbi-cf-icon' }, r.icon + ' '));
     }
-  if (cf.icons) span.prepend(h('i', { class: `pbi-cf-icon ${v > 0 ? 'is-good' : v < 0 ? 'is-bad' : 'is-flat'}` }, v > 0 ? '▲ ' : v < 0 ? '▼ ' : '● '));
+  if (cf.icons) {
+    if (typeof cf.icons === 'object') {
+      const res = renderIconIndicator(v, cf.icons, t);
+      if (res) {
+        if (res.align === 'iconOnly') {
+          span.replaceChildren(res.el);
+        } else if (res.align === 'right') {
+          span.append(h('span', { class: 'pbi-cf-spacer' }, ' '), res.el);
+        } else {
+          span.prepend(res.el);
+        }
+      }
+    } else {
+      span.prepend(h('i', { class: `pbi-cf-icon ${v > 0 ? 'is-good' : v < 0 ? 'is-bad' : 'is-flat'}` }, v > 0 ? '▲ ' : v < 0 ? '▼ ' : '● '));
+    }
+  }
 
   if (cf.dataBars) {
     const db = typeof cf.dataBars === 'object' ? cf.dataBars : {};

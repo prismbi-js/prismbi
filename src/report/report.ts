@@ -2488,17 +2488,22 @@ export class Report implements ReportRuntime {
     this.schedule();
   }
 
-  /** Get the raw data of a visual in CSV, TSV, or JSON format. */
-  getVisualData(visualId: string, format: 'csv' | 'tsv' | 'json' = 'csv'): string {
+  /** Get the raw or formatted data of a visual in CSV, TSV, or JSON format. */
+  getVisualData(visualId: string, format: 'csv' | 'tsv' | 'json' = 'csv', opts?: { formatted?: boolean }): string {
     for (const p of this.pages) {
       const host = p.hosts.get(visualId);
-      if (host) return host.getData(format);
+      if (host) return host.getData(format, opts);
     }
     throw new Error(`Visual "${visualId}" not found`);
   }
 
-  /** Export the raw data of a visual as a file download (CSV, TSV, JSON, or Excel XLSX). */
-  async exportVisualData(visualId: string, format: 'csv' | 'tsv' | 'json' | 'xlsx' = 'csv', filename?: string): Promise<Blob> {
+  /** Export the raw or formatted data of a visual as a file download (CSV, TSV, JSON, or Excel XLSX). */
+  async exportVisualData(
+    visualId: string,
+    format: 'csv' | 'tsv' | 'json' | 'xlsx' = 'csv',
+    filename?: string,
+    opts?: { formatted?: boolean }
+  ): Promise<Blob> {
     for (const p of this.pages) {
       const host = p.hosts.get(visualId);
       if (host) {
@@ -2511,16 +2516,16 @@ export class Report implements ReportRuntime {
         }
         const { download } = await import('./snapshot');
         if (format === 'json') {
-          const blob = new Blob([host.toJson()], { type: 'application/json;charset=utf-8' });
+          const blob = new Blob([host.toJson(opts)], { type: 'application/json;charset=utf-8' });
           if (typeof document !== 'undefined') download(blob, filename || `${baseName}.json`);
           return blob;
         }
         if (format === 'tsv') {
-          const blob = new Blob([host.toTsv()], { type: 'text/tab-separated-values;charset=utf-8' });
+          const blob = new Blob([host.toTsv(opts)], { type: 'text/tab-separated-values;charset=utf-8' });
           if (typeof document !== 'undefined') download(blob, filename || `${baseName}.tsv`);
           return blob;
         }
-        const blob = new Blob([host.toCsv()], { type: 'text/csv;charset=utf-8' });
+        const blob = new Blob([host.toCsv(opts)], { type: 'text/csv;charset=utf-8' });
         if (typeof document !== 'undefined') download(blob, filename || `${baseName}.csv`);
         return blob;
       }

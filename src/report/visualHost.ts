@@ -650,51 +650,79 @@ export class VisualHost {
     root.append(h('div', { class: 'pbi-datatable-wrap' }, table));
   }
 
-  /** CSV of the data currently shown by the visual. */
-  toCsv(): string {
+  /** Formats a value using the field's format string and current locale. */
+  fmt(field: QueryField | undefined, v: CellValue): string {
+    return formatValue(v, field?.format, { locale: this.rt.locale });
+  }
+
+  /** CSV of the data currently shown by the visual (raw or formatted). */
+  toCsv(opts?: { formatted?: boolean }): string {
     const d = this.data;
     if (!d) return '';
-    const esc = (v: CellValue) => {
-      const s = v === null ? '' : v instanceof Date ? v.toISOString() : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const head = [...d.groups, ...d.values].map((f) => esc(f.name)).join(',');
-    return [head, ...d.rows.map((r) => [...r.keys, ...r.values].map(esc).join(','))].join('\n');
+    const fields = [...d.groups, ...d.values];
+    const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+    const head = fields.map((f) => esc(f.name)).join(',');
+    const rows = d.rows.map((r) => {
+      const allVals = [...r.keys, ...r.values];
+      return allVals.map((v, i) => {
+        if (opts?.formatted) {
+          const formatted = this.fmt(fields[i], v);
+          return esc(formatted ?? '');
+        }
+        const s = v === null ? '' : v instanceof Date ? v.toISOString() : String(v);
+        return esc(s);
+      }).join(',');
+    });
+    return [head, ...rows].join('\n');
   }
 
   /** TSV (tab-separated values) of the data currently shown by the visual for clipboard copy. */
-  toTsv(): string {
+  toTsv(opts?: { formatted?: boolean }): string {
     const d = this.data;
     if (!d) return '';
-    const esc = (v: CellValue) => {
-      const s = v === null ? '' : v instanceof Date ? v.toISOString() : String(v);
-      return /[\t\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const head = [...d.groups, ...d.values].map((f) => esc(f.name)).join('\t');
-    return [head, ...d.rows.map((r) => [...r.keys, ...r.values].map(esc).join('\t'))].join('\n');
+    const fields = [...d.groups, ...d.values];
+    const esc = (s: string) => (/[\t\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+    const head = fields.map((f) => esc(f.name)).join('\t');
+    const rows = d.rows.map((r) => {
+      const allVals = [...r.keys, ...r.values];
+      return allVals.map((v, i) => {
+        if (opts?.formatted) {
+          const formatted = this.fmt(fields[i], v);
+          return esc(formatted ?? '');
+        }
+        const s = v === null ? '' : v instanceof Date ? v.toISOString() : String(v);
+        return esc(s);
+      }).join('\t');
+    });
+    return [head, ...rows].join('\n');
   }
 
   /** JSON array of objects representing the data currently shown by the visual. */
-  toJson(): string {
+  toJson(opts?: { formatted?: boolean }): string {
     const d = this.data;
     if (!d) return '[]';
-    const cols = [...d.groups, ...d.values].map((f) => f.name);
+    const fields = [...d.groups, ...d.values];
+    const cols = fields.map((f) => f.name);
     const rows = d.rows.map((r) => {
-      const obj: Record<string, CellValue> = {};
+      const obj: Record<string, CellValue | string> = {};
       const allVals = [...r.keys, ...r.values];
       for (let i = 0; i < cols.length; i++) {
-        obj[cols[i]] = allVals[i];
+        if (opts?.formatted) {
+          obj[cols[i]] = this.fmt(fields[i], allVals[i]) ?? '';
+        } else {
+          obj[cols[i]] = allVals[i];
+        }
       }
       return obj;
     });
     return JSON.stringify(rows, null, 2);
   }
 
-  /** Get the raw data in the specified text format. */
-  getData(format: 'csv' | 'tsv' | 'json' = 'csv'): string {
-    if (format === 'json') return this.toJson();
-    if (format === 'tsv') return this.toTsv();
-    return this.toCsv();
+  /** Get the visual data in the specified text format (raw or formatted). */
+  getData(format: 'csv' | 'tsv' | 'json' = 'csv', opts?: { formatted?: boolean }): string {
+    if (format === 'json') return this.toJson(opts);
+    if (format === 'tsv') return this.toTsv(opts);
+    return this.toCsv(opts);
   }
 
   /** Sheet name for exports: the visual's title, else its type. */
@@ -722,13 +750,13 @@ export class VisualHost {
     download(new Blob([bytes as unknown as BlobPart], { type: XLSX_MIME }), filename);
   }
 
-  exportCsv(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.csv`): void {
-    const blob = new Blob([this.toCsv()], { type: 'text/csv;charset=utf-8' });
+  exportCsv(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.csv`, opts?: { formatted?: boolean }): void {
+    const blob = new Blob([this.toCsv(opts)], { type: 'text/csv;charset=utf-8' });
     download(blob, filename);
   }
 
-  exportJson(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.json`): void {
-    const blob = new Blob([this.toJson()], { type: 'application/json;charset=utf-8' });
+  exportJson(filename = `${(this.format().title.text || this.spec.type).replace(/[^\w-]+/g, '_')}.json`, opts?: { formatted?: boolean }): void {
+    const blob = new Blob([this.toJson(opts)], { type: 'application/json;charset=utf-8' });
     download(blob, filename);
   }
 
@@ -838,8 +866,8 @@ export class VisualHost {
   }
 
   /** Copy the visual's query results as tab-separated values (TSV) directly to the system clipboard for Excel/Sheets. */
-  async copyData(): Promise<boolean> {
-    const text = this.toTsv();
+  async copyData(opts?: { formatted?: boolean }): Promise<boolean> {
+    const text = this.toTsv(opts);
     if (!text) return false;
     if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       try {

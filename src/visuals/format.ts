@@ -34,6 +34,26 @@ export interface ReferenceLine {
   label?: string | false;
   color?: string;
   dash?: boolean;
+  /** Shading between the reference line and an edge / baseline. */
+  shade?: 'above' | 'below' | 'to-zero';
+  shadeColor?: string;
+  shadeOpacity?: number;
+}
+
+export type IconSet = 'kpi-shapes' | 'arrows' | 'flags' | 'stars' | 'traffic-lights';
+
+export interface IconRule {
+  op: '>' | '>=' | '<' | '<=' | '=' | '<>' | 'between';
+  value: number;
+  value2?: number;
+  icon?: string;
+  color?: string;
+}
+
+export interface IconOptions {
+  set?: IconSet;
+  rules?: IconRule[];
+  align?: 'left' | 'right' | 'iconOnly';
 }
 
 export interface ReferenceBand {

@@ -336,13 +336,46 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
   };
 
   if (fmt.search !== false) {
-    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: st._search ?? '' }) as HTMLInputElement;
+    const searchWrap = h('div', { class: 'pbi-slicer-search-bar', style: 'display:flex;gap:4px;align-items:center;margin-bottom:6px;' });
+    const input = h('input', { type: 'search', class: 'pbi-slicer-search', placeholder: 'Search', 'aria-label': 'Search values', value: st._search ?? '', style: 'flex:1;min-width:0;' }) as HTMLInputElement;
+    input.addEventListener('input', () => ctx.host.setState({ _search: input.value }));
     input.addEventListener('change', () => ctx.host.setState({ _search: input.value }));
     input.addEventListener('keydown', (e) => e.key === 'Enter' && ctx.host.setState({ _search: input.value }));
-    container.append(input);
+    searchWrap.append(input);
+
+    const expandAll = h('button', { type: 'button', class: 'pbi-btn-icon pbi-slicer-action pbi-tree-expand-all', title: 'Expand all', 'aria-label': 'Expand all' }, '▾');
+    expandAll.addEventListener('click', () => {
+      const allKeys: string[] = [];
+      for (const [k, n] of byKey.entries()) if (n.children.length) allKeys.push(k);
+      ctx.host.setState({ expanded: allKeys });
+    });
+    const collapseAll = h('button', { type: 'button', class: 'pbi-btn-icon pbi-slicer-action pbi-tree-collapse-all', title: 'Collapse all', 'aria-label': 'Collapse all' }, '▸');
+    collapseAll.addEventListener('click', () => {
+      ctx.host.setState({ expanded: [] });
+    });
+    searchWrap.append(expandAll, collapseAll);
+    container.append(searchWrap);
   }
   const list = h('div', { class: 'pbi-slicer-list pbi-tree', role: 'tree', 'aria-multiselectable': String(!fmt.single) });
   const matches = (n: TreeNode): boolean => !q || n.label.toLowerCase().includes(q) || n.children.some(matches);
+  const highlightLabel = (label: string): (string | HTMLElement)[] => {
+    if (!q) return [label];
+    const idx = label.toLowerCase().indexOf(q);
+    if (idx < 0) return [label];
+    const out: (string | HTMLElement)[] = [];
+    let pos = 0;
+    while (pos < label.length) {
+      const hit = label.toLowerCase().indexOf(q, pos);
+      if (hit < 0) {
+        out.push(label.slice(pos));
+        break;
+      }
+      if (hit > pos) out.push(label.slice(pos, hit));
+      out.push(h('mark', { class: 'pbi-highlight' }, label.slice(hit, hit + q.length)));
+      pos = hit + q.length;
+    }
+    return out;
+  };
   const draw = (n: TreeNode) => {
     if (!matches(n)) return;
     const hasKids = n.children.length > 0;
@@ -363,7 +396,7 @@ function renderHierarchy(ctx: RenderContext, targets: string[], fmt: SlicerForma
       });
       row.append(btn);
     } else row.append(h('span', { class: 'pbi-tree-spacer' }));
-    row.append(h('label', {}, input, h('span', {}, n.label)));
+    row.append(h('label', {}, input, h('span', {}, ...highlightLabel(n.label))));
     list.append(row);
     if (open) n.children.forEach(draw);
   };
