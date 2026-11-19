@@ -4,7 +4,7 @@ import { defineVisual } from './registry';
 import { emptyState } from './common';
 import type { RenderContext } from './types';
 import type { CellValue } from '../data/types';
-import type { CardFormat, GaugeFormat, MultiRowCardFormat } from './format';
+import type { CardFormat, GaugeFormat, KpiFormat, MultiRowCardFormat } from './format';
 
 function deltaEl(ctx: RenderContext, delta: CellValue, field: Parameters<RenderContext['fmt']>[0], label: string | undefined, upIsGood: boolean): HTMLElement | null {
   if (typeof delta !== 'number') return null;
@@ -55,6 +55,10 @@ export const card = /* @__PURE__ */ defineVisual({
     if (valColor) value.style.color = valColor;
 
     const labelEl = f.showLabel === false ? null : h('div', { class: 'pbi-card-label' }, label);
+    if (labelEl) {
+      if (f.labelColor) labelEl.style.color = f.labelColor;
+      if (f.labelFontSize) labelEl.style.fontSize = `${f.labelFontSize}px`;
+    }
     const delta = di !== undefined ? deltaEl(ctx, row?.values[di] ?? null, ctx.data.values[di], f.deltaLabel ?? ctx.data.values[di].name, f.upIsGood ?? true) : null;
     const isHorizontal = f.orientation === 'horizontal';
     const wrap = h('div', { class: `pbi-card pbi-card-${f.align ?? 'left'}${isHorizontal ? ' is-horizontal' : ''}` });
@@ -125,16 +129,21 @@ export const kpi = /* @__PURE__ */ defineVisual({
     const last = gi !== undefined ? rows[rows.length - 1] : rows[0];
     const value = last?.values[vi] ?? null;
     const target = ti !== undefined ? last?.values[ti] ?? null : null;
-    const f = (ctx.format.kpi ?? {}) as { upIsGood?: boolean; showGoal?: boolean };
+    const f = (ctx.format.kpi ?? {}) as KpiFormat;
     const upIsGood = f.upIsGood ?? true;
+    const showGoal = f.showGoal !== false;
+    const goalLabel = f.goalLabel ?? 'vs goal';
     const wrap = h('div', { class: 'pbi-kpi' });
     wrap.append(h('div', { class: 'pbi-card-label' }, ctx.spec.title ?? field.name));
     const valEl = h('div', { class: 'pbi-card-value', style: `font-size:${Math.max(18, Math.min(t.calloutFontSize, ctx.height * 0.3)).toFixed(0)}px` }, ctx.fmt(field, value, { displayUnits: 'auto', blank: '(Blank)' }));
     wrap.append(valEl);
-    if (typeof value === 'number' && typeof target === 'number' && target !== 0) {
+    if (showGoal && typeof value === 'number' && typeof target === 'number' && target !== 0) {
       const diff = (value - target) / Math.abs(target);
       const good = diff >= 0 === upIsGood;
-      wrap.append(h('div', { class: 'pbi-card-delta' }, h('b', { class: good ? 'is-good' : 'is-bad' }, `${diff >= 0 ? '▲' : '▼'} ${(Math.abs(diff) * 100).toFixed(1)}%`), ` vs goal ${ctx.fmt(ctx.data.values[ti!], target, { displayUnits: 'auto' })}`));
+      if (f.statusColor) {
+        valEl.style.color = good ? t.good : t.bad;
+      }
+      wrap.append(h('div', { class: 'pbi-card-delta' }, h('b', { class: good ? 'is-good' : 'is-bad' }, `${diff >= 0 ? '▲' : '▼'} ${(Math.abs(diff) * 100).toFixed(1)}%`), ` ${goalLabel} ${ctx.fmt(ctx.data.values[ti!], target, { displayUnits: 'auto' })}`));
     }
     ctx.root.replaceChildren(wrap);
     if (gi !== undefined && rows.length > 1) {
@@ -146,10 +155,11 @@ export const kpi = /* @__PURE__ */ defineVisual({
       const x = pointScale(vals.length, [2, w - 6]);
       const svg = s('svg', { width: w, height: hh, class: 'pbi-svg pbi-spark' });
       const pts = vals.map((v, i) => (v === null ? null : `${x(i)},${y(v)}`)).filter(Boolean);
-      svg.append(s('path', { d: `M${pts.join('L')}L${x(vals.length - 1)},${hh}L${x(0)},${hh}Z`, fill: t.dataColors[0], 'fill-opacity': 0.1 }));
-      svg.append(s('path', { d: `M${pts.join('L')}`, fill: 'none', stroke: t.dataColors[0], 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+      const spkColor = f.sparklineColor ?? t.dataColors[0];
+      svg.append(s('path', { d: `M${pts.join('L')}L${x(vals.length - 1)},${hh}L${x(0)},${hh}Z`, fill: spkColor, 'fill-opacity': 0.1 }));
+      svg.append(s('path', { d: `M${pts.join('L')}`, fill: 'none', stroke: spkColor, 'stroke-width': 2, 'stroke-linejoin': 'round' }));
       const lv = vals[vals.length - 1];
-      if (lv !== null) svg.append(s('circle', { cx: x(vals.length - 1), cy: y(lv), r: 4, fill: t.dataColors[0], stroke: t.surface, 'stroke-width': 2 }));
+      if (lv !== null) svg.append(s('circle', { cx: x(vals.length - 1), cy: y(lv), r: 4, fill: spkColor, stroke: t.surface, 'stroke-width': 2 }));
       const gField = ctx.data.groups[gi];
       const hit = s('rect', { x: 0, y: 0, width: w, height: hh, fill: 'transparent' });
       hit.addEventListener('mousemove', (e) => {

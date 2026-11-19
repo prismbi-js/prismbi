@@ -48,7 +48,7 @@ export type { PowerBIThemeJson, Theme } from './theme/theme';
 export { defineVisual, getVisual, hasVisual, listVisuals, registerVisual } from './visuals/registry';
 export { baseFormat } from './visuals/format';
 export { resolveDataLabelColor } from './visuals/common';
-export type { CardFormat, DataLabelRule, GaugeFormat, MultiRowCardFormat, ReferenceBand, ReferenceLine, SyncSlicerConfig, VisualFormat } from './visuals/format';
+export type { CardFormat, DataLabelRule, DonutFormat, FunnelFormat, GaugeFormat, KpiFormat, MultiRowCardFormat, PieFormat, PieLabelContents, ReferenceBand, ReferenceLine, SyncSlicerConfig, VisualFormat } from './visuals/format';
 export { detectAnomalies } from './visuals/anomaly';
 export type { AnomalyOptions, AnomalyPoint } from './visuals/anomaly';
 export type {
@@ -72,7 +72,7 @@ export { relativeRange } from './visuals/slicer';
 export type { SlicerFormat, SlicerStyle } from './visuals/slicer';
 export type { SecondaryValueAxisFormat } from './visuals/format';
 export type { NetworkFormat } from './visuals/network';
-export type { ConditionalFormat, ConditionalRule, DataBarOptions, LinkOptions, ImageOptions, MatrixSubtotalsOptions, TableFormat, TableTotalsOptions } from './visuals/table';
+export type { ConditionalFormat, ConditionalRule, DataBarOptions, LinkOptions, ImageOptions, MatrixFormat, MatrixSubtotalsOptions, TableFormat, TableGridlinesOptions, TableTotalsOptions } from './visuals/table';
 export { squarify } from './visuals/parts';
 export { wQuantile } from './visuals/distribution';
 export type { GeoFeature, GeoFeatureCollection, MapFormat } from './visuals/map';
@@ -102,7 +102,7 @@ export type { StandaloneHtmlOptions, EncryptedPayload } from './report/html';
 export { buildXlsx, resultToSheet, excelFormat, XLSX_MIME } from './report/xlsx';
 export type { XlsxSheet, XlsxColumn } from './report/xlsx';
 export { renderSparkline } from './visuals/table';
-export type { SparklineOptions, MatrixFormat } from './visuals/table';
+export type { SparklineOptions } from './visuals/table';
 export type { SmallMultiplesFormat } from './visuals/multiples';
 
 // report runtime

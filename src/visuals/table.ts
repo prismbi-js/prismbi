@@ -105,6 +105,13 @@ export interface MatrixSubtotalsOptions {
   bold?: boolean;
 }
 
+export interface TableGridlinesOptions {
+  horizontal?: boolean;
+  vertical?: boolean;
+  color?: string;
+  width?: number;
+}
+
 export interface TableFormat {
   totals?: boolean | TableTotalsOptions;
   rowBanding?: boolean;
@@ -126,6 +133,14 @@ export interface TableFormat {
   columnOrder?: string[];
   /** Show an interactive in-table search input. */
   search?: boolean;
+  /** Alternate row background color. */
+  alternateRowColor?: string;
+  /** Table header background color. */
+  headerBackground?: string;
+  /** Table header font color. */
+  headerFontColor?: string;
+  /** Custom horizontal and vertical gridlines. */
+  gridlines?: TableGridlinesOptions;
 }
 
 /** Row count above which tables window their rows. */
@@ -774,6 +789,11 @@ export const table = /* @__PURE__ */ defineVisual({
       const rankBadge = sorted && sortList.length > 1 ? h('span', { class: 'pbi-sort-rank' }, String(sortIdx + 1)) : '';
       const sortSpan = sorted ? h('span', { class: 'pbi-sort' }, arrow, rankBadge) : '';
       const th = h('th', { class: c.kind === 'value' ? 'is-num' : '', scope: 'col', 'aria-sort': sorted ? (sortDir === 'desc' ? 'descending' : 'ascending') : undefined, tabindex: 0 }, c.field.name, sortSpan);
+      if (tf.headerBackground) th.style.backgroundColor = tf.headerBackground;
+      if (tf.headerFontColor) th.style.color = tf.headerFontColor;
+      if (tf.gridlines?.vertical) {
+        th.style.borderRight = `${tf.gridlines.width ?? 1}px solid ${tf.gridlines.color ?? 'var(--pbi-axis)'}`;
+      }
       const colKey = (c.field.ref && activeWidths[c.field.ref] !== undefined) ? c.field.ref : c.field.name;
       const w = activeWidths[c.field.name] ?? (c.field.ref ? activeWidths[c.field.ref] : undefined);
       attachColResizer(th, colKey, w, activeWidths, ctx);
@@ -848,9 +868,22 @@ export const table = /* @__PURE__ */ defineVisual({
       const identity = groupFields.length ? identityOf(groupFields, r.keys) : null;
       const sel = identity ? ctx.host.isSelected(identity) : null;
       const tr = h('tr', { class: sel === false ? 'is-dim' : sel ? 'is-selected' : '' });
+      if (tf.alternateRowColor && ri % 2 === 1) {
+        tr.style.backgroundColor = tf.alternateRowColor;
+      }
       cols.forEach((c, ci) => {
         const v = c.kind === 'group' ? r.keys[c.i] : r.values[c.i];
         const td = h('td', { class: c.kind === 'value' ? 'is-num' : '' });
+        if (tf.gridlines) {
+          if (tf.gridlines.vertical) {
+            td.style.borderRight = `${tf.gridlines.width ?? 1}px solid ${tf.gridlines.color ?? 'var(--pbi-grid)'}`;
+          }
+          if (tf.gridlines.horizontal === false) {
+            td.style.borderBottom = 'none';
+          } else if (tf.gridlines.color || tf.gridlines.width) {
+            td.style.borderBottom = `${tf.gridlines.width ?? 1}px solid ${tf.gridlines.color ?? 'var(--pbi-grid)'}`;
+          }
+        }
         // a calculation item in this row may bring its own format (e.g. YoY % as a percentage)
         const rf = c.kind === 'value' ? r.formats?.[c.i] : undefined;
         const text = ctx.fmt(rf ? { ...c.field, format: rf } : c.field, v);
@@ -988,6 +1021,14 @@ export interface MatrixFormat {
   search?: boolean;
   /** Pixel width per column name. */
   columnWidths?: Record<string, number>;
+  /** Alternate row background color. */
+  alternateRowColor?: string;
+  /** Matrix header background color. */
+  headerBackground?: string;
+  /** Matrix header font color. */
+  headerFontColor?: string;
+  /** Custom horizontal and vertical gridlines. */
+  gridlines?: TableGridlinesOptions;
 }
 
 export const matrix = /* @__PURE__ */ defineVisual({
@@ -1128,6 +1169,15 @@ export const matrix = /* @__PURE__ */ defineVisual({
       }
       thead.append(tr);
     }
+    if (mf.headerBackground || mf.headerFontColor || mf.gridlines?.vertical) {
+      for (const th of thead.querySelectorAll('th')) {
+        if (mf.headerBackground) th.style.backgroundColor = mf.headerBackground;
+        if (mf.headerFontColor) th.style.color = mf.headerFontColor;
+        if (mf.gridlines?.vertical) {
+          th.style.borderRight = `${mf.gridlines.width ?? 1}px solid ${mf.gridlines.color ?? 'var(--pbi-axis)'}`;
+        }
+      }
+    }
     tableEl.append(thead);
     const tbody = h('tbody');
     const stats = valueFields.map((_, i) => {
@@ -1179,6 +1229,9 @@ export const matrix = /* @__PURE__ */ defineVisual({
       const hasKids = lvl < rowFields.length;
       const open = hasKids && isExpanded(pk);
       const tr = h('tr', { class: `pbi-level-${lvl}${hasKids ? ' has-children' : ''}` });
+      if (mf.alternateRowColor && i % 2 === 1) {
+        tr.style.backgroundColor = mf.alternateRowColor;
+      }
       const label = ctx.fmt(rowFields[lvl - 1], path[path.length - 1]) || '(Blank)';
       const expanderBtn = hasKids
         ? (() => {
@@ -1232,6 +1285,18 @@ export const matrix = /* @__PURE__ */ defineVisual({
         e.stopPropagation();
         ctx.host.contextMenu(e, identity);
       });
+      if (mf.gridlines) {
+        for (const cell of tr.children as HTMLCollectionOf<HTMLElement>) {
+          if (mf.gridlines.vertical) {
+            cell.style.borderRight = `${mf.gridlines.width ?? 1}px solid ${mf.gridlines.color ?? 'var(--pbi-grid)'}`;
+          }
+          if (mf.gridlines.horizontal === false) {
+            cell.style.borderBottom = 'none';
+          } else if (mf.gridlines.color || mf.gridlines.width) {
+            cell.style.borderBottom = `${mf.gridlines.width ?? 1}px solid ${mf.gridlines.color ?? 'var(--pbi-grid)'}`;
+          }
+        }
+      }
       return tr;
     };
     const virtual = mf.virtualize ?? displayRows.length > VIRTUAL_MIN;

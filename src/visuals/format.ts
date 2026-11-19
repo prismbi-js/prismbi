@@ -34,6 +34,12 @@ export interface ReferenceLine {
   label?: string | false;
   color?: string;
   dash?: boolean;
+  /** Line style: 'dashed' (default when dash !== false), 'dotted', or 'solid'. */
+  style?: 'dashed' | 'dotted' | 'solid';
+  /** Label alignment along the reference line: 'left' | 'right' | 'center' (or 'top' | 'bottom'). */
+  labelPosition?: 'left' | 'right' | 'center' | 'top' | 'bottom';
+  /** Custom label font color. */
+  labelColor?: string;
   /** Shading between the reference line and an edge / baseline. */
   shade?: 'above' | 'below' | 'to-zero';
   shadeColor?: string;
@@ -111,6 +117,8 @@ export interface CardFormat {
   showLabel?: boolean;
   align?: 'left' | 'center';
   valueFontSize?: number;
+  labelFontSize?: number;
+  labelColor?: string;
   upIsGood?: boolean;
   deltaLabel?: string;
   prefix?: string;
@@ -124,6 +132,33 @@ export interface MultiRowCardFormat {
   columns?: number;
   showAccentBar?: boolean;
   accentColor?: string;
+}
+
+export type PieLabelContents = 'category' | 'value' | 'percent' | 'category, percent' | 'value, percent' | 'all';
+
+export interface PieFormat {
+  maxSlices?: number;
+  labelContents?: PieLabelContents;
+}
+
+export interface DonutFormat extends PieFormat {
+  innerRadius?: number;
+  centerLabel?: boolean;
+  centerTitle?: string;
+}
+
+export interface FunnelFormat {
+  percentOfFirst?: boolean;
+  percentOfPrevious?: boolean;
+  colorByStep?: boolean;
+}
+
+export interface KpiFormat {
+  upIsGood?: boolean;
+  showGoal?: boolean;
+  goalLabel?: string;
+  statusColor?: boolean;
+  sparklineColor?: string;
 }
 
 /** Every visual's format pane. Visual-specific sections live alongside (index signature). */
@@ -216,6 +251,10 @@ export interface VisualFormat {
   gauge?: GaugeFormat;
   card?: CardFormat;
   multiRowCard?: MultiRowCardFormat;
+  pie?: PieFormat;
+  donut?: DonutFormat;
+  funnel?: FunnelFormat;
+  kpi?: KpiFormat;
   [section: string]: unknown;
 }
 

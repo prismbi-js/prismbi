@@ -3,6 +3,7 @@ import { textOn, ramp } from '../render/color';
 import type { CellValue } from '../data/types';
 import type { QueryField } from '../data/query';
 import type { DataPointIdentity, RenderContext } from './types';
+import type { DonutFormat, FunnelFormat, PieFormat } from './format';
 import { defineVisual } from './registry';
 import { animateIn, emptyState, identityOf, interactive, labelFormatter, markOpacity, renderLegend, withLegend } from './common';
 
@@ -61,7 +62,9 @@ function slices(ctx: RenderContext, groupRole: string, max: number): { slices: S
 }
 
 function renderPie(ctx: RenderContext, donut: boolean): void {
-  const max = (ctx.format.pie as { maxSlices?: number } | undefined)?.maxSlices ?? ctx.theme.dataColors.length;
+  const pieFmt = (ctx.format.pie ?? {}) as PieFormat;
+  const donutFmt = (ctx.format.donut ?? {}) as DonutFormat;
+  const max = pieFmt.maxSlices ?? ctx.theme.dataColors.length;
   const { slices: data, field, total } = slices(ctx, 'legend', max);
   if (!data.length) return emptyState(ctx);
   const t = ctx.theme;
@@ -72,11 +75,12 @@ function renderPie(ctx: RenderContext, donut: boolean): void {
   const cx = width / 2;
   const cy = height / 2;
   const r1 = Math.max(10, Math.min(width, height) / 2 - 8);
-  const inner = (ctx.format.donut as { innerRadius?: number } | undefined)?.innerRadius ?? 0.62;
+  const inner = donutFmt.innerRadius ?? 0.62;
   const r0 = donut ? r1 * inner : 0;
   const gapAngle = data.length > 1 ? 2 / r1 : 0; // ≈2px surface gap
   const fs = t.labelFontSize;
   const fmtLabel = labelFormatter(ctx, field);
+  const labelContents = donut ? donutFmt.labelContents : pieFmt.labelContents;
   let a = 0;
   const g = s('g');
   svg.append(g);
@@ -105,21 +109,31 @@ function renderPie(ctx: RenderContext, donut: boolean): void {
       if (isSel) hlPath.setAttribute('transform', `translate(${dx}, ${dy})`);
       g.append(hlPath);
     }
-    // percentage label inside when it fits
+    // percentage or custom label inside when it fits
     const lr = donut ? (r0 + r1) / 2 : r1 * 0.66;
     const pct = `${((d.value / total) * 100).toFixed(d.value / total < 0.1 ? 1 : 0)}%`;
-    const text = ctx.format.dataLabels.show ? fmtLabel(d.value) : pct;
+    const valText = fmtLabel(d.value);
+    let text: string;
+    if (labelContents === 'category') text = d.label;
+    else if (labelContents === 'value') text = valText;
+    else if (labelContents === 'percent') text = pct;
+    else if (labelContents === 'category, percent') text = `${d.label} (${pct})`;
+    else if (labelContents === 'value, percent') text = `${valText} (${pct})`;
+    else if (labelContents === 'all') text = `${d.label}: ${valText} (${pct})`;
+    else text = ctx.format.dataLabels.show ? valText : pct;
+
     const arcLen = sweep * lr;
     if (arcLen > measureText(text, fs, t.fontFamily) + 8 && (r1 - r0 > fs + 6 || !donut))
       g.append(s('text', { x: cx + lr * Math.sin(mid) + dx, y: cy - lr * Math.cos(mid) + fs / 3 + dy, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(d.color, t.foreground), opacity: op, 'pointer-events': 'none' }, text));
     a += sweep;
   }
   if (donut && r0 > 30) {
-    const center = (ctx.format.donut as { centerLabel?: boolean } | undefined)?.centerLabel ?? true;
+    const center = donutFmt.centerLabel ?? true;
     if (center) {
       const big = Math.min(22, r0 / 2.6);
       g.append(s('text', { x: cx, y: cy + big / 3 - 4, 'text-anchor': 'middle', class: 'pbi-center-value', fill: t.foreground, 'font-size': big, 'font-weight': 600 }, ctx.fmt(field, total, { displayUnits: 'auto' })));
-      g.append(s('text', { x: cx, y: cy + big / 3 + 13, 'text-anchor': 'middle', class: 'pbi-tick', fill: t.foregroundMuted }, fitText(field?.name ?? 'Total', r0 * 1.6, fs, t.fontFamily)));
+      const centerTitle = donutFmt.centerTitle ?? field?.name ?? 'Total';
+      g.append(s('text', { x: cx, y: cy + big / 3 + 13, 'text-anchor': 'middle', class: 'pbi-tick', fill: t.foregroundMuted }, fitText(centerTitle, r0 * 1.6, fs, t.fontFamily)));
     }
   }
 }
@@ -311,21 +325,37 @@ export const funnel = /* @__PURE__ */ defineVisual({
     const plotW = ctx.width - labelW - 8;
     const step = ctx.height / rows.length;
     const thick = Math.min(step - 4, 40);
-    const color = ctx.format.colors.default ?? t.dataColors[0];
+    const fnlFmt = (ctx.format.funnel ?? {}) as FunnelFormat;
+    const showPctFirst = fnlFmt.percentOfFirst !== false;
+    const showPctPrev = fnlFmt.percentOfPrevious === true;
+    const colorByStep = fnlFmt.colorByStep === true;
+    const baseColor = ctx.format.colors.default ?? t.dataColors[0];
     rows.forEach((r, i) => {
       const val = r.values[vi] as number;
+      const prevVal = i > 0 ? (rows[i - 1].values[vi] as number) : first;
+      const pctFirst = `${((val / first) * 100).toFixed(1)}%`;
+      const pctPrev = prevVal > 0 ? `${((val / prevVal) * 100).toFixed(1)}%` : '0%';
+      const color = colorByStep ? (t.dataColors[i % t.dataColors.length] ?? baseColor) : baseColor;
       const w = Math.max(2, (val / max) * plotW);
       const x = labelW + (plotW - w) / 2;
       const y = i * step + (step - thick) / 2;
       const identity = identityOf([gField], [r.keys[gi]]);
       const op = markOpacity(ctx, identity);
       const rect = s('rect', { x, y, width: w, height: thick, rx: 4, fill: color, opacity: r.highlights ? 0.3 : op });
-      interactive(ctx, rect, identity, () => ({ title: ctx.fmt(gField, r.keys[gi]), items: [{ label: vField.name, value: ctx.fmt(vField, val), color }, { label: '% of first', value: `${((val / first) * 100).toFixed(1)}%` }] }), [r.keys[gi]]);
+      const tooltipItems: { label: string; value: string; color?: string }[] = [
+        { label: vField.name, value: ctx.fmt(vField, val), color },
+      ];
+      if (showPctFirst) tooltipItems.push({ label: '% of first', value: pctFirst });
+      if (showPctPrev && i > 0) tooltipItems.push({ label: '% of previous', value: pctPrev });
+      interactive(ctx, rect, identity, () => ({ title: ctx.fmt(gField, r.keys[gi]), items: tooltipItems }), [r.keys[gi]]);
       svg.append(rect);
       const hl = r.highlights?.[vi];
       if (typeof hl === 'number') svg.append(s('rect', { x: labelW + (plotW - (hl / max) * plotW) / 2, y, width: (hl / max) * plotW, height: thick, rx: 4, fill: color, 'pointer-events': 'none' }));
       svg.append(s('text', { x: labelW - 8, y: y + thick / 2 + fs / 3, 'text-anchor': 'end', class: 'pbi-tick', fill: t.foregroundSecondary }, fitText(ctx.fmt(gField, r.keys[gi]), labelW - 10, fs, t.fontFamily)));
-      const label = `${ctx.fmt(vField, val, { displayUnits: 'auto' })} · ${((val / first) * 100).toFixed(0)}%`;
+      let labelParts: string[] = [ctx.fmt(vField, val, { displayUnits: 'auto' })];
+      if (showPctPrev && i > 0) labelParts.push(`${pctPrev} prev`);
+      else if (showPctFirst) labelParts.push(`${((val / first) * 100).toFixed(0)}%`);
+      const label = labelParts.join(' · ');
       const lw = measureText(label, fs, t.fontFamily);
       if (lw + 10 < w) svg.append(s('text', { x: labelW + plotW / 2, y: y + thick / 2 + fs / 3, 'text-anchor': 'middle', class: 'pbi-label', fill: textOn(color, t.foreground), 'pointer-events': 'none' }, label));
       else svg.append(s('text', { x: x + w + 6, y: y + thick / 2 + fs / 3, class: 'pbi-label', fill: t.foregroundSecondary }, label));

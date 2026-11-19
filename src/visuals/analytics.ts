@@ -133,15 +133,36 @@ export function drawReferenceLines(ctx: RenderContext, g: SVGGElement, scale: Li
     if (v === null || !Number.isFinite(v)) continue;
     const p = Math.round(scale(v)) + 0.5;
     const color = line.color ?? t.foregroundSecondary;
-    const attrs = { stroke: color, 'stroke-width': 1.5, 'stroke-dasharray': line.dash === false ? undefined : '5 4', class: 'pbi-refline', 'pointer-events': 'none' };
+    const strokeDash = line.style === 'dotted' ? '2 2' : line.style === 'solid' || line.dash === false ? undefined : '5 4';
+    const attrs = { stroke: color, 'stroke-width': 1.5, 'stroke-dasharray': strokeDash, class: 'pbi-refline', 'pointer-events': 'none' };
     const valueText = ctx.fmt(field, v, { displayUnits: 'auto' });
     const label = line.label === false ? '' : line.label ? line.label.replace('{value}', valueText) : `${line.type === 'percentile' ? `P${line.percentile ?? 50}` : LABELS[line.type]}${LABELS[line.type] || line.type === 'percentile' ? ' ' : ''}${valueText}`;
+    const textColor = line.labelColor ?? t.foregroundSecondary;
     if (axis === 'y') {
       g.append(s('line', { x1: span[0], x2: span[1], y1: p, y2: p, ...attrs }));
-      if (label) g.append(s('text', { x: span[1] - 4, y: p - 5, 'text-anchor': 'end', class: 'pbi-label pbi-refline-label', fill: t.foregroundSecondary }, label));
+      if (label) {
+        let lx = span[1] - 4;
+        let anchor = 'end';
+        if (line.labelPosition === 'left') {
+          lx = span[0] + 4;
+          anchor = 'start';
+        } else if (line.labelPosition === 'center') {
+          lx = (span[0] + span[1]) / 2;
+          anchor = 'middle';
+        }
+        g.append(s('text', { x: lx, y: p - 5, 'text-anchor': anchor, class: 'pbi-label pbi-refline-label', fill: textColor }, label));
+      }
     } else {
       g.append(s('line', { y1: span[0], y2: span[1], x1: p, x2: p, ...attrs }));
-      if (label) g.append(s('text', { x: p + 4, y: span[0] + 12, class: 'pbi-label pbi-refline-label', fill: t.foregroundSecondary }, label));
+      if (label) {
+        let ly = span[0] + 12;
+        if (line.labelPosition === 'bottom') {
+          ly = span[1] - 4;
+        } else if (line.labelPosition === 'center') {
+          ly = (span[0] + span[1]) / 2;
+        }
+        g.append(s('text', { x: p + 4, y: ly, class: 'pbi-label pbi-refline-label', fill: textColor }, label));
+      }
     }
 
     if (line.shade) {
